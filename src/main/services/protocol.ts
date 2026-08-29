@@ -10,6 +10,17 @@ function escapeHtml(value: string): string {
     .replace(/"/g, '&quot;')
 }
 
+function getSiteName(title: string, url: string): string {
+  const trimmedTitle = title.trim()
+  if (trimmedTitle && !/^https?:\/\//i.test(trimmedTitle)) return trimmedTitle
+
+  try {
+    return new URL(url).hostname.replace(/^www\./i, '')
+  } catch {
+    return url
+  }
+}
+
 function baseStyles(): string {
   return `
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -24,6 +35,7 @@ function baseStyles(): string {
       body { background: ${APP_SURFACE_LIGHT}; color: #1a1a1e; }
       .site { background: #fff; border-color: #ddd; }
       .site:hover { border-color: #888; }
+      .site-url { color: #666; }
       .muted { color: #666; }
     }
     h1 { font-size: 1.5rem; font-weight: 600; margin-bottom: 8px; }
@@ -73,7 +85,7 @@ export function renderHomePage(): string {
           .map(
             (site) => `
         <a class="site" href="${escapeHtml(site.url)}">
-          <div class="site-title">${escapeHtml(site.title || site.url)}</div>
+          <div class="site-title">${escapeHtml(getSiteName(site.title, site.url))}</div>
           <div class="site-url">${escapeHtml(site.url)}</div>
         </a>`
           )
