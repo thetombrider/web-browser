@@ -7,7 +7,8 @@ import {
   Icon,
   Kbd,
   Text,
-  HStack
+  HStack,
+  useColorModeValue
 } from '@chakra-ui/react'
 import { SearchIcon } from '@chakra-ui/icons'
 
@@ -21,6 +22,9 @@ interface OmniboxProps {
 export function Omnibox({ initialValue, focusToken, onSubmit, onClose }: OmniboxProps) {
   const [value, setValue] = useState(initialValue === 'browsy://home' ? '' : initialValue)
   const inputRef = useRef<HTMLInputElement>(null)
+  const inputBackground = useColorModeValue('blackAlpha.50', 'whiteAlpha.100')
+  const inputBorder = useColorModeValue('blackAlpha.200', 'whiteAlpha.200')
+  const focusBorder = useColorModeValue('blue.500', 'blue.400')
 
   useEffect(() => {
     inputRef.current?.focus()
@@ -57,10 +61,10 @@ export function Omnibox({ initialValue, focusToken, onSubmit, onClose }: Omnibox
             if (e.key === 'Enter') onSubmit(value)
           }}
           placeholder="Search or enter URL"
-          bg="whiteAlpha.100"
+          bg={inputBackground}
           border="1px solid"
-          borderColor="whiteAlpha.200"
-          _focus={{ borderColor: 'blue.400', boxShadow: 'outline' }}
+          borderColor={inputBorder}
+          _focus={{ borderColor: focusBorder, boxShadow: 'outline' }}
         />
       </InputGroup>
       <HStack mt={2} spacing={3} opacity={0.7}>

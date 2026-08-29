@@ -7,7 +7,8 @@ import {
   HStack,
   Select,
   Text,
-  VStack
+  VStack,
+  useColorModeValue
 } from '@chakra-ui/react'
 import type { Settings } from '@shared/types'
 import { BROWSY_API_PORT, BROWSY_CDP_PORT } from '@shared/types'
@@ -18,6 +19,8 @@ interface SettingsPanelProps {
 
 export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const [settings, setSettings] = useState<Settings | null>(null)
+  const surface = useColorModeValue('whiteAlpha.900', 'blackAlpha.700')
+  const border = useColorModeValue('blackAlpha.200', 'whiteAlpha.200')
 
   useEffect(() => {
     window.browsy.getSettings().then(setSettings)
@@ -30,10 +33,10 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
 
   return (
     <Box
-      bg="blackAlpha.800"
+      bg={surface}
       backdropFilter="blur(12px)"
       borderBottom="1px solid"
-      borderColor="whiteAlpha.200"
+      borderColor={border}
       px={4}
       py={3}
       pt="36px"

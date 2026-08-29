@@ -1,4 +1,4 @@
-import { Box } from '@chakra-ui/react'
+import { Box, useColorModeValue } from '@chakra-ui/react'
 import type { TabState } from '@shared/types'
 import { Omnibox } from './Omnibox'
 import { TabBar } from './TabBar'
@@ -26,14 +26,17 @@ export function NavigationChrome({
   onSubmit,
   onClose
 }: NavigationChromeProps) {
+  const surface = useColorModeValue('whiteAlpha.900', 'blackAlpha.700')
+  const border = useColorModeValue('blackAlpha.200', 'whiteAlpha.200')
+
   return (
     <Box
       height="200px"
       overflow="hidden"
-      bg="blackAlpha.800"
+      bg={surface}
       backdropFilter="blur(12px)"
       borderBottom="1px solid"
-      borderColor="whiteAlpha.200"
+      borderColor={border}
       pt="32px"
       style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
     >
