@@ -1,13 +1,7 @@
-import {
-  Box,
-  Button,
-  HStack,
-  IconButton,
-  Text,
-  CloseButton
-} from '@chakra-ui/react'
+import { HStack, IconButton, Text, CloseButton } from '@chakra-ui/react'
 import { AddIcon } from '@chakra-ui/icons'
 import type { TabState } from '@shared/types'
+import { FloatingOverlay, FloatingPanel } from './FloatingPanel'
 
 interface TabBarProps {
   tabs: TabState[]
@@ -20,67 +14,55 @@ interface TabBarProps {
 
 export function TabBar({ tabs, activeTabId, onSwitch, onClose, onNew, onClosePanel }: TabBarProps) {
   return (
-    <Box
-      bg="blackAlpha.800"
-      backdropFilter="blur(12px)"
-      borderBottom="1px solid"
-      borderColor="whiteAlpha.200"
-      px={3}
-      py={2}
-      pt="36px"
-      style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-    >
-      <HStack justify="space-between" mb={2}>
-        <Text fontSize="sm" fontWeight="medium" opacity={0.8}>
-          Tabs
-        </Text>
-        <HStack>
+    <FloatingOverlay onDismiss={onClosePanel} position="top">
+      <FloatingPanel borderRadius="xl" px={2} py={1.5}>
+        <HStack spacing={1.5} overflowX="auto" maxW="full">
+          {tabs.map((tab) => {
+            const isActive = tab.id === activeTabId
+            const label = tab.title === 'Browsy' || tab.url === 'browsy://home' ? 'Home' : tab.title
+            return (
+              <HStack
+                key={tab.id}
+                bg={isActive ? 'blackAlpha.50' : 'transparent'}
+                border="1px solid"
+                borderColor={isActive ? 'blackAlpha.200' : 'transparent'}
+                borderRadius="md"
+                px={2}
+                py={0.5}
+                h="26px"
+                minW="88px"
+                maxW="160px"
+                cursor="pointer"
+                onClick={() => onSwitch(tab.id)}
+                flexShrink={0}
+                _hover={{ bg: 'blackAlpha.50' }}
+              >
+                <Text fontSize="xs" noOfLines={1} flex={1} color="gray.700">
+                  {label}
+                </Text>
+                <CloseButton
+                  size="xs"
+                  color="gray.500"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onClose(tab.id)
+                  }}
+                />
+              </HStack>
+            )
+          })}
           <IconButton
             aria-label="New tab"
-            icon={<AddIcon />}
+            icon={<AddIcon boxSize={2.5} />}
             size="xs"
             variant="ghost"
+            color="gray.600"
+            minW="26px"
+            h="26px"
             onClick={onNew}
           />
-          <CloseButton size="sm" onClick={onClosePanel} />
         </HStack>
-      </HStack>
-      <HStack spacing={2} overflowX="auto" pb={1}>
-        {tabs.map((tab) => {
-          const isActive = tab.id === activeTabId
-          const label = tab.title === 'Browsy' || tab.url === 'browsy://home' ? 'Home' : tab.title
-          return (
-            <HStack
-              key={tab.id}
-              bg={isActive ? 'whiteAlpha.200' : 'whiteAlpha.100'}
-              border="1px solid"
-              borderColor={isActive ? 'whiteAlpha.400' : 'whiteAlpha.200'}
-              borderRadius="md"
-              px={3}
-              py={1}
-              minW="120px"
-              maxW="200px"
-              cursor="pointer"
-              onClick={() => onSwitch(tab.id)}
-              flexShrink={0}
-            >
-              <Text fontSize="sm" noOfLines={1} flex={1}>
-                {label}
-              </Text>
-              <CloseButton
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onClose(tab.id)
-                }}
-              />
-            </HStack>
-          )
-        })}
-      </HStack>
-      <Button size="xs" variant="link" mt={2} onClick={onClosePanel}>
-        Esc to hide
-      </Button>
-    </Box>
+      </FloatingPanel>
+    </FloatingOverlay>
   )
 }

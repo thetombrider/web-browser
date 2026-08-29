@@ -19,6 +19,7 @@ export interface Tab {
 export type TabUpdateCallback = () => void
 export type PopupCallback = (id: string, url: string) => void
 export type ShortcutCallback = (action: string) => void
+export type ChromeVisibilityCallback = (visible: boolean) => void
 
 export class TabManager {
   private tabs: Tab[] = []
@@ -31,7 +32,8 @@ export class TabManager {
     private window: BrowserWindow,
     private onUpdate: TabUpdateCallback,
     private onPopup: PopupCallback,
-    private onShortcut: ShortcutCallback
+    private onShortcut: ShortcutCallback,
+    private onChromeChange: ChromeVisibilityCallback
   ) {
     this.setupWindowResize()
   }
@@ -59,14 +61,14 @@ export class TabManager {
   showChrome(panel: ChromePanel): void {
     this.chromeVisible = true
     this.chromePanel = panel
-    this.layoutViews()
+    this.onChromeChange(true)
     this.onUpdate()
   }
 
   hideChrome(): void {
     this.chromeVisible = false
     this.chromePanel = null
-    this.layoutViews()
+    this.onChromeChange(false)
     this.onUpdate()
     const active = this.getActiveTab()
     if (active) {
@@ -203,32 +205,13 @@ export class TabManager {
 
   layoutViews(): void {
     const bounds = this.window.getContentBounds()
-    const dragHeight = process.platform === 'linux' ? 28 : 0
-    const chromeHeight = this.chromeVisible ? this.getChromeHeight() : 0
-    const top = dragHeight + chromeHeight
-
     for (const tab of this.tabs) {
       tab.view.setBounds({
         x: 0,
-        y: top,
+        y: 0,
         width: bounds.width,
-        height: Math.max(0, bounds.height - top)
+        height: bounds.height
       })
-    }
-  }
-
-  private getChromeHeight(): number {
-    switch (this.chromePanel) {
-      case 'omnibox':
-        return 108
-      case 'tabs':
-        return 130
-      case 'bookmarks':
-        return 220
-      case 'settings':
-        return 200
-      default:
-        return 100
     }
   }
 

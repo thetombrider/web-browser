@@ -43,9 +43,8 @@ export default function App() {
   return (
     <>
       {state.chromeVisible ? (
-        <Box position="fixed" inset={0} pointerEvents="none" zIndex={1000}>
+        <Box position="fixed" inset={0} pointerEvents="auto" zIndex={1000}>
           <DragRegion />
-          <Box pointerEvents="auto">
             {state.chromePanel === 'omnibox' && (
               <Omnibox
                 initialValue={activeTab?.url ?? ''}
@@ -79,10 +78,9 @@ export default function App() {
             {state.chromePanel === 'settings' && (
               <SettingsPanel onClose={() => window.browsy.hideChrome()} />
             )}
-          </Box>
         </Box>
       ) : (
-        <Box position="fixed" top={0} left={0} right={0} height="32px" pointerEvents="none" zIndex={1000}>
+        <Box position="fixed" top={0} left={0} right={0} height="32px" pointerEvents="auto" zIndex={1000}>
           <DragRegion />
         </Box>
       )}

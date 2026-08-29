@@ -9,6 +9,7 @@ import {
 } from '@chakra-ui/react'
 import { DeleteIcon } from '@chakra-ui/icons'
 import type { Bookmark } from '@shared/types'
+import { FloatingOverlay, FloatingPanel } from './FloatingPanel'
 
 interface BookmarksPanelProps {
   bookmarks: Bookmark[]
@@ -26,61 +27,55 @@ export function BookmarksPanel({
   onClose
 }: BookmarksPanelProps) {
   return (
-    <Box
-      bg="blackAlpha.800"
-      backdropFilter="blur(12px)"
-      borderBottom="1px solid"
-      borderColor="whiteAlpha.200"
-      px={4}
-      py={3}
-      pt="36px"
-      maxH="50vh"
-      overflowY="auto"
-      style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-    >
-      <HStack justify="space-between" mb={3}>
-        <Text fontWeight="medium">Bookmarks</Text>
-        <HStack>
-          <Button size="xs" onClick={onAdd}>
-            Bookmark page
-          </Button>
-          <CloseButton size="sm" onClick={onClose} />
+    <FloatingOverlay onDismiss={onClose} position="top">
+      <FloatingPanel borderRadius="xl" px={3} py={2} maxH="40vh" overflowY="auto">
+        <HStack justify="space-between" mb={2}>
+          <Text fontSize="sm" fontWeight="medium" color="gray.700">
+            Bookmarks
+          </Text>
+          <HStack spacing={1}>
+            <Button size="xs" variant="outline" colorScheme="gray" onClick={onAdd}>
+              Save page
+            </Button>
+            <CloseButton size="sm" color="gray.500" onClick={onClose} />
+          </HStack>
         </HStack>
-      </HStack>
-      {bookmarks.length === 0 ? (
-        <Text fontSize="sm" opacity={0.7}>
-          No bookmarks yet. Press the button above to save the current page.
-        </Text>
-      ) : (
-        <VStack align="stretch" spacing={1}>
-          {bookmarks.map((bookmark) => (
-            <HStack
-              key={bookmark.id}
-              px={2}
-              py={2}
-              borderRadius="md"
-              _hover={{ bg: 'whiteAlpha.100' }}
-              cursor="pointer"
-            >
-              <Box flex={1} onClick={() => onNavigate(bookmark.url)}>
-                <Text fontSize="sm" fontWeight="medium" noOfLines={1}>
-                  {bookmark.title}
-                </Text>
-                <Text fontSize="xs" opacity={0.6} noOfLines={1}>
-                  {bookmark.url}
-                </Text>
-              </Box>
-              <IconButton
-                aria-label="Remove bookmark"
-                icon={<DeleteIcon />}
-                size="xs"
-                variant="ghost"
-                onClick={() => onRemove(bookmark.id)}
-              />
-            </HStack>
-          ))}
-        </VStack>
-      )}
-    </Box>
+        {bookmarks.length === 0 ? (
+          <Text fontSize="xs" color="gray.500">
+            No bookmarks yet.
+          </Text>
+        ) : (
+          <VStack align="stretch" spacing={0.5}>
+            {bookmarks.map((bookmark) => (
+              <HStack
+                key={bookmark.id}
+                px={2}
+                py={1.5}
+                borderRadius="md"
+                _hover={{ bg: 'blackAlpha.50' }}
+                cursor="pointer"
+              >
+                <Box flex={1} onClick={() => onNavigate(bookmark.url)}>
+                  <Text fontSize="xs" fontWeight="medium" noOfLines={1} color="gray.800">
+                    {bookmark.title}
+                  </Text>
+                  <Text fontSize="2xs" noOfLines={1} color="gray.500">
+                    {bookmark.url}
+                  </Text>
+                </Box>
+                <IconButton
+                  aria-label="Remove bookmark"
+                  icon={<DeleteIcon boxSize={3} />}
+                  size="xs"
+                  variant="ghost"
+                  color="gray.500"
+                  onClick={() => onRemove(bookmark.id)}
+                />
+              </HStack>
+            ))}
+          </VStack>
+        )}
+      </FloatingPanel>
+    </FloatingOverlay>
   )
 }

@@ -1,15 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import {
-  Box,
-  Input,
-  InputGroup,
-  InputLeftElement,
-  Icon,
-  Kbd,
-  Text,
-  HStack
-} from '@chakra-ui/react'
+import { Input, InputGroup, InputLeftElement, Icon } from '@chakra-ui/react'
 import { SearchIcon } from '@chakra-ui/icons'
+import { FloatingOverlay, FloatingPanel } from './FloatingPanel'
 
 interface OmniboxProps {
   initialValue: string
@@ -35,39 +27,29 @@ export function Omnibox({ initialValue, onSubmit, onClose }: OmniboxProps) {
   }, [onClose])
 
   return (
-    <Box
-      bg="blackAlpha.800"
-      backdropFilter="blur(12px)"
-      borderBottom="1px solid"
-      borderColor="whiteAlpha.200"
-      px={4}
-      py={3}
-      pt="40px"
-      style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-    >
-      <InputGroup size="lg">
-        <InputLeftElement pointerEvents="none">
-          <Icon as={SearchIcon} color="gray.400" />
-        </InputLeftElement>
-        <Input
-          ref={inputRef}
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') onSubmit(value)
-          }}
-          placeholder="Search or enter URL"
-          bg="whiteAlpha.100"
-          border="1px solid"
-          borderColor="whiteAlpha.200"
-          _focus={{ borderColor: 'blue.400', boxShadow: 'outline' }}
-        />
-      </InputGroup>
-      <HStack mt={2} spacing={3} opacity={0.7}>
-        <Text fontSize="xs">Enter to go</Text>
-        <Kbd fontSize="xs">Esc</Kbd>
-        <Text fontSize="xs">to close</Text>
-      </HStack>
-    </Box>
+    <FloatingOverlay onDismiss={onClose} position="center">
+      <FloatingPanel borderRadius="2xl" px={3} py={2}>
+        <InputGroup size="md">
+          <InputLeftElement pointerEvents="none" h="full">
+            <Icon as={SearchIcon} color="gray.400" boxSize={3.5} />
+          </InputLeftElement>
+          <Input
+            ref={inputRef}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') onSubmit(value)
+            }}
+            placeholder="Search or enter URL"
+            variant="unstyled"
+            pl={9}
+            h="36px"
+            fontSize="sm"
+            color="gray.800"
+            _placeholder={{ color: 'gray.400' }}
+          />
+        </InputGroup>
+      </FloatingPanel>
+    </FloatingOverlay>
   )
 }

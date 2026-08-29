@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain, app, type IpcMainInvokeEvent } from 'electron'
+import { BrowserWindow, BrowserView, ipcMain, app, type IpcMainInvokeEvent } from 'electron'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
 import { TabManager } from '../tabs/tab-manager'
@@ -22,6 +22,7 @@ import { IPC } from '../../shared/types'
 interface BrowserWindowEntry {
   window: BrowserWindow
   tabs: TabManager
+  chromeView: BrowserView
 }
 
 export class WindowManager {
@@ -59,7 +60,8 @@ export class WindowManager {
       y: session?.bounds?.y,
       show: false,
       title: 'Browsy',
-      backgroundColor: '#0f0f12',
+      backgroundColor: '#00000000',
+      transparent: true,
       ...(isMac
         ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 12, y: 12 } }
         : { frame: false }),
@@ -71,20 +73,39 @@ export class WindowManager {
       }
     })
 
+    const rendererUrl = process.env.ELECTRON_RENDERER_URL
+    const chromeUrl =
+      rendererUrl && rendererUrl.length > 0
+        ? rendererUrl
+        : pathToFileURL(join(__dirname, '../renderer/index.html')).href
+
+    const chromeView = new BrowserView({
+      webPreferences: {
+        preload: join(__dirname, '../preload/index.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: false,
+        backgroundThrottling: false
+      }
+    })
+
     const tabs = new TabManager(
       win,
       () => this.broadcastState(win.id),
       (id, url) => {
-        win.webContents.send('browser:popup-request', { id, url })
+        chromeView.webContents.send('browser:popup-request', { id, url })
       },
-      (action) => this.handleShortcut(win.id, action)
+      (action) => this.handleShortcut(win.id, action),
+      (visible) => this.setChromeOverlayVisible(win.id, visible)
     )
 
-    this.windows.set(win.id, { window: win, tabs })
+    this.windows.set(win.id, { window: win, tabs, chromeView })
 
     win.on('ready-to-show', () => win.show())
+    win.on('resize', () => this.layoutChromeView(win.id))
     win.on('closed', () => {
       tabs.destroy()
+      win.removeBrowserView(chromeView)
       this.windows.delete(win.id)
       if (this.windows.size === 0) {
         app.quit()
@@ -93,13 +114,14 @@ export class WindowManager {
 
     win.on('focus', () => this.broadcastState(win.id))
 
-    const rendererUrl = process.env.ELECTRON_RENDERER_URL
-    const chromeUrl =
-      rendererUrl && rendererUrl.length > 0
-        ? rendererUrl
-        : pathToFileURL(join(__dirname, '../renderer/index.html')).href
+    await win.loadURL('data:text/html,<html><body style="margin:0;background:transparent"></body></html>')
 
-    await win.loadURL(chromeUrl)
+    win.addBrowserView(chromeView)
+    chromeView.setBackgroundColor('#00000000')
+    await chromeView.webContents.loadURL(chromeUrl)
+    this.layoutChromeView(win.id)
+    win.setIgnoreMouseEvents(true, { forward: true })
+    win.setTopBrowserView(chromeView)
 
     if (session?.tabs?.length) {
       for (const tab of session.tabs) {
@@ -110,9 +132,31 @@ export class WindowManager {
       await tabs.createTab('browsy://home')
     }
 
-    this.registerRendererShortcuts(win)
+    this.registerRendererShortcuts(chromeView)
     this.broadcastState(win.id)
     return win
+  }
+
+  private layoutChromeView(windowId: number): void {
+    const entry = this.windows.get(windowId)
+    if (!entry) return
+    const bounds = entry.window.getContentBounds()
+    entry.chromeView.setBounds({
+      x: 0,
+      y: 0,
+      width: bounds.width,
+      height: bounds.height
+    })
+  }
+
+  private setChromeOverlayVisible(windowId: number, visible: boolean): void {
+    const entry = this.windows.get(windowId)
+    if (!entry) return
+    entry.window.setIgnoreMouseEvents(!visible, { forward: true })
+    entry.window.setTopBrowserView(entry.chromeView)
+    if (visible) {
+      entry.chromeView.webContents.focus()
+    }
   }
 
   private handleShortcut(windowId: number, action: string): void {
@@ -163,8 +207,11 @@ export class WindowManager {
     this.broadcastState(windowId)
   }
 
-  private registerRendererShortcuts(win: BrowserWindow): void {
-    win.webContents.on('before-input-event', (_event, input) => {
+  private registerRendererShortcuts(chromeView: BrowserView): void {
+    chromeView.webContents.on('before-input-event', (_event, input) => {
+      const win = BrowserWindow.fromWebContents(chromeView.webContents)
+      if (!win) return
+
       if (input.key === 'Escape') {
         this.handleShortcut(win.id, 'hide-chrome')
         return
@@ -254,7 +301,7 @@ export class WindowManager {
     const entry = this.windows.get(windowId)
     if (!entry) return
     const state = this.buildState(entry.tabs)
-    entry.window.webContents.send(IPC.STATE_CHANGED, state)
+    entry.chromeView.webContents.send(IPC.STATE_CHANGED, state)
   }
 
   private getEntryFromEvent(event: IpcMainInvokeEvent): BrowserWindowEntry | null {

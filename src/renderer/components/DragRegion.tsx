@@ -9,7 +9,6 @@ export function DragRegion() {
       right={0}
       height="32px"
       style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-      pointerEvents="auto"
     />
   )
 }
