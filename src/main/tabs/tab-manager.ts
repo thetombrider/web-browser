@@ -310,6 +310,9 @@ export class TabManager {
       if (url && !url.startsWith('browsy://error')) {
         addHistoryEntry(url, title)
       }
+      if (tab.id === this.activeTabId) {
+        this.syncChromeWithActiveTab()
+      }
       this.onUpdate()
     })
 
