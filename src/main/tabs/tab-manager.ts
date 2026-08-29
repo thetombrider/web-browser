@@ -136,11 +136,16 @@ export class TabManager {
     if (index === -1) return
 
     const [tab] = this.tabs.splice(index, 1)
-    if (tab.devToolsOpen) {
-      tab.view.webContents.closeDevTools()
+    const wc = tab.view.webContents
+    if (!wc.isDestroyed() && tab.devToolsOpen) {
+      wc.closeDevTools()
     }
-    this.window.removeBrowserView(tab.view)
-    ;(tab.view.webContents as unknown as { destroy?: () => void }).destroy?.()
+    if (!this.window.isDestroyed()) {
+      this.window.removeBrowserView(tab.view)
+    }
+    if (!wc.isDestroyed()) {
+      wc.destroy()
+    }
 
     if (this.activeTabId === tabId) {
       const next = this.tabs[Math.min(index, this.tabs.length - 1)]
@@ -256,8 +261,14 @@ export class TabManager {
 
   destroy(): void {
     for (const tab of this.tabs) {
-      if (tab.devToolsOpen) tab.view.webContents.closeDevTools()
-      this.window.removeBrowserView(tab.view)
+      const wc = tab.view.webContents
+      if (!wc.isDestroyed() && tab.devToolsOpen) wc.closeDevTools()
+      if (!this.window.isDestroyed()) {
+        this.window.removeBrowserView(tab.view)
+      }
+      if (!wc.isDestroyed()) {
+        wc.destroy()
+      }
     }
     this.tabs = []
     this.activeTabId = null
