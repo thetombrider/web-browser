@@ -1,6 +1,6 @@
 import { protocol } from 'electron'
 import { getRecentSites } from './store'
-import { RECENT_SITES_COUNT } from '../../shared/types'
+import { APP_SURFACE_DARK, APP_SURFACE_LIGHT, RECENT_SITES_COUNT } from '../../shared/types'
 
 function escapeHtml(value: string): string {
   return value
@@ -15,13 +15,13 @@ function baseStyles(): string {
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #0f0f12;
+      background: ${APP_SURFACE_DARK};
       color: #e8e8ec;
       min-height: 100vh;
       padding: 48px 32px;
     }
     @media (prefers-color-scheme: light) {
-      body { background: #f5f5f7; color: #1a1a1e; }
+      body { background: ${APP_SURFACE_LIGHT}; color: #1a1a1e; }
       .site { background: #fff; border-color: #ddd; }
       .site:hover { border-color: #888; }
       .muted { color: #666; }
@@ -30,9 +30,11 @@ function baseStyles(): string {
     .muted { color: #999; margin-bottom: 32px; font-size: 0.9rem; }
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      grid-template-columns: minmax(0, 640px);
       gap: 12px;
-      max-width: 900px;
+      justify-content: center;
+      width: 100%;
+      margin: 0 auto;
     }
     .site {
       display: block;

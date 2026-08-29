@@ -232,7 +232,7 @@ export class TabManager {
   private getChromeHeight(): number {
     switch (this.chromePanel) {
       case 'navigation':
-        return 200
+        return 212
       case 'bookmarks':
         return 220
       case 'settings':

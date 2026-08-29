@@ -3,6 +3,8 @@ export const BROWSY_CDP_PORT = 9222
 export const RECENT_SITES_COUNT = 12
 export const GOOGLE_SEARCH_URL = 'https://www.google.com/search?q='
 export const APP_NAME = 'Browsy'
+export const APP_SURFACE_LIGHT = '#f5f5f7'
+export const APP_SURFACE_DARK = '#0f0f12'
 
 export type ChromePanel = 'navigation' | 'bookmarks' | 'settings' | null
 

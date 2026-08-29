@@ -46,7 +46,8 @@ export function Omnibox({ initialValue, focusToken, onSubmit, onClose }: Omnibox
   return (
     <Box
       px={4}
-      py={3}
+      pt={3}
+      pb={4}
       style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
     >
       <InputGroup size="lg">

@@ -1,5 +1,5 @@
 import { Box, useColorModeValue } from '@chakra-ui/react'
-import type { TabState } from '@shared/types'
+import { APP_SURFACE_DARK, APP_SURFACE_LIGHT, type TabState } from '@shared/types'
 import { Omnibox } from './Omnibox'
 import { TabBar } from './TabBar'
 
@@ -26,12 +26,12 @@ export function NavigationChrome({
   onSubmit,
   onClose
 }: NavigationChromeProps) {
-  const surface = useColorModeValue('whiteAlpha.900', 'blackAlpha.700')
+  const surface = useColorModeValue(APP_SURFACE_LIGHT, APP_SURFACE_DARK)
   const border = useColorModeValue('blackAlpha.200', 'whiteAlpha.200')
 
   return (
     <Box
-      height="200px"
+      height="212px"
       overflow="hidden"
       bg={surface}
       backdropFilter="blur(12px)"
