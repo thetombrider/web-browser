@@ -1,6 +1,5 @@
 import {
   Box,
-  Button,
   HStack,
   IconButton,
   Text,
@@ -23,8 +22,6 @@ export function TabBar({ tabs, activeTabId, onSwitch, onClose, onNew, onClosePan
   const divider = useColorModeValue('blackAlpha.100', 'whiteAlpha.100')
   const activeBackground = useColorModeValue('blackAlpha.100', 'whiteAlpha.200')
   const inactiveBackground = useColorModeValue('blackAlpha.50', 'whiteAlpha.100')
-  const activeBorder = useColorModeValue('blackAlpha.300', 'whiteAlpha.400')
-  const inactiveBorder = useColorModeValue('blackAlpha.200', 'whiteAlpha.200')
 
   return (
     <Box
@@ -34,10 +31,7 @@ export function TabBar({ tabs, activeTabId, onSwitch, onClose, onNew, onClosePan
       borderColor={divider}
       style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
     >
-      <HStack justify="space-between" mb={2}>
-        <Text fontSize="sm" fontWeight="medium" opacity={0.8}>
-          Tabs
-        </Text>
+      <HStack justify="flex-end" mb={2}>
         <HStack>
           <IconButton
             aria-label="New tab"
@@ -57,8 +51,6 @@ export function TabBar({ tabs, activeTabId, onSwitch, onClose, onNew, onClosePan
             <HStack
               key={tab.id}
               bg={isActive ? activeBackground : inactiveBackground}
-              border="1px solid"
-              borderColor={isActive ? activeBorder : inactiveBorder}
               borderRadius="md"
               px={3}
               py={1}
@@ -82,9 +74,6 @@ export function TabBar({ tabs, activeTabId, onSwitch, onClose, onNew, onClosePan
           )
         })}
       </HStack>
-      <Button size="xs" variant="link" mt={2} onClick={onClosePanel}>
-        Esc to hide
-      </Button>
     </Box>
   )
 }
