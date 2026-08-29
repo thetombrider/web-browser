@@ -23,9 +23,10 @@ export function TabBar({ tabs, activeTabId, onSwitch, onClose, onNew, onClosePan
             return (
               <HStack
                 key={tab.id}
-                bg={isActive ? 'blackAlpha.50' : 'transparent'}
-                border="1px solid"
-                borderColor={isActive ? 'blackAlpha.200' : 'transparent'}
+                style={{
+                  background: isActive ? 'rgba(0,0,0,0.06)' : 'transparent',
+                  border: isActive ? '1px solid rgba(0,0,0,0.12)' : '1px solid transparent'
+                }}
                 borderRadius="md"
                 px={2}
                 py={0.5}
@@ -35,9 +36,8 @@ export function TabBar({ tabs, activeTabId, onSwitch, onClose, onNew, onClosePan
                 cursor="pointer"
                 onClick={() => onSwitch(tab.id)}
                 flexShrink={0}
-                _hover={{ bg: 'blackAlpha.50' }}
               >
-                <Text fontSize="xs" noOfLines={1} flex={1} color="gray.700">
+                <Text fontSize="xs" noOfLines={1} flex={1} style={{ color: '#374151' }}>
                   {label}
                 </Text>
                 <CloseButton

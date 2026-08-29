@@ -114,7 +114,7 @@ export class WindowManager {
 
     win.on('focus', () => this.broadcastState(win.id))
 
-    await win.loadURL('data:text/html,<html><body style="margin:0;background:transparent"></body></html>')
+    await win.loadURL('about:blank')
 
     win.addBrowserView(chromeView)
     chromeView.setBackgroundColor('#00000000')

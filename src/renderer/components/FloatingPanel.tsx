@@ -1,16 +1,16 @@
 import { Box, type BoxProps } from '@chakra-ui/react'
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 
-const noDrag = { WebkitAppRegion: 'no-drag' } as React.CSSProperties
+const noDrag = { WebkitAppRegion: 'no-drag' } as CSSProperties
 
-export const floatingSurface = {
-  bg: 'rgba(255, 255, 255, 0.88)',
-  border: '1px solid',
-  borderColor: 'blackAlpha.100',
+export const floatingSurfaceStyle: CSSProperties = {
+  background: 'rgba(255, 255, 255, 0.92)',
+  border: '1px solid rgba(0, 0, 0, 0.08)',
   boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.06)',
   backdropFilter: 'blur(20px)',
-  color: 'gray.800'
-} as const
+  WebkitBackdropFilter: 'blur(20px)',
+  color: '#1a1a1e'
+}
 
 interface FloatingPanelProps extends BoxProps {
   children: ReactNode
@@ -18,7 +18,7 @@ interface FloatingPanelProps extends BoxProps {
 
 export function FloatingPanel({ children, ...props }: FloatingPanelProps) {
   return (
-    <Box {...floatingSurface} style={noDrag} {...props}>
+    <Box style={{ ...floatingSurfaceStyle, ...noDrag }} {...props}>
       {children}
     </Box>
   )
