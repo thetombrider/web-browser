@@ -21,13 +21,10 @@ interface TabBarProps {
 export function TabBar({ tabs, activeTabId, onSwitch, onClose, onNew, onClosePanel }: TabBarProps) {
   return (
     <Box
-      bg="blackAlpha.800"
-      backdropFilter="blur(12px)"
-      borderBottom="1px solid"
-      borderColor="whiteAlpha.200"
       px={3}
       py={2}
-      pt="36px"
+      borderBottom="1px solid"
+      borderColor="whiteAlpha.100"
       style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
     >
       <HStack justify="space-between" mb={2}>

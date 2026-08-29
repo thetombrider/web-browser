@@ -4,7 +4,7 @@ export const RECENT_SITES_COUNT = 12
 export const GOOGLE_SEARCH_URL = 'https://www.google.com/search?q='
 export const APP_NAME = 'Browsy'
 
-export type ChromePanel = 'omnibox' | 'tabs' | 'bookmarks' | 'settings' | null
+export type ChromePanel = 'navigation' | 'bookmarks' | 'settings' | null
 
 export interface TabState {
   id: string
@@ -43,6 +43,7 @@ export interface BrowserState {
   activeTabId: string | null
   chromePanel: ChromePanel
   chromeVisible: boolean
+  chromeFocusToken: number
 }
 
 export interface Settings {

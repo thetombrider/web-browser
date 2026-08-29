@@ -5,7 +5,7 @@ A minimal, keyboard-first Electron browser built for learning and portfolio use.
 ## Features
 
 - Full-page browsing with hidden chrome by default
-- On-demand UI via keyboard shortcuts (omnibox, tabs, bookmarks, settings)
+- Unified navigation chrome with tabs and omnibox
 - Multiple windows and tabs (`BrowserView` per tab)
 - Custom homepage with recent sites
 - Custom error pages
@@ -42,8 +42,7 @@ npm start
 
 | Shortcut | Action |
 |----------|--------|
-| `Ctrl/Cmd+L` | Omnibox |
-| `Ctrl/Cmd+Shift+T` | Tab bar |
+| `Ctrl/Cmd+L` | Navigation chrome (tabs and omnibox) |
 | `Ctrl/Cmd+T` | New tab |
 | `Ctrl/Cmd+W` | Close tab |
 | `Ctrl/Cmd+N` | New window |

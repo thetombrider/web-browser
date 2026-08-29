@@ -66,7 +66,7 @@ export function renderHomePage(): string {
   const recent = getRecentSites(RECENT_SITES_COUNT)
   const sitesHtml =
     recent.length === 0
-      ? '<p class="empty">No recent sites yet. Press Ctrl+L to open the omnibox and start browsing.</p>'
+      ? '<p class="empty">No recent sites yet. Use the address bar above to start browsing.</p>'
       : `<div class="grid">${recent
           .map(
             (site) => `

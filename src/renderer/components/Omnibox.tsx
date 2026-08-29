@@ -13,18 +13,23 @@ import { SearchIcon } from '@chakra-ui/icons'
 
 interface OmniboxProps {
   initialValue: string
+  focusToken: number
   onSubmit: (value: string) => void
   onClose: () => void
 }
 
-export function Omnibox({ initialValue, onSubmit, onClose }: OmniboxProps) {
+export function Omnibox({ initialValue, focusToken, onSubmit, onClose }: OmniboxProps) {
   const [value, setValue] = useState(initialValue === 'browsy://home' ? '' : initialValue)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     inputRef.current?.focus()
     inputRef.current?.select()
-  }, [])
+  }, [focusToken])
+
+  useEffect(() => {
+    setValue(initialValue === 'browsy://home' ? '' : initialValue)
+  }, [initialValue])
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -36,13 +41,8 @@ export function Omnibox({ initialValue, onSubmit, onClose }: OmniboxProps) {
 
   return (
     <Box
-      bg="blackAlpha.800"
-      backdropFilter="blur(12px)"
-      borderBottom="1px solid"
-      borderColor="whiteAlpha.200"
       px={4}
       py={3}
-      pt="40px"
       style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
     >
       <InputGroup size="lg">
