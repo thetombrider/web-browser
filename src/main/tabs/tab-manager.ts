@@ -144,7 +144,7 @@ export class TabManager {
       this.window.removeBrowserView(tab.view)
     }
     if (!wc.isDestroyed()) {
-      wc.destroy()
+      ;(wc as unknown as { destroy?: () => void }).destroy?.()
     }
 
     if (this.activeTabId === tabId) {
@@ -267,7 +267,7 @@ export class TabManager {
         this.window.removeBrowserView(tab.view)
       }
       if (!wc.isDestroyed()) {
-        wc.destroy()
+        ;(wc as unknown as { destroy?: () => void }).destroy?.()
       }
     }
     this.tabs = []
