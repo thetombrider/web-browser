@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Box } from '@chakra-ui/react'
 import type { Bookmark, BrowserState, PopupRequest } from '@shared/types'
-import { Omnibox } from './components/Omnibox'
-import { TabBar } from './components/TabBar'
+import { NavigationChrome } from './components/NavigationChrome'
 import { BookmarksPanel } from './components/BookmarksPanel'
 import { SettingsPanel } from './components/SettingsPanel'
 import { PopupDialog } from './components/PopupDialog'
@@ -13,7 +12,8 @@ export default function App() {
     tabs: [],
     activeTabId: null,
     chromePanel: null,
-    chromeVisible: false
+    chromeVisible: false,
+    chromeFocusToken: 0
   })
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([])
   const [popup, setPopup] = useState<PopupRequest | null>(null)
@@ -46,21 +46,17 @@ export default function App() {
         <Box position="fixed" inset={0} pointerEvents="none" zIndex={1000}>
           <DragRegion />
           <Box pointerEvents="auto">
-            {state.chromePanel === 'omnibox' && (
-              <Omnibox
-                initialValue={activeTab?.url ?? ''}
-                onSubmit={(value) => window.browsy.navigate(value)}
-                onClose={() => window.browsy.hideChrome()}
-              />
-            )}
-            {state.chromePanel === 'tabs' && (
-              <TabBar
+            {state.chromePanel === 'navigation' && (
+              <NavigationChrome
                 tabs={state.tabs}
                 activeTabId={state.activeTabId}
-                onSwitch={(id) => window.browsy.switchTab(id)}
-                onClose={(id) => window.browsy.closeTab(id)}
-                onNew={() => window.browsy.newTab()}
-                onClosePanel={() => window.browsy.hideChrome()}
+                initialValue={activeTab?.url ?? ''}
+                focusToken={state.chromeFocusToken}
+                onSwitchTab={(id) => window.browsy.switchTab(id)}
+                onCloseTab={(id) => window.browsy.closeTab(id)}
+                onNewTab={() => window.browsy.newTab()}
+                onSubmit={(value) => window.browsy.navigate(value)}
+                onClose={() => window.browsy.hideChrome()}
               />
             )}
             {state.chromePanel === 'bookmarks' && (

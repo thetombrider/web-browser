@@ -121,11 +121,8 @@ export class WindowManager {
     const { tabs } = entry
 
     switch (action) {
-      case 'omnibox':
-        tabs.showChrome('omnibox')
-        break
-      case 'tabs':
-        tabs.showChrome('tabs')
+      case 'navigation':
+        tabs.showChrome('navigation')
         break
       case 'bookmarks':
         tabs.showChrome('bookmarks')
@@ -164,20 +161,26 @@ export class WindowManager {
   }
 
   private registerRendererShortcuts(win: BrowserWindow): void {
-    win.webContents.on('before-input-event', (_event, input) => {
+    win.webContents.on('before-input-event', (event, input) => {
       if (input.key === 'Escape') {
+        event.preventDefault()
         this.handleShortcut(win.id, 'hide-chrome')
         return
       }
       const mod = input.control || input.meta
       if (!mod) return
       const key = input.key.toLowerCase()
-      if (key === 'l') this.handleShortcut(win.id, 'omnibox')
-      else if (key === 't' && input.shift) this.handleShortcut(win.id, 'tabs')
-      else if (key === 't') this.handleShortcut(win.id, 'new-tab')
-      else if (key === 'w') this.handleShortcut(win.id, 'close-tab')
-      else if (key === 'b') this.handleShortcut(win.id, 'bookmarks')
-      else if (key === ',') this.handleShortcut(win.id, 'settings')
+      let action: string | null = null
+      if (key === 'l') action = 'navigation'
+      else if (key === 't' && !input.shift) action = 'new-tab'
+      else if (key === 'w') action = 'close-tab'
+      else if (key === 'b') action = 'bookmarks'
+      else if (key === ',') action = 'settings'
+
+      if (action) {
+        event.preventDefault()
+        this.handleShortcut(win.id, action)
+      }
     })
   }
 
@@ -190,7 +193,7 @@ export class WindowManager {
   getFocusedState(): BrowserState {
     const entry = this.getFocusedEntry()
     if (!entry) {
-      return { tabs: [], activeTabId: null, chromePanel: null, chromeVisible: false }
+      return { tabs: [], activeTabId: null, chromePanel: null, chromeVisible: false, chromeFocusToken: 0 }
     }
     return this.buildState(entry.tabs)
   }
@@ -200,7 +203,8 @@ export class WindowManager {
     if (!entry) return
     const url = resolveNavigationInput(input)
     await entry.tabs.navigate(url)
-    entry.tabs.hideChrome()
+    if (url === 'browsy://home') entry.tabs.showChrome('navigation')
+    else entry.tabs.hideChrome()
   }
 
   goBackFocused(): void {
@@ -246,7 +250,8 @@ export class WindowManager {
       tabs: tabs.getTabStates(),
       activeTabId: tabs.getActiveTabId(),
       chromeVisible: tabs.isChromeVisible(),
-      chromePanel: tabs.getChromePanel()
+      chromePanel: tabs.getChromePanel(),
+      chromeFocusToken: tabs.getChromeFocusToken()
     }
   }
 
@@ -274,7 +279,8 @@ export class WindowManager {
       if (!entry) return
       const url = resolveNavigationInput(input)
       await entry.tabs.navigate(url)
-      entry.tabs.hideChrome()
+      if (url === 'browsy://home') entry.tabs.showChrome('navigation')
+      else entry.tabs.hideChrome()
     })
 
     ipcMain.handle(IPC.GO_BACK, (event) => {

@@ -7,24 +7,33 @@ import {
   Icon,
   Kbd,
   Text,
-  HStack
+  HStack,
+  useColorModeValue
 } from '@chakra-ui/react'
 import { SearchIcon } from '@chakra-ui/icons'
 
 interface OmniboxProps {
   initialValue: string
+  focusToken: number
   onSubmit: (value: string) => void
   onClose: () => void
 }
 
-export function Omnibox({ initialValue, onSubmit, onClose }: OmniboxProps) {
+export function Omnibox({ initialValue, focusToken, onSubmit, onClose }: OmniboxProps) {
   const [value, setValue] = useState(initialValue === 'browsy://home' ? '' : initialValue)
   const inputRef = useRef<HTMLInputElement>(null)
+  const inputBackground = useColorModeValue('blackAlpha.50', 'whiteAlpha.100')
+  const inputBorder = useColorModeValue('blackAlpha.200', 'whiteAlpha.200')
+  const focusBorder = useColorModeValue('blue.500', 'blue.400')
 
   useEffect(() => {
     inputRef.current?.focus()
     inputRef.current?.select()
-  }, [])
+  }, [focusToken])
+
+  useEffect(() => {
+    setValue(initialValue === 'browsy://home' ? '' : initialValue)
+  }, [initialValue])
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -36,13 +45,9 @@ export function Omnibox({ initialValue, onSubmit, onClose }: OmniboxProps) {
 
   return (
     <Box
-      bg="blackAlpha.800"
-      backdropFilter="blur(12px)"
-      borderBottom="1px solid"
-      borderColor="whiteAlpha.200"
       px={4}
-      py={3}
-      pt="40px"
+      pt={3}
+      pb={4}
       style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
     >
       <InputGroup size="lg">
@@ -57,10 +62,10 @@ export function Omnibox({ initialValue, onSubmit, onClose }: OmniboxProps) {
             if (e.key === 'Enter') onSubmit(value)
           }}
           placeholder="Search or enter URL"
-          bg="whiteAlpha.100"
+          bg={inputBackground}
           border="1px solid"
-          borderColor="whiteAlpha.200"
-          _focus={{ borderColor: 'blue.400', boxShadow: 'outline' }}
+          borderColor={inputBorder}
+          _focus={{ borderColor: focusBorder, boxShadow: 'outline' }}
         />
       </InputGroup>
       <HStack mt={2} spacing={3} opacity={0.7}>

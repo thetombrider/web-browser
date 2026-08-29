@@ -25,6 +25,7 @@ export class TabManager {
   private activeTabId: string | null = null
   private chromeVisible = false
   private chromePanel: ChromePanel = null
+  private chromeFocusToken = 0
   private pendingPopups = new Map<string, (allow: boolean) => void>()
 
   constructor(
@@ -56,9 +57,16 @@ export class TabManager {
     return this.chromePanel
   }
 
+  getChromeFocusToken(): number {
+    return this.chromeFocusToken
+  }
+
   showChrome(panel: ChromePanel): void {
     this.chromeVisible = true
     this.chromePanel = panel
+    if (panel === 'navigation') {
+      this.chromeFocusToken += 1
+    }
     this.layoutViews()
     this.onUpdate()
   }
@@ -99,6 +107,10 @@ export class TabManager {
       this.switchTab(tab.id)
     }
 
+    if (activate && url === 'browsy://home') {
+      this.showChrome('navigation')
+    }
+
     await tab.view.webContents.loadURL(url)
     return tab
   }
@@ -115,6 +127,7 @@ export class TabManager {
       }
     }
     this.layoutViews()
+    this.syncChromeWithActiveTab()
     this.onUpdate()
   }
 
@@ -123,11 +136,16 @@ export class TabManager {
     if (index === -1) return
 
     const [tab] = this.tabs.splice(index, 1)
-    if (tab.devToolsOpen) {
-      tab.view.webContents.closeDevTools()
+    const wc = tab.view.webContents
+    if (!wc.isDestroyed() && tab.devToolsOpen) {
+      wc.closeDevTools()
     }
-    this.window.removeBrowserView(tab.view)
-    ;(tab.view.webContents as unknown as { destroy?: () => void }).destroy?.()
+    if (!this.window.isDestroyed()) {
+      this.window.removeBrowserView(tab.view)
+    }
+    if (!wc.isDestroyed()) {
+      ;(wc as unknown as { destroy?: () => void }).destroy?.()
+    }
 
     if (this.activeTabId === tabId) {
       const next = this.tabs[Math.min(index, this.tabs.length - 1)]
@@ -204,8 +222,7 @@ export class TabManager {
   layoutViews(): void {
     const bounds = this.window.getContentBounds()
     const dragHeight = process.platform === 'linux' ? 28 : 0
-    const chromeHeight = this.chromeVisible ? this.getChromeHeight() : 0
-    const top = dragHeight + chromeHeight
+    const top = this.chromeVisible ? this.getChromeHeight() : dragHeight
 
     for (const tab of this.tabs) {
       tab.view.setBounds({
@@ -219,10 +236,8 @@ export class TabManager {
 
   private getChromeHeight(): number {
     switch (this.chromePanel) {
-      case 'omnibox':
-        return 108
-      case 'tabs':
-        return 130
+      case 'navigation':
+        return 212
       case 'bookmarks':
         return 220
       case 'settings':
@@ -232,10 +247,28 @@ export class TabManager {
     }
   }
 
+  private syncChromeWithActiveTab(): void {
+    const active = this.getActiveTab()
+    if (!active) return
+
+    const isHome = active.view.webContents.getURL().startsWith('browsy://home')
+    if (isHome && (!this.chromeVisible || this.chromePanel !== 'navigation')) {
+      this.showChrome('navigation')
+    } else if (!isHome && this.chromePanel === 'navigation' && this.chromeVisible) {
+      this.hideChrome()
+    }
+  }
+
   destroy(): void {
     for (const tab of this.tabs) {
-      if (tab.devToolsOpen) tab.view.webContents.closeDevTools()
-      this.window.removeBrowserView(tab.view)
+      const wc = tab.view.webContents
+      if (!wc.isDestroyed() && tab.devToolsOpen) wc.closeDevTools()
+      if (!this.window.isDestroyed()) {
+        this.window.removeBrowserView(tab.view)
+      }
+      if (!wc.isDestroyed()) {
+        ;(wc as unknown as { destroy?: () => void }).destroy?.()
+      }
     }
     this.tabs = []
     this.activeTabId = null
@@ -274,7 +307,12 @@ export class TabManager {
     wc.on('did-start-loading', () => this.onUpdate())
     wc.on('did-stop-loading', () => this.onUpdate())
     wc.on('page-title-updated', () => this.onUpdate())
-    wc.on('did-navigate', () => this.onUpdate())
+    wc.on('did-navigate', () => {
+      if (tab.id === this.activeTabId) {
+        this.syncChromeWithActiveTab()
+      }
+      this.onUpdate()
+    })
     wc.on('did-navigate-in-page', () => this.onUpdate())
 
     wc.on('did-finish-load', () => {
@@ -282,6 +320,9 @@ export class TabManager {
       const title = wc.getTitle()
       if (url && !url.startsWith('browsy://error')) {
         addHistoryEntry(url, title)
+      }
+      if (tab.id === this.activeTabId) {
+        this.syncChromeWithActiveTab()
       }
       this.onUpdate()
     })
@@ -307,13 +348,15 @@ export class TabManager {
       }
     })
 
-    wc.on('before-input-event', (_event, input) => {
+    wc.on('before-input-event', (event, input) => {
       if (input.key === 'Escape') {
+        event.preventDefault()
         this.onShortcut('hide-chrome')
         return
       }
 
       if (input.key === 'F12') {
+        event.preventDefault()
         this.onShortcut('toggle-devtools')
         return
       }
@@ -322,17 +365,22 @@ export class TabManager {
       if (!mod) return
 
       const key = input.key.toLowerCase()
-      if (key === 'l') this.onShortcut('omnibox')
-      else if (key === 't' && input.shift) this.onShortcut('tabs')
-      else if (key === 't') this.onShortcut('new-tab')
-      else if (key === 'w') this.onShortcut('close-tab')
-      else if (key === 'r') this.onShortcut('reload')
-      else if (key === '[') this.onShortcut('back')
-      else if (key === ']') this.onShortcut('forward')
-      else if (key === 'b') this.onShortcut('bookmarks')
-      else if (key === ',') this.onShortcut('settings')
-      else if (key === 'i' && input.shift) this.onShortcut('toggle-devtools')
-      else if (key === 'n') this.onShortcut('new-window')
+      let action: string | null = null
+      if (key === 'l') action = 'navigation'
+      else if (key === 't' && !input.shift) action = 'new-tab'
+      else if (key === 'w') action = 'close-tab'
+      else if (key === 'r') action = 'reload'
+      else if (key === '[') action = 'back'
+      else if (key === ']') action = 'forward'
+      else if (key === 'b') action = 'bookmarks'
+      else if (key === ',') action = 'settings'
+      else if (key === 'i' && input.shift) action = 'toggle-devtools'
+      else if (key === 'n') action = 'new-window'
+
+      if (action) {
+        event.preventDefault()
+        this.onShortcut(action)
+      }
     })
   }
 }

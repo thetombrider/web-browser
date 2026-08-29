@@ -1,6 +1,6 @@
 import { protocol } from 'electron'
 import { getRecentSites } from './store'
-import { RECENT_SITES_COUNT } from '../../shared/types'
+import { APP_SURFACE_DARK, APP_SURFACE_LIGHT, RECENT_SITES_COUNT } from '../../shared/types'
 
 function escapeHtml(value: string): string {
   return value
@@ -10,29 +10,40 @@ function escapeHtml(value: string): string {
     .replace(/"/g, '&quot;')
 }
 
+function getSiteName(title: string, url: string): string {
+  const trimmedTitle = title.trim()
+  if (trimmedTitle && !/^https?:\/\//i.test(trimmedTitle)) return trimmedTitle
+
+  try {
+    return new URL(url).hostname.replace(/^www\./i, '')
+  } catch {
+    return url
+  }
+}
+
 function baseStyles(): string {
   return `
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #0f0f12;
+      background: ${APP_SURFACE_DARK};
       color: #e8e8ec;
       min-height: 100vh;
       padding: 48px 32px;
     }
     @media (prefers-color-scheme: light) {
-      body { background: #f5f5f7; color: #1a1a1e; }
-      .site { background: #fff; border-color: #ddd; }
-      .site:hover { border-color: #888; }
+      body { background: ${APP_SURFACE_LIGHT}; color: #1a1a1e; }
       .muted { color: #666; }
     }
     h1 { font-size: 1.5rem; font-weight: 600; margin-bottom: 8px; }
     .muted { color: #999; margin-bottom: 32px; font-size: 0.9rem; }
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      grid-template-columns: minmax(0, 640px);
       gap: 12px;
-      max-width: 900px;
+      justify-content: center;
+      width: 100%;
+      margin: 0 auto;
     }
     .site {
       display: block;
@@ -47,6 +58,11 @@ function baseStyles(): string {
     .site:hover { border-color: #666; }
     .site-title { font-weight: 500; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .site-url { font-size: 0.8rem; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    @media (prefers-color-scheme: light) {
+      .site { background: #fff; border-color: #ddd; }
+      .site:hover { border-color: #888; }
+      .site-url { color: #666; }
+    }
     .empty { color: #888; font-size: 0.95rem; }
     .error-code { font-size: 3rem; font-weight: 700; color: #e55; margin-bottom: 8px; }
     .error-msg { margin-bottom: 24px; max-width: 600px; line-height: 1.5; }
@@ -66,12 +82,12 @@ export function renderHomePage(): string {
   const recent = getRecentSites(RECENT_SITES_COUNT)
   const sitesHtml =
     recent.length === 0
-      ? '<p class="empty">No recent sites yet. Press Ctrl+L to open the omnibox and start browsing.</p>'
+      ? '<p class="empty">No recent sites yet. Use the address bar above to start browsing.</p>'
       : `<div class="grid">${recent
           .map(
             (site) => `
         <a class="site" href="${escapeHtml(site.url)}">
-          <div class="site-title">${escapeHtml(site.title || site.url)}</div>
+          <div class="site-title">${escapeHtml(getSiteName(site.title, site.url))}</div>
           <div class="site-url">${escapeHtml(site.url)}</div>
         </a>`
           )

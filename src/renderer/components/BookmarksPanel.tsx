@@ -5,7 +5,8 @@ import {
   HStack,
   IconButton,
   Text,
-  VStack
+  VStack,
+  useColorModeValue
 } from '@chakra-ui/react'
 import { DeleteIcon } from '@chakra-ui/icons'
 import type { Bookmark } from '@shared/types'
@@ -25,12 +26,16 @@ export function BookmarksPanel({
   onAdd,
   onClose
 }: BookmarksPanelProps) {
+  const surface = useColorModeValue('whiteAlpha.900', 'blackAlpha.700')
+  const border = useColorModeValue('blackAlpha.200', 'whiteAlpha.200')
+  const hoverBackground = useColorModeValue('blackAlpha.50', 'whiteAlpha.100')
+
   return (
     <Box
-      bg="blackAlpha.800"
+      bg={surface}
       backdropFilter="blur(12px)"
       borderBottom="1px solid"
-      borderColor="whiteAlpha.200"
+      borderColor={border}
       px={4}
       py={3}
       pt="36px"
@@ -59,7 +64,7 @@ export function BookmarksPanel({
               px={2}
               py={2}
               borderRadius="md"
-              _hover={{ bg: 'whiteAlpha.100' }}
+              _hover={{ bg: hoverBackground }}
               cursor="pointer"
             >
               <Box flex={1} onClick={() => onNavigate(bookmark.url)}>

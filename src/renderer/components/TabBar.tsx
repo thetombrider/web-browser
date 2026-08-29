@@ -1,10 +1,10 @@
 import {
   Box,
-  Button,
   HStack,
   IconButton,
   Text,
-  CloseButton
+  CloseButton,
+  useColorModeValue
 } from '@chakra-ui/react'
 import { AddIcon } from '@chakra-ui/icons'
 import type { TabState } from '@shared/types'
@@ -19,21 +19,19 @@ interface TabBarProps {
 }
 
 export function TabBar({ tabs, activeTabId, onSwitch, onClose, onNew, onClosePanel }: TabBarProps) {
+  const divider = useColorModeValue('blackAlpha.100', 'whiteAlpha.100')
+  const activeBackground = useColorModeValue('blackAlpha.100', 'whiteAlpha.200')
+  const inactiveBackground = useColorModeValue('blackAlpha.50', 'whiteAlpha.100')
+
   return (
     <Box
-      bg="blackAlpha.800"
-      backdropFilter="blur(12px)"
-      borderBottom="1px solid"
-      borderColor="whiteAlpha.200"
       px={3}
       py={2}
-      pt="36px"
+      borderBottom="1px solid"
+      borderColor={divider}
       style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
     >
-      <HStack justify="space-between" mb={2}>
-        <Text fontSize="sm" fontWeight="medium" opacity={0.8}>
-          Tabs
-        </Text>
+      <HStack justify="flex-end" mb={2}>
         <HStack>
           <IconButton
             aria-label="New tab"
@@ -52,9 +50,7 @@ export function TabBar({ tabs, activeTabId, onSwitch, onClose, onNew, onClosePan
           return (
             <HStack
               key={tab.id}
-              bg={isActive ? 'whiteAlpha.200' : 'whiteAlpha.100'}
-              border="1px solid"
-              borderColor={isActive ? 'whiteAlpha.400' : 'whiteAlpha.200'}
+              bg={isActive ? activeBackground : inactiveBackground}
               borderRadius="md"
               px={3}
               py={1}
@@ -78,9 +74,6 @@ export function TabBar({ tabs, activeTabId, onSwitch, onClose, onNew, onClosePan
           )
         })}
       </HStack>
-      <Button size="xs" variant="link" mt={2} onClick={onClosePanel}>
-        Esc to hide
-      </Button>
     </Box>
   )
 }
