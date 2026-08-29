@@ -161,19 +161,26 @@ export class WindowManager {
   }
 
   private registerRendererShortcuts(win: BrowserWindow): void {
-    win.webContents.on('before-input-event', (_event, input) => {
+    win.webContents.on('before-input-event', (event, input) => {
       if (input.key === 'Escape') {
+        event.preventDefault()
         this.handleShortcut(win.id, 'hide-chrome')
         return
       }
       const mod = input.control || input.meta
       if (!mod) return
       const key = input.key.toLowerCase()
-      if (key === 'l') this.handleShortcut(win.id, 'navigation')
-      else if (key === 't' && !input.shift) this.handleShortcut(win.id, 'new-tab')
-      else if (key === 'w') this.handleShortcut(win.id, 'close-tab')
-      else if (key === 'b') this.handleShortcut(win.id, 'bookmarks')
-      else if (key === ',') this.handleShortcut(win.id, 'settings')
+      let action: string | null = null
+      if (key === 'l') action = 'navigation'
+      else if (key === 't' && !input.shift) action = 'new-tab'
+      else if (key === 'w') action = 'close-tab'
+      else if (key === 'b') action = 'bookmarks'
+      else if (key === ',') action = 'settings'
+
+      if (action) {
+        event.preventDefault()
+        this.handleShortcut(win.id, action)
+      }
     })
   }
 

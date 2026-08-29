@@ -348,13 +348,15 @@ export class TabManager {
       }
     })
 
-    wc.on('before-input-event', (_event, input) => {
+    wc.on('before-input-event', (event, input) => {
       if (input.key === 'Escape') {
+        event.preventDefault()
         this.onShortcut('hide-chrome')
         return
       }
 
       if (input.key === 'F12') {
+        event.preventDefault()
         this.onShortcut('toggle-devtools')
         return
       }
@@ -363,16 +365,22 @@ export class TabManager {
       if (!mod) return
 
       const key = input.key.toLowerCase()
-      if (key === 'l') this.onShortcut('navigation')
-      else if (key === 't' && !input.shift) this.onShortcut('new-tab')
-      else if (key === 'w') this.onShortcut('close-tab')
-      else if (key === 'r') this.onShortcut('reload')
-      else if (key === '[') this.onShortcut('back')
-      else if (key === ']') this.onShortcut('forward')
-      else if (key === 'b') this.onShortcut('bookmarks')
-      else if (key === ',') this.onShortcut('settings')
-      else if (key === 'i' && input.shift) this.onShortcut('toggle-devtools')
-      else if (key === 'n') this.onShortcut('new-window')
+      let action: string | null = null
+      if (key === 'l') action = 'navigation'
+      else if (key === 't' && !input.shift) action = 'new-tab'
+      else if (key === 'w') action = 'close-tab'
+      else if (key === 'r') action = 'reload'
+      else if (key === '[') action = 'back'
+      else if (key === ']') action = 'forward'
+      else if (key === 'b') action = 'bookmarks'
+      else if (key === ',') action = 'settings'
+      else if (key === 'i' && input.shift) action = 'toggle-devtools'
+      else if (key === 'n') action = 'new-window'
+
+      if (action) {
+        event.preventDefault()
+        this.onShortcut(action)
+      }
     })
   }
 }
