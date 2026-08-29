@@ -33,9 +33,6 @@ function baseStyles(): string {
     }
     @media (prefers-color-scheme: light) {
       body { background: ${APP_SURFACE_LIGHT}; color: #1a1a1e; }
-      .site { background: #fff; border-color: #ddd; }
-      .site:hover { border-color: #888; }
-      .site-url { color: #666; }
       .muted { color: #666; }
     }
     h1 { font-size: 1.5rem; font-weight: 600; margin-bottom: 8px; }
@@ -61,6 +58,11 @@ function baseStyles(): string {
     .site:hover { border-color: #666; }
     .site-title { font-weight: 500; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .site-url { font-size: 0.8rem; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    @media (prefers-color-scheme: light) {
+      .site { background: #fff; border-color: #ddd; }
+      .site:hover { border-color: #888; }
+      .site-url { color: #666; }
+    }
     .empty { color: #888; font-size: 0.95rem; }
     .error-code { font-size: 3rem; font-weight: 700; color: #e55; margin-bottom: 8px; }
     .error-msg { margin-bottom: 24px; max-width: 600px; line-height: 1.5; }
