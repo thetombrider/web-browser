@@ -95,6 +95,14 @@ export class ApiServer {
       }
     })
 
+    this.server.on('error', (err: NodeJS.ErrnoException) => {
+      if (err.code === 'EADDRINUSE') {
+        console.log(`[Browsy] API port ${BROWSY_API_PORT} already in use, reusing existing server`)
+        return
+      }
+      console.error('[Browsy] API server error:', err)
+    })
+
     this.server.listen(BROWSY_API_PORT, '127.0.0.1', () => {
       console.log(`[Browsy] API listening on http://127.0.0.1:${BROWSY_API_PORT}`)
     })
