@@ -1,0 +1,39 @@
+{
+  "name": "browsy",
+  "version": "0.1.0",
+  "description": "A minimal, keyboard-first Electron browser",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "mcp": "tsx src/mcp/bridge.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json"
+  },
+  "keywords": ["electron", "browser", "mcp"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@chakra-ui/icons": "^2.1.1",
+    "@chakra-ui/react": "^2.8.2",
+    "@emotion/react": "^11.11.4",
+    "@emotion/styled": "^11.11.5",
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "electron-store": "^8.2.0",
+    "framer-motion": "^11.0.28",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.7",
+    "@types/react": "^18.2.79",
+    "@types/react-dom": "^18.2.25",
+    "@vitejs/plugin-react": "^4.2.1",
+    "electron": "^29.3.0",
+    "electron-vite": "^2.1.0",
+    "tsx": "^4.7.2",
+    "typescript": "^5.4.5",
+    "vite": "^5.2.10"
+  }
+}
