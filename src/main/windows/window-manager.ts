@@ -333,6 +333,10 @@ export class WindowManager {
         void tabs.openNewTab()
         break
       case 'close-tab': {
+        if (entry.carousel) {
+          this.closeCarouselTab(windowId)
+          return
+        }
         const id = tabs.getActiveTabId()
         if (id) tabs.closeTab(id)
         break
@@ -394,12 +398,37 @@ export class WindowManager {
 
     const tabIds = entry.tabs.getTabs().map((tab) => tab.id)
     const activeIndex = tabIds.indexOf(entry.tabs.getActiveTabId() ?? '')
-    const selectedIndex = (activeIndex + direction + tabIds.length) % tabIds.length
     entry.carouselTabIds = tabIds
-    entry.carousel = { selectedTabId: tabIds[selectedIndex], direction }
+    entry.carousel = { selectedTabId: tabIds[activeIndex], direction }
     this.layoutWindow(windowId)
     this.broadcastState(windowId)
     void this.captureCarouselThumbnails(windowId, tabIds)
+  }
+
+  private closeCarouselTab(windowId: number): void {
+    const entry = this.windows.get(windowId)
+    const carousel = entry?.carousel
+    const selectedTabId = carousel?.selectedTabId
+    if (!entry || !carousel || !selectedTabId) return
+
+    const selectedIndex = entry.carouselTabIds.indexOf(selectedTabId)
+    const direction = carousel.direction
+    entry.tabs.closeTab(selectedTabId)
+    entry.carouselTabIds = entry.carouselTabIds.filter((tabId) => tabId !== selectedTabId && entry.tabs.hasTab(tabId))
+
+    if (entry.carouselTabIds.length < 2) {
+      this.dismissCarousel(windowId)
+      return
+    }
+
+    const nextIndex = Math.min(Math.max(selectedIndex, 0), entry.carouselTabIds.length - 1)
+    entry.carousel = {
+      selectedTabId: entry.carouselTabIds[nextIndex],
+      direction
+    }
+    this.layoutWindow(windowId)
+    this.broadcastState(windowId)
+    void this.captureCarouselThumbnails(windowId, entry.carouselTabIds)
   }
 
   private async captureCarouselThumbnails(windowId: number, tabIds: string[]): Promise<void> {
