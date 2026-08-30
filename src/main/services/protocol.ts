@@ -43,7 +43,7 @@ function baseStyles(): string {
       background: ${APP_SURFACE_DARK};
       color: #f4f4f5;
       min-height: 100vh;
-      padding: 28px 32px 48px;
+      padding: 120px 32px 48px;
     }
     @media (prefers-color-scheme: light) {
       body { background: ${APP_SURFACE_LIGHT}; color: #18181b; }

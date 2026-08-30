@@ -5,8 +5,9 @@ A minimal, keyboard-first Electron browser built for learning and portfolio use.
 ## Features
 
 - Full-page browsing with hidden chrome by default
-- Compact navigation chrome: tabs, omnibox suggestions, back/forward/reload
-- Multiple windows and tabs (`BrowserView` per tab)
+- Compact floating navigation chrome over full-bleed pages (`WebContentsView`)
+- Omnibox suggestions and command palette (`/` shortcuts)
+- Multiple windows and tabs
 - Custom homepage with recent sites
 - Custom error pages
 - DevTools docked right, one per tab (`F12`)
@@ -101,10 +102,10 @@ Connect with Playwright, Puppeteer, or any CDP client.
 
 ## Architecture
 
-- **Main process** — windows, tabs, `BrowserView` layout, downloads, pop-ups, API server
+- **Main process** — windows, tabs, `WebContentsView` layout, downloads, pop-ups, API server
 - **Preload** — typed `contextBridge` IPC
-- **Renderer** — React + Chakra UI overlay chrome only
-- **BrowserView** — actual web content per tab
+- **Chrome view** — React + Chakra UI overlay (`WebContentsView` on top)
+- **Tab views** — full-bleed `WebContentsView` per tab underneath chrome
 
 ## License
 

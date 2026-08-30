@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain, app, type IpcMainInvokeEvent } from 'electron'
+import { BrowserWindow, WebContentsView, ipcMain, app, type IpcMainInvokeEvent } from 'electron'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
 import { TabManager } from '../tabs/tab-manager'
@@ -17,11 +17,13 @@ import {
 } from '../services/store'
 import { resolveNavigationInput, generateId } from '../../shared/utils'
 import type { BrowserState, ChromePanel, SessionWindow } from '../../shared/types'
-import { IPC } from '../../shared/types'
+import { CHROME_DRAG_HEIGHT, CHROME_NAV_HEIGHT, CHROME_PANEL_HEIGHT, IPC } from '../../shared/types'
 
 interface BrowserWindowEntry {
   window: BrowserWindow
   tabs: TabManager
+  chromeView: WebContentsView
+  chromeHeight: number
 }
 
 export class WindowManager {
@@ -64,27 +66,50 @@ export class WindowManager {
         ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 12, y: 12 } }
         : { frame: false }),
       webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true
+      }
+    })
+
+    // Window shell is unused for UI — chrome lives in its own WebContentsView.
+    await win.loadURL('data:text/html,<html><body style="margin:0;background:#111114"></body></html>')
+
+    const chromeView = new WebContentsView({
+      webPreferences: {
         preload: join(__dirname, '../preload/index.js'),
         contextIsolation: true,
         nodeIntegration: false,
-        sandbox: false
+        sandbox: false,
+        backgroundThrottling: false
       }
     })
+    chromeView.setBackgroundColor('#00000000')
 
     const tabs = new TabManager(
       win,
       () => this.broadcastState(win.id),
       (id, url) => {
-        win.webContents.send('browser:popup-request', { id, url })
+        chromeView.webContents.send(IPC.POPUP_REQUEST, { id, url })
       },
-      (action) => this.handleShortcut(win.id, action)
+      (action) => this.handleShortcut(win.id, action),
+      () => this.layoutWindow(win.id)
     )
 
-    this.windows.set(win.id, { window: win, tabs })
+    this.windows.set(win.id, {
+      window: win,
+      tabs,
+      chromeView,
+      chromeHeight: CHROME_NAV_HEIGHT
+    })
 
     win.on('ready-to-show', () => win.show())
+    win.on('resize', () => this.layoutWindow(win.id))
     win.on('closed', () => {
       tabs.destroy()
+      if (!chromeView.webContents.isDestroyed()) {
+        chromeView.webContents.close()
+      }
       this.windows.delete(win.id)
       if (this.windows.size === 0) {
         app.quit()
@@ -99,7 +124,7 @@ export class WindowManager {
         ? rendererUrl
         : pathToFileURL(join(__dirname, '../renderer/index.html')).href
 
-    await win.loadURL(chromeUrl)
+    await chromeView.webContents.loadURL(chromeUrl)
 
     if (session?.tabs?.length) {
       for (const tab of session.tabs) {
@@ -110,9 +135,46 @@ export class WindowManager {
       await tabs.createTab('browsy://home')
     }
 
-    this.registerRendererShortcuts(win)
+    this.layoutWindow(win.id)
+    this.registerChromeShortcuts(chromeView, win.id)
     this.broadcastState(win.id)
     return win
+  }
+
+  private layoutWindow(windowId: number): void {
+    const entry = this.windows.get(windowId)
+    if (!entry || entry.window.isDestroyed()) return
+
+    entry.tabs.layoutTabViews()
+
+    const bounds = entry.window.getContentBounds()
+    const chromeVisible = entry.tabs.isChromeVisible()
+    const height = chromeVisible
+      ? Math.max(CHROME_DRAG_HEIGHT, entry.chromeHeight)
+      : CHROME_DRAG_HEIGHT
+
+    entry.chromeView.setBounds({
+      x: 0,
+      y: 0,
+      width: bounds.width,
+      height: Math.min(height, bounds.height)
+    })
+
+    // Keep chrome above the active page view.
+    entry.window.contentView.addChildView(entry.chromeView)
+
+    if (chromeVisible) {
+      entry.chromeView.webContents.focus()
+    }
+  }
+
+  private setChromeHeight(windowId: number, height: number): void {
+    const entry = this.windows.get(windowId)
+    if (!entry) return
+    const next = Math.max(CHROME_DRAG_HEIGHT, Math.round(height))
+    if (next === entry.chromeHeight) return
+    entry.chromeHeight = next
+    this.layoutWindow(windowId)
   }
 
   private handleShortcut(windowId: number, action: string): void {
@@ -123,12 +185,15 @@ export class WindowManager {
     switch (action) {
       case 'navigation':
         tabs.showChrome('navigation')
+        entry.chromeHeight = CHROME_NAV_HEIGHT
         break
       case 'bookmarks':
         tabs.showChrome('bookmarks')
+        entry.chromeHeight = CHROME_PANEL_HEIGHT
         break
       case 'settings':
         tabs.showChrome('settings')
+        entry.chromeHeight = CHROME_PANEL_HEIGHT
         break
       case 'hide-chrome':
         tabs.hideChrome()
@@ -157,14 +222,15 @@ export class WindowManager {
         void this.createWindow()
         break
     }
+    this.layoutWindow(windowId)
     this.broadcastState(windowId)
   }
 
-  private registerRendererShortcuts(win: BrowserWindow): void {
-    win.webContents.on('before-input-event', (event, input) => {
+  private registerChromeShortcuts(chromeView: WebContentsView, windowId: number): void {
+    chromeView.webContents.on('before-input-event', (event, input) => {
       if (input.key === 'Escape') {
         event.preventDefault()
-        this.handleShortcut(win.id, 'hide-chrome')
+        this.handleShortcut(windowId, 'hide-chrome')
         return
       }
       const mod = input.control || input.meta
@@ -179,7 +245,7 @@ export class WindowManager {
 
       if (action) {
         event.preventDefault()
-        this.handleShortcut(win.id, action)
+        this.handleShortcut(windowId, action)
       }
     })
   }
@@ -205,6 +271,7 @@ export class WindowManager {
     await entry.tabs.navigate(url)
     if (url === 'browsy://home') entry.tabs.showChrome('navigation')
     else entry.tabs.hideChrome()
+    this.layoutWindow(entry.window.id)
   }
 
   goBackFocused(): void {
@@ -228,6 +295,7 @@ export class WindowManager {
     if (!entry) return
     const resolved = url ? resolveNavigationInput(url) : 'browsy://home'
     await entry.tabs.createTab(resolved)
+    this.layoutWindow(entry.window.id)
   }
 
   closeTabFocused(tabId?: string): void {
@@ -235,10 +303,14 @@ export class WindowManager {
     if (!entry) return
     const id = tabId ?? entry.tabs.getActiveTabId()
     if (id) entry.tabs.closeTab(id)
+    this.layoutWindow(entry.window.id)
   }
 
   switchTabFocused(tabId: string): void {
-    this.getFocusedEntry()?.tabs.switchTab(tabId)
+    const entry = this.getFocusedEntry()
+    if (!entry) return
+    entry.tabs.switchTab(tabId)
+    this.layoutWindow(entry.window.id)
   }
 
   toggleDevToolsFocused(): void {
@@ -257,13 +329,22 @@ export class WindowManager {
 
   private broadcastState(windowId: number): void {
     const entry = this.windows.get(windowId)
-    if (!entry) return
+    if (!entry || entry.chromeView.webContents.isDestroyed()) return
     const state = this.buildState(entry.tabs)
-    entry.window.webContents.send(IPC.STATE_CHANGED, state)
+    entry.chromeView.webContents.send(IPC.STATE_CHANGED, state)
   }
 
   private getEntryFromEvent(event: IpcMainInvokeEvent): BrowserWindowEntry | null {
-    const win = BrowserWindow.fromWebContents(event.sender)
+    const wc = event.sender
+    for (const entry of this.windows.values()) {
+      if (entry.chromeView.webContents.id === wc.id) return entry
+      for (const tab of entry.tabs.getTabs()) {
+        if (!tab.view.webContents.isDestroyed() && tab.view.webContents.id === wc.id) {
+          return entry
+        }
+      }
+    }
+    const win = BrowserWindow.fromWebContents(wc)
     if (!win) return null
     return this.windows.get(win.id) ?? null
   }
@@ -281,6 +362,7 @@ export class WindowManager {
       await entry.tabs.navigate(url)
       if (url === 'browsy://home') entry.tabs.showChrome('navigation')
       else entry.tabs.hideChrome()
+      this.layoutWindow(entry.window.id)
     })
 
     ipcMain.handle(IPC.GO_BACK, (event) => {
@@ -304,6 +386,7 @@ export class WindowManager {
       if (!entry) return
       const resolved = url ? resolveNavigationInput(url) : 'browsy://home'
       await entry.tabs.createTab(resolved)
+      this.layoutWindow(entry.window.id)
     })
 
     ipcMain.handle(IPC.CLOSE_TAB, (event, tabId?: string) => {
@@ -311,10 +394,14 @@ export class WindowManager {
       if (!entry) return
       const id = tabId ?? entry.tabs.getActiveTabId()
       if (id) entry.tabs.closeTab(id)
+      this.layoutWindow(entry.window.id)
     })
 
     ipcMain.handle(IPC.SWITCH_TAB, (event, tabId: string) => {
-      this.getEntryFromEvent(event)?.tabs.switchTab(tabId)
+      const entry = this.getEntryFromEvent(event)
+      if (!entry) return
+      entry.tabs.switchTab(tabId)
+      this.layoutWindow(entry.window.id)
     })
 
     ipcMain.handle(IPC.NEW_WINDOW, async () => {
@@ -323,18 +410,26 @@ export class WindowManager {
 
     ipcMain.handle(IPC.SHOW_CHROME, (event, panel: ChromePanel) => {
       const entry = this.getEntryFromEvent(event)
-      entry?.tabs.showChrome(panel)
-      if (entry) this.broadcastState(entry.window.id)
+      if (!entry) return
+      if (panel === 'navigation') entry.chromeHeight = CHROME_NAV_HEIGHT
+      else entry.chromeHeight = CHROME_PANEL_HEIGHT
+      entry.tabs.showChrome(panel)
+      this.layoutWindow(entry.window.id)
+      this.broadcastState(entry.window.id)
     })
 
     ipcMain.handle(IPC.HIDE_CHROME, (event) => {
       const entry = this.getEntryFromEvent(event)
-      entry?.tabs.hideChrome()
-      if (entry) this.broadcastState(entry.window.id)
+      if (!entry) return
+      entry.tabs.hideChrome()
+      this.layoutWindow(entry.window.id)
+      this.broadcastState(entry.window.id)
     })
 
     ipcMain.handle(IPC.SET_CHROME_HEIGHT, (event, height: number) => {
-      this.getEntryFromEvent(event)?.tabs.setChromeHeight(height)
+      const entry = this.getEntryFromEvent(event)
+      if (!entry) return
+      this.setChromeHeight(entry.window.id, height)
     })
 
     ipcMain.handle(IPC.TOGGLE_DEVTOOLS, (event) => {

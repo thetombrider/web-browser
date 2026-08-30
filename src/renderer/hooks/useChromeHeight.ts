@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 
-/** Reports chrome panel height to the main process so BrowserView stays in sync. */
+/** Reports overlay chrome height so the chrome WebContentsView can be sized without moving the page. */
 export function useChromeHeight<T extends HTMLElement>() {
   const ref = useRef<T | null>(null)
 

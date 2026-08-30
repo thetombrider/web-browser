@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Box } from '@chakra-ui/react'
 import type { Bookmark, BrowserState, PopupRequest } from '@shared/types'
+import { CHROME_DRAG_HEIGHT } from '@shared/types'
 import { NavigationChrome } from './components/NavigationChrome'
 import { BookmarksPanel } from './components/BookmarksPanel'
 import { SettingsPanel } from './components/SettingsPanel'
@@ -38,6 +39,15 @@ export default function App() {
       void refreshBookmarks()
     }
   }, [state.chromePanel, refreshBookmarks])
+
+  // Expand overlay to full window while a popup dialog is open.
+  useEffect(() => {
+    if (popup) {
+      void window.browsy.setChromeHeight(window.innerHeight)
+    } else if (!state.chromeVisible) {
+      void window.browsy.setChromeHeight(CHROME_DRAG_HEIGHT)
+    }
+  }, [popup, state.chromeVisible])
 
   const runCommand = useCallback((action: CommandAction) => {
     switch (action) {
