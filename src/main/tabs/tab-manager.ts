@@ -163,13 +163,17 @@ export class TabManager {
   goBack(): void {
     const active = this.getActiveTab()
     const wc = active?.view.webContents
-    if (wc?.canGoBack()) wc.goBack()
+    if (wc && !wc.isDestroyed() && wc.navigationHistory.canGoBack()) {
+      wc.navigationHistory.goBack()
+    }
   }
 
   goForward(): void {
     const active = this.getActiveTab()
     const wc = active?.view.webContents
-    if (wc?.canGoForward()) wc.goForward()
+    if (wc && !wc.isDestroyed() && wc.navigationHistory.canGoForward()) {
+      wc.navigationHistory.goForward()
+    }
   }
 
   reload(): void {
@@ -280,8 +284,8 @@ export class TabManager {
       title: wc.isDestroyed() ? 'New Tab' : wc.getTitle() || 'New Tab',
       url: wc.isDestroyed() ? 'browsy://home' : wc.getURL() || 'browsy://home',
       isLoading: !wc.isDestroyed() && wc.isLoading(),
-      canGoBack: !wc.isDestroyed() && wc.canGoBack(),
-      canGoForward: !wc.isDestroyed() && wc.canGoForward()
+      canGoBack: !wc.isDestroyed() && wc.navigationHistory.canGoBack(),
+      canGoForward: !wc.isDestroyed() && wc.navigationHistory.canGoForward()
     }
   }
 
