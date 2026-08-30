@@ -20,7 +20,7 @@ export const CHROME_PEEK_HEIGHT = 6
 /** Top padding on browsy:// internal pages (below the chrome strip). */
 export const HOME_PAGE_TOP_PADDING = 16
 
-export type ChromePanel = 'navigation' | 'bookmarks' | 'shortcuts' | null
+export type ChromePanel = 'navigation' | 'bookmarks' | null
 
 export type SearchEngine = 'google' | 'duckduckgo' | 'bing'
 export type RestoreSession = 'always' | 'never'
@@ -138,7 +138,7 @@ export interface BrowsyAPI {
   goForward: () => Promise<void>
   reload: () => Promise<void>
   stop: () => Promise<void>
-  newTab: (url?: string) => Promise<void>
+  newTab: (url?: string, forceNew?: boolean) => Promise<void>
   closeTab: (tabId?: string) => Promise<void>
   switchTab: (tabId: string) => Promise<void>
   nextTab: () => Promise<void>

@@ -4,7 +4,6 @@ import { AnimatePresence } from 'framer-motion'
 import type { BrowserState, PopupRequest, ToastPayload } from '@shared/types'
 import { CHROME_DRAG_HEIGHT } from '@shared/types'
 import { NavigationChrome } from './components/NavigationChrome'
-import { ShortcutsPanel } from './components/ShortcutsPanel'
 import { PopupDialog } from './components/PopupDialog'
 import { DragRegion } from './components/DragRegion'
 import { ToastHost } from './components/ToastHost'
@@ -69,7 +68,7 @@ export default function App() {
         void window.browsy.navigate('browsy://settings')
         break
       case 'shortcuts':
-        void window.browsy.showChrome('shortcuts')
+        void window.browsy.navigate('browsy://shortcuts')
         break
       case 'bookmark-page':
         void window.browsy.bookmarkPage()
@@ -118,7 +117,7 @@ export default function App() {
                   isLoading={activeTab?.isLoading ?? false}
                   onSwitchTab={(id) => window.browsy.switchTab(id)}
                   onCloseTab={(id) => window.browsy.closeTab(id)}
-                  onNewTab={() => window.browsy.newTab()}
+                  onNewTab={() => window.browsy.newTab(undefined, true)}
                   onSubmit={(value) => window.browsy.navigate(value)}
                   onClose={() => window.browsy.hideChrome()}
                   onBack={() => window.browsy.goBack()}
@@ -127,9 +126,6 @@ export default function App() {
                   onStop={() => window.browsy.stop()}
                   onCommand={runCommand}
                 />
-              )}
-              {state.chromePanel === 'shortcuts' && (
-                <ShortcutsPanel key="shortcuts" onClose={() => window.browsy.hideChrome()} />
               )}
             </AnimatePresence>
           </Box>

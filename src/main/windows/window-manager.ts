@@ -44,6 +44,8 @@ interface BrowserWindowEntry {
   tabs: TabManager
   chromeView: WebContentsView
   chromeHeight: number
+  /** Page inset below the resting chrome strip (excludes suggestion dropdown expansion). */
+  pageInset: number
   toastExpandUntil: number
   toastExpandTimer: ReturnType<typeof setTimeout> | null
   windowDrag: { startScreenX: number; startScreenY: number; startWindowX: number; startWindowY: number } | null
@@ -132,6 +134,7 @@ export class WindowManager {
       tabs,
       chromeView,
       chromeHeight: CHROME_NAV_HEIGHT,
+      pageInset: CHROME_NAV_HEIGHT,
       toastExpandUntil: 0,
       toastExpandTimer: null,
       windowDrag: null
@@ -170,30 +173,45 @@ export class WindowManager {
       if (!allowed) event.preventDefault()
     })
 
-    if (session?.tabs?.length) {
-      for (const tab of session.tabs) {
-        const url = sanitizeNavigationUrl(tab.url) ?? 'browsy://home'
-        await tabs.createTab(url, tab.active)
-      }
-    } else {
-      await tabs.createTab('browsy://home')
-    }
+    await tabs.createTab('browsy://home')
 
     this.layoutWindow(win.id)
     this.registerChromeShortcuts(chromeView, win.id)
     this.broadcastState(win.id)
+    win.show()
+
+    if (session?.tabs?.length) {
+      void this.restoreSessionTabs(win.id, session.tabs)
+    }
+
     return win
+  }
+
+  private async restoreSessionTabs(windowId: number, sessionTabs: SessionWindow['tabs']): Promise<void> {
+    const entry = this.windows.get(windowId)
+    if (!entry) return
+
+    const urls = sessionTabs
+      .map((tab) => sanitizeNavigationUrl(tab.url) ?? 'browsy://home')
+      .filter((url) => !url.startsWith('browsy://home'))
+
+    await Promise.allSettled(urls.map((url) => entry.tabs.createTab(url, false)))
+
+    if (this.windows.has(windowId)) {
+      this.layoutWindow(windowId)
+      this.broadcastState(windowId)
+    }
   }
 
   private layoutWindow(windowId: number): void {
     const entry = this.windows.get(windowId)
     if (!entry || entry.window.isDestroyed()) return
 
-    const chromeVisible = entry.tabs.isChromeVisible()
-    const topInset = chromeVisible ? CHROME_NAV_HEIGHT : CHROME_DRAG_HEIGHT
-    entry.tabs.layoutTabViews(topInset)
-
     const bounds = entry.window.getContentBounds()
+    const chromeVisible = entry.tabs.isChromeVisible()
+    const navigationInset = chromeVisible && entry.tabs.getChromePanel() === 'navigation' ? entry.pageInset : 0
+    entry.tabs.layoutTabViews(navigationInset)
+
     let height = chromeVisible
       ? Math.max(CHROME_DRAG_HEIGHT, entry.chromeHeight)
       : CHROME_DRAG_HEIGHT
@@ -231,6 +249,11 @@ export class WindowManager {
     const next = Math.max(floor, Math.round(height))
     if (next === entry.chromeHeight) return
     entry.chromeHeight = next
+    // Track the resting chrome height (suggestion dropdown excluded) so the page
+    // clears the chrome strip without jumping when suggestions expand over it.
+    if (next <= CHROME_NAV_HEIGHT + CHROME_DRAG_HEIGHT) {
+      entry.pageInset = next
+    }
     this.layoutWindow(windowId)
   }
 
@@ -240,6 +263,7 @@ export class WindowManager {
       return
     }
     entry.chromeHeight = height
+    if (panel === 'navigation') entry.pageInset = height
     entry.tabs.showChrome(panel)
   }
 
@@ -264,7 +288,8 @@ export class WindowManager {
         entry.chromeHeight = CHROME_NAV_HEIGHT
         break
       case 'shortcuts':
-        this.toggleChromePanel(entry, 'shortcuts', CHROME_PANEL_HEIGHT)
+        void tabs.navigate('browsy://shortcuts')
+        entry.chromeHeight = CHROME_NAV_HEIGHT
         break
       case 'hide-chrome':
         tabs.hideChrome()
@@ -378,8 +403,8 @@ export class WindowManager {
       else if (key === 'd') action = 'bookmark-page'
       else if (key === ',') action = 'settings'
       else if (key === '/' || key === '?' || code === 'Slash') action = 'shortcuts'
-      else if (input.meta && key === 'arrowright') action = 'next-tab'
-      else if (input.meta && key === 'arrowleft') action = 'prev-tab'
+      else if (input.meta && (key === 'arrowright' || code === 'ArrowRight')) action = 'next-tab'
+      else if (input.meta && (key === 'arrowleft' || code === 'ArrowLeft')) action = 'prev-tab'
 
       if (action) {
         event.preventDefault()
@@ -552,14 +577,14 @@ export class WindowManager {
       this.getEntryFromEvent(event)?.tabs.stop()
     })
 
-    ipcMain.handle(IPC.NEW_TAB, async (event, url?: string) => {
+    ipcMain.handle(IPC.NEW_TAB, async (event, url?: string, forceNew?: unknown) => {
       const entry = this.getEntryFromEvent(event)
       if (!entry) return
       if (url) {
         const resolved = resolveNavigationInput(url, getSettings().searchEngine)
-        await entry.tabs.openNewTab(resolved)
+        await entry.tabs.openNewTab(resolved, forceNew === true)
       } else {
-        await entry.tabs.openNewTab()
+        await entry.tabs.openNewTab('browsy://home', forceNew === true)
       }
       this.layoutWindow(entry.window.id)
     })
@@ -600,8 +625,12 @@ export class WindowManager {
     ipcMain.handle(IPC.SHOW_CHROME, (event, panel: ChromePanel) => {
       const entry = this.getEntryFromEvent(event)
       if (!entry) return
-      if (panel === 'navigation') entry.chromeHeight = CHROME_NAV_HEIGHT
-      else entry.chromeHeight = CHROME_PANEL_HEIGHT
+      if (panel === 'navigation') {
+        entry.chromeHeight = CHROME_NAV_HEIGHT
+        entry.pageInset = CHROME_NAV_HEIGHT
+      } else {
+        entry.chromeHeight = CHROME_PANEL_HEIGHT
+      }
       entry.tabs.showChrome(panel)
       this.layoutWindow(entry.window.id)
       this.broadcastState(entry.window.id)

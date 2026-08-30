@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Shell(git merge --no-ff origin/cursor/reduce-new-tab-top-spacing-a203 -m \"Merge branch 'cursor/reduce-new-tab-top-spacing-a203' into main\" 2>&1; echo \"---EXIT:$?---\")",
+      "Shell(git stash pop 2>&1; echo \"---EXIT:$?---\")",
+      "Shell(git push origin main 2>&1; echo \"---EXIT:$?---\")"
+    ],
+    "deny": [],
+    "defaultMode": "default"
+  }
+}

@@ -92,7 +92,7 @@ function pageStyles(): string {
         color: #18181b;
       }
       .filter:focus { border-color: rgba(0,0,0,0.22); }
-      .domain-head:hover, .row:hover { background: ${APP_SURFACE_ELEVATED_LIGHT}; }
+      .domain-head:hover, .row:hover, .row.selected { background: ${APP_SURFACE_ELEVATED_LIGHT}; }
       .glyph { background: rgba(0,0,0,0.06); color: #52525b; }
       .chevron { color: #a1a1aa; }
     }
@@ -196,6 +196,7 @@ function pageStyles(): string {
       min-width: 0;
     }
     .row:hover { background: ${APP_SURFACE_ELEVATED_DARK}; }
+    .row.selected { background: ${APP_SURFACE_ELEVATED_DARK}; outline: 1px solid rgba(255,255,255,0.16); }
     .row.hidden { display: none; }
     .title {
       flex: 1;
@@ -219,6 +220,14 @@ function pageStyles(): string {
     }
     .empty { color: #71717a; font-size: 0.9rem; line-height: 1.5; max-width: 420px; }
     .empty.hidden { display: none; }
+    .footer-link {
+      display: inline-block;
+      margin-top: 24px;
+      color: #71717a;
+      font-size: 0.85rem;
+      text-decoration: none;
+    }
+    .footer-link:hover { color: inherit; }
   `
 }
 
@@ -231,18 +240,44 @@ function clientScript(): string {
       try { bookmarks = JSON.parse(dataEl.textContent || '[]'); } catch (e) { bookmarks = []; }
 
       var filter = document.getElementById('filter');
-      var groupsRoot = document.getElementById('groups');
-      var emptyFilter = document.getElementById('empty-filter');
-      var emptyAll = document.getElementById('empty-all');
-      if (!filter || !groupsRoot) return;
+       var groupsRoot = document.getElementById('groups');
+       var emptyFilter = document.getElementById('empty-filter');
+       var emptyAll = document.getElementById('empty-all');
+       var selectedIndex = -1;
+       if (!filter || !groupsRoot) return;
 
-      function normalize(value) {
-        return String(value || '').toLowerCase();
-      }
+       function normalize(value) {
+         return String(value || '').toLowerCase();
+       }
 
-      function applyFilter() {
-        var q = normalize(filter.value).trim();
-        var visibleRows = 0;
+       function visibleRows() {
+         return Array.from(groupsRoot.querySelectorAll('.row')).filter(function (row) {
+           return !row.classList.contains('hidden') && !row.closest('.group').classList.contains('collapsed');
+         });
+       }
+
+       function setSelected(index) {
+         var rows = visibleRows();
+         rows.forEach(function (row) {
+           row.classList.remove('selected');
+           row.removeAttribute('aria-current');
+         });
+         if (!rows.length || index < 0) {
+           selectedIndex = -1;
+           return null;
+         }
+         selectedIndex = index;
+         var selected = rows[selectedIndex];
+         selected.classList.add('selected');
+         selected.setAttribute('aria-current', 'true');
+         selected.scrollIntoView({ block: 'nearest' });
+         return selected;
+       }
+
+       function applyFilter() {
+         var q = normalize(filter.value).trim();
+         var visibleRows = 0;
+         setSelected(-1);
 
         groupsRoot.querySelectorAll('.group').forEach(function (group) {
           var domain = normalize(group.getAttribute('data-domain'));
@@ -273,13 +308,32 @@ function clientScript(): string {
         var button = event.target.closest('.domain-head');
         if (!button) return;
         var group = button.closest('.group');
-        if (!group) return;
-        group.classList.toggle('collapsed');
-        button.setAttribute('aria-expanded', group.classList.contains('collapsed') ? 'false' : 'true');
-      });
+         if (!group) return;
+         group.classList.toggle('collapsed');
+         button.setAttribute('aria-expanded', group.classList.contains('collapsed') ? 'false' : 'true');
+         setSelected(-1);
+       });
 
-      filter.addEventListener('input', applyFilter);
-      filter.focus();
+       filter.addEventListener('input', applyFilter);
+       document.addEventListener('keydown', function (event) {
+         if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+           var rows = visibleRows();
+           if (!rows.length) return;
+           event.preventDefault();
+           var next = event.key === 'ArrowDown'
+             ? (selectedIndex + 1) % rows.length
+             : (selectedIndex <= 0 ? rows.length - 1 : selectedIndex - 1);
+           setSelected(next);
+         } else if (event.key === 'Enter' || event.key === 'NumpadEnter') {
+           if (selectedIndex < 0) return;
+           var rows = visibleRows();
+           var selected = rows[selectedIndex];
+           if (!selected) return;
+           event.preventDefault();
+           selected.click();
+         }
+       });
+       filter.focus();
       applyFilter();
     })();
   `
@@ -348,6 +402,7 @@ export function renderBookmarksPage(bookmarksOverride?: Bookmark[]): string {
     <p id="empty-all" class="empty${bookmarks.length === 0 ? '' : ' hidden'}">No bookmarks yet. Press Ctrl+D on any page to save it.</p>
     <p id="empty-filter" class="empty hidden">No matches.</p>
     <div id="groups" class="groups">${groupsHtml}</div>
+    <a class="footer-link" href="browsy://home">← Home</a>
   </div>
   <script type="application/json" id="bookmarks-data">${payload}</script>
   <script>${clientScript()}</script>

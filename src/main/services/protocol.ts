@@ -1,6 +1,7 @@
 import { protocol } from 'electron'
 import { getRecentSites, getSettings, setSettings } from './store'
 import { renderBookmarksPage } from './bookmarks-page'
+import { renderShortcutsPage } from './shortcuts-page'
 import { isAllowedNavigationUrl, sanitizeNavigationUrl } from '../../shared/utils'
 import {
   APP_SURFACE_DARK,
@@ -56,7 +57,7 @@ function baseStyles(): string {
     @media (prefers-color-scheme: light) {
       body { background: ${APP_SURFACE_LIGHT}; color: #18181b; }
       .muted { color: #71717a; }
-      .site:hover { background: ${APP_SURFACE_ELEVATED_LIGHT}; }
+      .site:hover, .site.selected, .home-card:hover, .home-card.selected { background: ${APP_SURFACE_ELEVATED_LIGHT}; }
       .glyph { background: rgba(0,0,0,0.06); color: #52525b; }
       .btn { background: #2563eb; }
     }
@@ -84,6 +85,42 @@ function baseStyles(): string {
       transition: background 0.12s ease;
     }
     .site:hover { background: ${APP_SURFACE_ELEVATED_DARK}; }
+    .site.selected { background: ${APP_SURFACE_ELEVATED_DARK}; outline: 1px solid rgba(255,255,255,0.16); }
+    .home-cards {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      max-width: 520px;
+      margin-top: 24px;
+    }
+    .home-card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      text-decoration: none;
+      color: inherit;
+      transition: background 0.12s ease;
+    }
+    .home-card:hover { background: ${APP_SURFACE_ELEVATED_DARK}; }
+    .home-card.selected { background: ${APP_SURFACE_ELEVATED_DARK}; outline: 1px solid rgba(255,255,255,0.16); }
+    .card-glyph {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.08);
+      color: #a1a1aa;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    .card-meta { min-width: 0; }
+    .card-title { font-weight: 500; font-size: 0.925rem; }
+    .card-sub { font-size: 0.75rem; color: #71717a; }
     .glyph {
       width: 28px;
       height: 28px;
@@ -210,7 +247,7 @@ export function renderHomePage(): string {
   const settings = getSettings()
   const recent = (settings.homepage === 'blank' ? [] : getRecentSites(RECENT_SITES_COUNT)).filter((site) =>
     isAllowedNavigationUrl(site.url)
-  )
+  ).slice(0, 5)
   const sitesHtml =
     recent.length === 0
       ? '<p class="empty">Type a URL or search above to get started.</p>'
@@ -242,8 +279,76 @@ export function renderHomePage(): string {
   <div class="brand">Browsy</div>
   <p class="muted">${recent.length === 0 ? 'A quieter place to browse' : 'Recent'}</p>
   ${sitesHtml}
+  ${recent.length === 0 ? '' : `
+  <div class="home-cards">
+    <a class="home-card" href="browsy://shortcuts" data-nav>
+      <div class="card-glyph">⌘</div>
+      <div class="card-meta">
+        <div class="card-title">Shortcuts</div>
+        <div class="card-sub">Keyboard reference</div>
+      </div>
+    </a>
+    <a class="home-card" href="browsy://bookmarks" data-nav>
+      <div class="card-glyph">★</div>
+      <div class="card-meta">
+        <div class="card-title">Bookmarks</div>
+        <div class="card-sub">Saved pages</div>
+      </div>
+    </a>
+    <a class="home-card" href="browsy://settings" data-nav>
+      <div class="card-glyph">⚙</div>
+      <div class="card-meta">
+        <div class="card-title">Settings</div>
+        <div class="card-sub">Preferences</div>
+      </div>
+    </a>
+  </div>`}
+  <script>${homeClientScript()}</script>
 </body>
 </html>`
+}
+
+function homeClientScript(): string {
+  return `
+    (function () {
+      var rows = Array.from(document.querySelectorAll('.site, .home-card'));
+      if (!rows.length) return;
+      var selectedIndex = -1;
+
+      function setSelected(index) {
+        rows.forEach(function (row) {
+          row.classList.remove('selected');
+          row.removeAttribute('aria-current');
+        });
+        if (index < 0) {
+          selectedIndex = -1;
+          return null;
+        }
+        selectedIndex = index;
+        var selected = rows[selectedIndex];
+        selected.classList.add('selected');
+        selected.setAttribute('aria-current', 'true');
+        selected.scrollIntoView({ block: 'nearest' });
+        return selected;
+      }
+
+      document.addEventListener('keydown', function (event) {
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+          event.preventDefault();
+          var next = event.key === 'ArrowDown'
+            ? (selectedIndex + 1) % rows.length
+            : (selectedIndex <= 0 ? rows.length - 1 : selectedIndex - 1);
+          setSelected(next);
+        } else if (event.key === 'Enter' || event.key === 'NumpadEnter') {
+          if (selectedIndex < 0) return;
+          var selected = rows[selectedIndex];
+          if (!selected) return;
+          event.preventDefault();
+          selected.click();
+        }
+      });
+    })();
+  `
 }
 
 function settingsPageUrl(params: Record<string, string>, showDev: boolean): string {
@@ -401,6 +506,12 @@ export function setupProtocolHandler(): void {
       applySettingsFromQuery(url)
       const showDev = url.searchParams.get('dev') === '1'
       return new Response(renderSettingsPage(showDev), {
+        headers: { 'Content-Type': 'text/html; charset=utf-8' }
+      })
+    }
+
+    if (url.hostname === 'shortcuts' || url.pathname === '/shortcuts') {
+      return new Response(renderShortcutsPage(), {
         headers: { 'Content-Type': 'text/html; charset=utf-8' }
       })
     }

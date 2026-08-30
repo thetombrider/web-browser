@@ -100,9 +100,9 @@ export class TabManager {
   }
 
   /** Focus an existing new-tab page, or create one if none is open. */
-  async openNewTab(url = 'browsy://home'): Promise<Tab> {
+  async openNewTab(url = 'browsy://home', forceNew = false): Promise<Tab> {
     const safeUrl = sanitizeNavigationUrl(url) ?? 'browsy://home'
-    if (safeUrl === 'browsy://home' || safeUrl.startsWith('browsy://home')) {
+    if (!forceNew && (safeUrl === 'browsy://home' || safeUrl.startsWith('browsy://home'))) {
       const existing = this.findNewTab()
       if (existing) {
         this.switchTab(existing.id)
@@ -160,6 +160,7 @@ export class TabManager {
     this.onLayout()
     // Keep the user's current chrome state when moving between tabs.
     if (this.chromeVisible) this.chromeFocusToken += 1
+    else if (!tab.view.webContents.isDestroyed()) tab.view.webContents.focus()
     this.onUpdate()
   }
 
@@ -473,8 +474,8 @@ export class TabManager {
       else if (key === '/' || key === '?' || code === 'Slash') action = 'shortcuts'
       else if (key === 'i' && input.shift) action = 'toggle-devtools'
       else if (key === 'n') action = 'new-window'
-      else if (input.meta && key === 'arrowright') action = 'next-tab'
-      else if (input.meta && key === 'arrowleft') action = 'prev-tab'
+      else if (input.meta && (key === 'arrowright' || code === 'ArrowRight')) action = 'next-tab'
+      else if (input.meta && (key === 'arrowleft' || code === 'ArrowLeft')) action = 'prev-tab'
 
       if (action) {
         event.preventDefault()

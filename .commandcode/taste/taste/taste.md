@@ -1,0 +1,9 @@
+# Taste
+- Cares about pixel-level visual polish: reports subtle layout discrepancies (e.g., ~10px of page content getting overlapped by chrome on cmd+L) as bugs worth fixing, not nitpicks to dismiss. Confidence: 0.6
+- Bug reports often give the observed symptom precisely (action, magnitude like "~10px at most", and when it's noticeable) rather than a diagnosis — expects the agent to trace the root cause in code. Confidence: 0.5
+- Prefers native-page content (recents, nav cards) to stay in a single shared column aligned with the main list, not spread into separate grids or sections ("in that same column"). Confidence: 0.5
+- Wants keyboard-driven navigation (arrow keys) for list-like UI across all browsy-native pages (home recents, settings, bookmarks, shortcuts), not just mouse interaction. Confidence: 0.8
+- Expects interaction patterns to be consistent across the app's native pages: feature requests reference existing pages as the pattern to follow ("like all other browsy-native pages", "like in shortcuts and settings"), and the agent is expected to match that established implementation. Confidence: 0.8
+- Wants a "back to home" footer link in the bottom left of every browsy-native page (shortcuts and settings already have it; bookmarks was asked to match), so users can always return home from an internal page. Confidence: 0.7
+- Wants the omnibox to follow standard browser (Chrome-style) UX conventions: the first suggestion should forward-fill into the input with the completion tail selected, update live as suggestions recompute, and Enter should accept the full suggestion and navigate to it (not commit the partial typed text). Confidence: 0.8
+- Values live, real-time UI feedback: explicitly praised suggestions updating as he types and wants derived UI (like forward-fill) to stay in sync with input as it changes. Confidence: 0.5

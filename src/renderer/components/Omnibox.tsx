@@ -88,6 +88,31 @@ export function Omnibox({
     ? buildSuggestions(value, tabs, bookmarks, history)
     : []
 
+  // Inline autocomplete: the first suggestion's URL extends the typed text.
+  // The input shows the completed value with the tail selected; typing replaces
+  // the tail, and Enter accepts the full suggestion.
+  const completion = (() => {
+    if (activeIndex !== -1) return null
+    const first = suggestions[0]
+    if (!first?.url) return null
+    const typed = value.trim()
+    if (!typed) return null
+    const lower = typed.toLowerCase()
+    const url = first.url
+    const candidates = [url, url.replace(/^https?:\/\/(www\.)?/i, '')]
+    try {
+      const host = new URL(url).hostname.replace(/^www\./i, '')
+      if (!candidates.includes(host)) candidates.push(host)
+    } catch {
+      /* keep url candidates */
+    }
+    for (const candidate of candidates) {
+      if (candidate.toLowerCase().startsWith(lower)) return candidate
+    }
+    return null
+  })()
+  const displayedValue = completion ?? value
+
   const liveDisplay = displayValueForUrl(initialValue)
   const scheme = getUrlScheme(initialValue)
   // Show origin cue only when the field still mirrors the live tab URL (not while typing).
@@ -115,6 +140,13 @@ export function Omnibox({
       }
     )
   }, [focusToken])
+
+  // Select the autocompleted tail so typing replaces it and Enter accepts it.
+  useEffect(() => {
+    const el = inputRef.current
+    if (!el || !completion) return
+    el.setSelectionRange(value.length, completion.length)
+  }, [displayedValue, completion, value.length])
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -210,7 +242,7 @@ export function Omnibox({
           </InputLeftElement>
           <Input
             ref={inputRef}
-            value={value}
+            value={displayedValue}
             h="32px"
             fontSize="sm"
             borderRadius="md"
@@ -232,6 +264,8 @@ export function Omnibox({
                 e.preventDefault()
                 if (activeIndex >= 0 && suggestions[activeIndex]) {
                   choose(suggestions[activeIndex])
+                } else if (completion) {
+                  onSubmit(completion)
                 } else {
                   commit(value)
                 }
