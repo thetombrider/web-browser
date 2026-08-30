@@ -188,7 +188,14 @@ export class WindowManager {
   private setChromeHeight(windowId: number, height: number): void {
     const entry = this.windows.get(windowId)
     if (!entry) return
-    const next = Math.max(CHROME_DRAG_HEIGHT, Math.round(height))
+    // Never shrink below the panel defaults while a chrome panel is open —
+    // early ResizeObserver reads against a peek-sized viewport can undershoot.
+    const floor = entry.tabs.isChromeVisible()
+      ? entry.tabs.getChromePanel() === 'navigation'
+        ? CHROME_NAV_HEIGHT
+        : CHROME_PANEL_HEIGHT
+      : CHROME_DRAG_HEIGHT
+    const next = Math.max(floor, Math.round(height))
     if (next === entry.chromeHeight) return
     entry.chromeHeight = next
     this.layoutWindow(windowId)

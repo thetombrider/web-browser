@@ -27,8 +27,8 @@ export function ShortcutsPanel({ onClose }: ShortcutsPanelProps) {
   const rowHover = useColorModeValue('blackAlpha.50', 'whiteAlpha.100')
 
   return (
-    <ChromePanel maxHeight="60vh">
-      <Box px={3} pb={3} overflowY="auto" maxH="calc(60vh - 32px)">
+    <ChromePanel>
+      <Box px={3} pb={3} overflowY="auto" maxH="240px">
         <HStack justify="space-between" mb={3}>
           <Text fontSize="sm" fontWeight="600">
             Shortcuts
