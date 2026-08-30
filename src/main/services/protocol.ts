@@ -6,6 +6,7 @@ import {
   APP_SURFACE_ELEVATED_DARK,
   APP_SURFACE_ELEVATED_LIGHT,
   APP_SURFACE_LIGHT,
+  HOME_PAGE_TOP_PADDING,
   RECENT_SITES_COUNT
 } from '../../shared/types'
 
@@ -44,7 +45,7 @@ function baseStyles(): string {
       background: ${APP_SURFACE_DARK};
       color: #f4f4f5;
       min-height: 100vh;
-      padding: 120px 32px 48px;
+      padding: ${HOME_PAGE_TOP_PADDING}px 32px 48px;
     }
     @media (prefers-color-scheme: light) {
       body { background: ${APP_SURFACE_LIGHT}; color: #18181b; }

@@ -269,8 +269,8 @@ export class TabManager {
     }
   }
 
-  /** Full-bleed page layer — chrome overlays on top via WindowManager. */
-  layoutTabViews(): void {
+  /** Page layer sits below the chrome strip; overlay chrome still paints on top for suggestions. */
+  layoutTabViews(topInset = 0): void {
     if (this.window.isDestroyed()) return
     const bounds = this.window.getContentBounds()
     const contentView = this.window.contentView
@@ -283,9 +283,9 @@ export class TabManager {
         }
         tab.view.setBounds({
           x: 0,
-          y: 0,
+          y: topInset,
           width: bounds.width,
-          height: bounds.height
+          height: Math.max(0, bounds.height - topInset)
         })
       } else if (contentView.children.includes(tab.view)) {
         contentView.removeChildView(tab.view)

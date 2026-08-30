@@ -188,10 +188,11 @@ export class WindowManager {
     const entry = this.windows.get(windowId)
     if (!entry || entry.window.isDestroyed()) return
 
-    entry.tabs.layoutTabViews()
+    const chromeVisible = entry.tabs.isChromeVisible()
+    const topInset = chromeVisible ? CHROME_NAV_HEIGHT : CHROME_DRAG_HEIGHT
+    entry.tabs.layoutTabViews(topInset)
 
     const bounds = entry.window.getContentBounds()
-    const chromeVisible = entry.tabs.isChromeVisible()
     let height = chromeVisible
       ? Math.max(CHROME_DRAG_HEIGHT, entry.chromeHeight)
       : CHROME_DRAG_HEIGHT
