@@ -2,6 +2,7 @@ import type { TabState } from '@shared/types'
 import { ChromePanel } from './ChromePanel'
 import { Omnibox } from './Omnibox'
 import { TabBar } from './TabBar'
+import type { CommandAction } from '../utils/suggestions'
 
 interface NavigationChromeProps {
   tabs: TabState[]
@@ -20,6 +21,7 @@ interface NavigationChromeProps {
   onForward: () => void
   onReload: () => void
   onStop: () => void
+  onCommand: (action: CommandAction) => void
 }
 
 export function NavigationChrome({
@@ -38,7 +40,8 @@ export function NavigationChrome({
   onBack,
   onForward,
   onReload,
-  onStop
+  onStop,
+  onCommand
 }: NavigationChromeProps) {
   return (
     <ChromePanel>
@@ -62,6 +65,8 @@ export function NavigationChrome({
         onForward={onForward}
         onReload={onReload}
         onStop={onStop}
+        onSwitchTab={onSwitchTab}
+        onCommand={onCommand}
       />
     </ChromePanel>
   )

@@ -6,6 +6,7 @@ import { BookmarksPanel } from './components/BookmarksPanel'
 import { SettingsPanel } from './components/SettingsPanel'
 import { PopupDialog } from './components/PopupDialog'
 import { DragRegion } from './components/DragRegion'
+import type { CommandAction } from './utils/suggestions'
 
 export default function App() {
   const [state, setState] = useState<BrowserState>({
@@ -38,6 +39,37 @@ export default function App() {
     }
   }, [state.chromePanel, refreshBookmarks])
 
+  const runCommand = useCallback((action: CommandAction) => {
+    switch (action) {
+      case 'bookmarks':
+        void window.browsy.showChrome('bookmarks')
+        break
+      case 'settings':
+        void window.browsy.showChrome('settings')
+        break
+      case 'new-tab':
+        void window.browsy.newTab()
+        break
+      case 'new-window':
+        void window.browsy.newWindow()
+        break
+      case 'reload':
+        void window.browsy.reload()
+        void window.browsy.hideChrome()
+        break
+      case 'home':
+        void window.browsy.navigate('browsy://home')
+        break
+      case 'close-tab':
+        void window.browsy.closeTab()
+        break
+      case 'devtools':
+        void window.browsy.toggleDevTools()
+        void window.browsy.hideChrome()
+        break
+    }
+  }, [])
+
   const activeTab = state.tabs.find((t) => t.id === state.activeTabId)
 
   return (
@@ -64,6 +96,7 @@ export default function App() {
                 onForward={() => window.browsy.goForward()}
                 onReload={() => window.browsy.reload()}
                 onStop={() => window.browsy.stop()}
+                onCommand={runCommand}
               />
             )}
             {state.chromePanel === 'bookmarks' && (

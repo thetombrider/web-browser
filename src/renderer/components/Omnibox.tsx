@@ -20,7 +20,12 @@ import {
   SearchIcon
 } from '@chakra-ui/icons'
 import type { Bookmark, HistoryEntry, TabState } from '@shared/types'
-import { buildSuggestions, kindLabel, letterForUrl, type Suggestion } from '../utils/suggestions'
+import {
+  buildSuggestions,
+  kindLabel,
+  type CommandAction,
+  type Suggestion
+} from '../utils/suggestions'
 
 interface OmniboxProps {
   initialValue: string
@@ -35,6 +40,8 @@ interface OmniboxProps {
   onForward: () => void
   onReload: () => void
   onStop: () => void
+  onSwitchTab: (id: string) => void
+  onCommand: (action: CommandAction) => void
 }
 
 export function Omnibox({
@@ -49,7 +56,9 @@ export function Omnibox({
   onBack,
   onForward,
   onReload,
-  onStop
+  onStop,
+  onSwitchTab,
+  onCommand
 }: OmniboxProps) {
   const [value, setValue] = useState(initialValue === 'browsy://home' ? '' : initialValue)
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([])
@@ -98,17 +107,30 @@ export function Omnibox({
     return () => window.removeEventListener('keydown', handler)
   }, [onClose])
 
+  const choose = (suggestion: Suggestion) => {
+    if (suggestion.kind === 'command' && suggestion.action) {
+      onCommand(suggestion.action)
+      return
+    }
+    if (suggestion.kind === 'tab' && suggestion.tabId) {
+      onSwitchTab(suggestion.tabId)
+      onClose()
+      return
+    }
+    if (suggestion.url) onSubmit(suggestion.url)
+  }
+
   const commit = (raw: string) => {
     const next = raw.trim()
-    if (!next && suggestions[0]) {
-      onSubmit(suggestions[0].url)
+    if (!next) {
+      if (suggestions[0]) choose(suggestions[0])
+      return
+    }
+    if (next.startsWith('/') && suggestions[0]?.kind === 'command') {
+      choose(suggestions[0])
       return
     }
     onSubmit(next)
-  }
-
-  const choose = (suggestion: Suggestion) => {
-    onSubmit(suggestion.url)
   }
 
   return (
@@ -178,7 +200,7 @@ export function Omnibox({
                 setActiveIndex((i) => (i + 1) % suggestions.length)
               }
             }}
-            placeholder="Search or enter URL"
+            placeholder="Search, URL, or /command"
             bg={inputBackground}
             border="1px solid"
             borderColor={inputBorder}
@@ -237,14 +259,14 @@ export function Omnibox({
                   color={muted}
                   flexShrink={0}
                 >
-                  {letterForUrl(suggestion.url)}
+                  {suggestion.glyph}
                 </Box>
                 <Box flex={1} minW={0}>
                   <Text fontSize="sm" noOfLines={1} fontWeight="500">
                     {suggestion.title}
                   </Text>
                   <Text fontSize="xs" color={muted} noOfLines={1}>
-                    {suggestion.url}
+                    {suggestion.subtitle}
                   </Text>
                 </Box>
                 <Text fontSize="xs" color={muted} flexShrink={0}>
