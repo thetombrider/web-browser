@@ -1,5 +1,6 @@
 import { protocol } from 'electron'
 import { getRecentSites, getSettings } from './store'
+import { isAllowedNavigationUrl, sanitizeNavigationUrl } from '../../shared/utils'
 import {
   APP_SURFACE_DARK,
   APP_SURFACE_ELEVATED_DARK,
@@ -135,7 +136,9 @@ function baseStyles(): string {
 
 export function renderHomePage(): string {
   const settings = getSettings()
-  const recent = settings.homepage === 'blank' ? [] : getRecentSites(RECENT_SITES_COUNT)
+  const recent = (settings.homepage === 'blank' ? [] : getRecentSites(RECENT_SITES_COUNT)).filter((site) =>
+    isAllowedNavigationUrl(site.url)
+  )
   const sitesHtml =
     recent.length === 0
       ? '<p class="empty">Type a URL or search above to get started.</p>'
@@ -172,7 +175,8 @@ export function renderHomePage(): string {
 }
 
 export function renderErrorPage(url: string, errorCode: number, errorDescription: string): string {
-  const retryHref = escapeHtml(url || 'browsy://home')
+  const retryTarget = sanitizeNavigationUrl(url) ?? 'browsy://home'
+  const retryHref = escapeHtml(retryTarget)
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -209,7 +213,7 @@ export function setupProtocolHandler(): void {
     }
 
     if (url.hostname === 'error') {
-      const failedUrl = url.searchParams.get('url') ?? ''
+      const failedUrl = sanitizeNavigationUrl(url.searchParams.get('url') ?? '') ?? ''
       const code = Number(url.searchParams.get('code') ?? '0')
       const desc = url.searchParams.get('desc') ?? 'Unknown error'
       return new Response(renderErrorPage(failedUrl, code, desc), {

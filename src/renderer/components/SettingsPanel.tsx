@@ -100,9 +100,11 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
             </Button>
             <Collapse in={showDev} animateOpacity>
               <Box fontSize="xs" color={muted} mt={2} lineHeight="1.6">
-                <Text>Agent API · http://127.0.0.1:{BROWSY_API_PORT}</Text>
-                <Text>CDP · localhost:{BROWSY_CDP_PORT}</Text>
-                <Text>MCP · npm run mcp</Text>
+                <Text>Agent API · http://127.0.0.1:{BROWSY_API_PORT} (off by default; token required)</Text>
+                <Text>Enable API · BROWSY_ENABLE_API=1 or BROWSY_API_TOKEN</Text>
+                <Text>CDP · localhost:{BROWSY_CDP_PORT} (off by default)</Text>
+                <Text>Enable CDP · BROWSY_ENABLE_CDP=1 or BROWSY_CDP_PORT</Text>
+                <Text>MCP · BROWSY_API_TOKEN=… npm run mcp</Text>
               </Box>
             </Collapse>
           </Box>

@@ -8,10 +8,25 @@ import { BROWSY_API_PORT } from '../shared/types'
 
 const API_BASE = `http://127.0.0.1:${BROWSY_API_PORT}`
 
+function requireApiToken(): string {
+  const token = process.env.BROWSY_API_TOKEN?.trim()
+  if (!token) {
+    throw new Error(
+      'BROWSY_API_TOKEN is required. Enable the API with BROWSY_ENABLE_API=1 or BROWSY_API_TOKEN, then pass the same token to the MCP bridge.'
+    )
+  }
+  return token
+}
+
 async function api(method: string, path: string, body?: unknown): Promise<unknown> {
+  const token = requireApiToken()
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${token}`
+  }
+  if (body) headers['Content-Type'] = 'application/json'
   const res = await fetch(`${API_BASE}${path}`, {
     method,
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    headers,
     body: body ? JSON.stringify(body) : undefined
   })
   if (!res.ok) {
