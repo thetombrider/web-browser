@@ -20,7 +20,7 @@ import {
   LockIcon,
   RepeatIcon,
   SearchIcon,
-  UnlockIcon
+  WarningIcon
 } from '@chakra-ui/icons'
 import type { Bookmark, HistoryEntry, TabState } from '@shared/types'
 import {
@@ -175,8 +175,8 @@ export function Omnibox({
     if (showOriginCue && scheme === 'http') {
       return (
         <Tooltip label={originHint} openDelay={400} hasArrow>
-          <Box as="span" display="inline-flex" pointerEvents="auto">
-            <UnlockIcon color={insecureColor} boxSize={3} aria-label={originHint} />
+          <Box as="span" display="inline-flex" alignItems="center" gap="4px" pointerEvents="auto">
+            <WarningIcon color={insecureColor} boxSize={3} aria-label={originHint} />
           </Box>
         </Tooltip>
       )
