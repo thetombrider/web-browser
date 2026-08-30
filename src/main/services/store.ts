@@ -14,7 +14,9 @@ const defaults: StoreSchema = {
   session: [],
   settings: {
     homepage: 'recent',
-    searchEngine: 'google'
+    searchEngine: 'google',
+    restoreSession: 'always',
+    hasSeenShortcutTip: false
   }
 }
 
@@ -27,10 +29,13 @@ export function getBookmarks(): Bookmark[] {
   return store.get('bookmarks')
 }
 
-export function addBookmark(bookmark: Bookmark): void {
+export function addBookmark(bookmark: Bookmark): { added: boolean; alreadyExists: boolean } {
   const bookmarks = getBookmarks()
-  if (bookmarks.some((b) => b.url === bookmark.url)) return
+  if (bookmarks.some((b) => b.url === bookmark.url)) {
+    return { added: false, alreadyExists: true }
+  }
   store.set('bookmarks', [bookmark, ...bookmarks])
+  return { added: true, alreadyExists: false }
 }
 
 export function removeBookmark(id: string): void {
@@ -72,7 +77,8 @@ export function saveSession(session: SessionWindow[]): void {
 }
 
 export function getSettings(): Settings {
-  return store.get('settings')
+  const stored = store.get('settings')
+  return { ...defaults.settings, ...stored }
 }
 
 export function setSettings(settings: Partial<Settings>): Settings {

@@ -14,6 +14,7 @@ import { addHistoryEntry } from '../services/store'
 export interface Tab {
   id: string
   view: WebContentsView
+  favicon: string | null
   devToolsOpen: boolean
 }
 
@@ -98,6 +99,7 @@ export class TabManager {
     const tab: Tab = {
       id: generateId(),
       view,
+      favicon: null,
       devToolsOpen: false
     }
 
@@ -126,6 +128,22 @@ export class TabManager {
     this.onLayout()
     this.syncChromeWithActiveTab()
     this.onUpdate()
+  }
+
+  nextTab(): void {
+    if (this.tabs.length < 2 || !this.activeTabId) return
+    const index = this.tabs.findIndex((t) => t.id === this.activeTabId)
+    if (index === -1) return
+    const next = this.tabs[(index + 1) % this.tabs.length]
+    this.switchTab(next.id)
+  }
+
+  prevTab(): void {
+    if (this.tabs.length < 2 || !this.activeTabId) return
+    const index = this.tabs.findIndex((t) => t.id === this.activeTabId)
+    if (index === -1) return
+    const prev = this.tabs[(index - 1 + this.tabs.length) % this.tabs.length]
+    this.switchTab(prev.id)
   }
 
   closeTab(tabId: string): void {
@@ -283,6 +301,7 @@ export class TabManager {
       id: tab.id,
       title: wc.isDestroyed() ? 'New Tab' : wc.getTitle() || 'New Tab',
       url: wc.isDestroyed() ? 'browsy://home' : wc.getURL() || 'browsy://home',
+      favicon: tab.favicon,
       isLoading: !wc.isDestroyed() && wc.isLoading(),
       canGoBack: !wc.isDestroyed() && wc.navigationHistory.canGoBack(),
       canGoForward: !wc.isDestroyed() && wc.navigationHistory.canGoForward()
@@ -306,7 +325,12 @@ export class TabManager {
     wc.on('did-start-loading', () => this.onUpdate())
     wc.on('did-stop-loading', () => this.onUpdate())
     wc.on('page-title-updated', () => this.onUpdate())
+    wc.on('page-favicon-updated', (_event, favicons: string[]) => {
+      tab.favicon = favicons[0] ?? null
+      this.onUpdate()
+    })
     wc.on('did-navigate', () => {
+      tab.favicon = null
       if (tab.id === this.activeTabId) {
         this.syncChromeWithActiveTab()
       }
@@ -349,6 +373,8 @@ export class TabManager {
     })
 
     wc.on('before-input-event', (event, input) => {
+      if (input.type !== 'keyDown') return
+
       if (input.key === 'Escape') {
         event.preventDefault()
         this.onShortcut('hide-chrome')
@@ -365,6 +391,7 @@ export class TabManager {
       if (!mod) return
 
       const key = input.key.toLowerCase()
+      const code = input.code
       let action: string | null = null
       if (key === 'l') action = 'navigation'
       else if (key === 't' && !input.shift) action = 'new-tab'
@@ -373,9 +400,14 @@ export class TabManager {
       else if (key === '[') action = 'back'
       else if (key === ']') action = 'forward'
       else if (key === 'b') action = 'bookmarks'
+      else if (key === 'd') action = 'bookmark-page'
       else if (key === ',') action = 'settings'
+      else if (key === '/' || key === '?' || code === 'Slash') action = 'shortcuts'
       else if (key === 'i' && input.shift) action = 'toggle-devtools'
       else if (key === 'n') action = 'new-window'
+      else if (key === 'tab') action = input.shift ? 'prev-tab' : 'next-tab'
+      else if (key === 'pagedown') action = 'next-tab'
+      else if (key === 'pageup') action = 'prev-tab'
 
       if (action) {
         event.preventDefault()

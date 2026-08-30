@@ -5,12 +5,14 @@ export type SuggestionKind = 'tab' | 'bookmark' | 'history' | 'command'
 export type CommandAction =
   | 'bookmarks'
   | 'settings'
+  | 'shortcuts'
   | 'new-tab'
   | 'new-window'
   | 'reload'
   | 'home'
   | 'close-tab'
   | 'devtools'
+  | 'bookmark-page'
 
 export interface Suggestion {
   id: string
@@ -19,6 +21,7 @@ export interface Suggestion {
   subtitle: string
   url?: string
   tabId?: string
+  favicon?: string | null
   action?: CommandAction
   glyph: string
 }
@@ -42,12 +45,28 @@ const COMMANDS: CommandDef[] = [
     slashes: ['/bookmarks', '/b', '/bm']
   },
   {
+    action: 'bookmark-page',
+    title: 'Bookmark page',
+    subtitle: 'Save the current page',
+    glyph: '+★',
+    keywords: ['bookmark page', 'save page', 'star'],
+    slashes: ['/bookmark', '/star']
+  },
+  {
     action: 'settings',
     title: 'Settings',
     subtitle: 'Open settings',
     glyph: '⚙',
     keywords: ['settings', 'preferences', 'options', 'config'],
     slashes: ['/settings', '/s', '/pref']
+  },
+  {
+    action: 'shortcuts',
+    title: 'Shortcuts',
+    subtitle: 'Keyboard shortcut list',
+    glyph: '?',
+    keywords: ['shortcuts', 'help', 'keys', 'hotkeys'],
+    slashes: ['/shortcuts', '/help', '/?']
   },
   {
     action: 'new-tab',
@@ -216,6 +235,7 @@ export function buildSuggestions(
         subtitle: tab.url,
         url: tab.url,
         tabId: tab.id,
+        favicon: tab.favicon,
         glyph: letterForUrl(tab.url)
       })
     }

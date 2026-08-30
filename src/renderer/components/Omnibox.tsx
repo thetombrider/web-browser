@@ -29,6 +29,7 @@ import {
 } from '../utils/suggestions'
 import { getUrlScheme } from '../utils/origin'
 import { OriginCue } from './OriginCue'
+import { Favicon } from './Favicon'
 
 interface OmniboxProps {
   initialValue: string
@@ -283,21 +284,25 @@ export function Omnibox({
                 }}
                 spacing={2}
               >
-                <Box
-                  w="20px"
-                  h="20px"
-                  borderRadius="sm"
-                  bg={glyphBg}
-                  display="flex"
-                  alignItems="center"
-                  justifyContent="center"
-                  fontSize="10px"
-                  fontWeight="600"
-                  color={muted}
-                  flexShrink={0}
-                >
-                  {suggestion.glyph}
-                </Box>
+                {suggestion.kind === 'command' || !suggestion.url ? (
+                  <Box
+                    w="20px"
+                    h="20px"
+                    borderRadius="sm"
+                    bg={glyphBg}
+                    display="flex"
+                    alignItems="center"
+                    justifyContent="center"
+                    fontSize="10px"
+                    fontWeight="600"
+                    color={muted}
+                    flexShrink={0}
+                  >
+                    {suggestion.glyph}
+                  </Box>
+                ) : (
+                  <Favicon url={suggestion.url} favicon={suggestion.favicon} size={20} />
+                )}
                 <Box flex={1} minW={0}>
                   <Text fontSize="sm" noOfLines={1} fontWeight="500">
                     {suggestion.title}

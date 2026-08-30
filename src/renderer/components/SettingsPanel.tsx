@@ -12,7 +12,7 @@ import {
   Collapse,
   Button
 } from '@chakra-ui/react'
-import type { Settings } from '@shared/types'
+import type { RestoreSession, SearchEngine, Settings } from '@shared/types'
 import { BROWSY_API_PORT, BROWSY_CDP_PORT } from '@shared/types'
 import { ChromePanel } from './ChromePanel'
 
@@ -58,6 +58,39 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
             >
               <option value="recent">Recent sites</option>
               <option value="blank">Blank</option>
+            </Select>
+          </FormControl>
+
+          <FormControl>
+            <FormLabel fontSize="xs" color={muted} mb={1}>
+              Search engine
+            </FormLabel>
+            <Select
+              size="sm"
+              value={settings?.searchEngine ?? 'google'}
+              onChange={(e) => void update({ searchEngine: e.target.value as SearchEngine })}
+              bg={inputBackground}
+              border="none"
+            >
+              <option value="google">Google</option>
+              <option value="duckduckgo">DuckDuckGo</option>
+              <option value="bing">Bing</option>
+            </Select>
+          </FormControl>
+
+          <FormControl>
+            <FormLabel fontSize="xs" color={muted} mb={1}>
+              On startup
+            </FormLabel>
+            <Select
+              size="sm"
+              value={settings?.restoreSession ?? 'always'}
+              onChange={(e) => void update({ restoreSession: e.target.value as RestoreSession })}
+              bg={inputBackground}
+              border="none"
+            >
+              <option value="always">Restore previous tabs</option>
+              <option value="never">Start fresh</option>
             </Select>
           </FormControl>
 
