@@ -39,7 +39,7 @@ const COMMANDS: CommandDef[] = [
   {
     action: 'bookmarks',
     title: 'Bookmarks',
-    subtitle: 'Open bookmarks',
+    subtitle: 'Go to browsy://bookmarks',
     glyph: '★',
     keywords: ['bookmarks', 'bookmark', 'saved', 'favorites'],
     slashes: ['/bookmarks', '/b', '/bm']
@@ -231,7 +231,12 @@ export function buildSuggestions(
       pushPage({
         id: `tab-${tab.id}`,
         kind: 'tab',
-        title: tab.title === 'Browsy' || tab.url === 'browsy://home' ? 'Home' : tab.title,
+        title:
+          tab.url === 'browsy://bookmarks' || tab.title.startsWith('Bookmarks')
+            ? 'Bookmarks'
+            : tab.title === 'Browsy' || tab.url === 'browsy://home'
+              ? 'Home'
+              : tab.title,
         subtitle: tab.url,
         url: tab.url,
         tabId: tab.id,

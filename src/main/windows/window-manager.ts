@@ -233,9 +233,12 @@ export class WindowManager {
         entry.chromeHeight = CHROME_NAV_HEIGHT
         break
       case 'bookmarks':
-        tabs.showChrome('bookmarks')
-        entry.chromeHeight = CHROME_PANEL_HEIGHT
-        break
+        void tabs.navigate('browsy://bookmarks').then(() => {
+          tabs.hideChrome()
+          this.layoutWindow(windowId)
+          this.broadcastState(windowId)
+        })
+        return
       case 'settings':
         tabs.showChrome('settings')
         entry.chromeHeight = CHROME_PANEL_HEIGHT

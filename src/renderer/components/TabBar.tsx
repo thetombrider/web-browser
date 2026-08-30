@@ -38,7 +38,12 @@ export function TabBar({ tabs, activeTabId, onSwitch, onClose, onNew }: TabBarPr
     >
       {tabs.map((tab) => {
         const isActive = tab.id === activeTabId
-        const label = tab.title === 'Browsy' || tab.url === 'browsy://home' ? 'Home' : tab.title
+        const label =
+          tab.url === 'browsy://bookmarks' || tab.title.startsWith('Bookmarks')
+            ? 'Bookmarks'
+            : tab.title === 'Browsy' || tab.url === 'browsy://home'
+              ? 'Home'
+              : tab.title
         return (
           <HStack
             key={tab.id}

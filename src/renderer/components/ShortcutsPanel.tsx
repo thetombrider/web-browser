@@ -12,7 +12,7 @@ const SHORTCUTS: { keys: string[]; label: string }[] = [
   { keys: ['Ctrl', 'Tab'], label: 'Next tab' },
   { keys: ['Ctrl', 'Shift', 'Tab'], label: 'Previous tab' },
   { keys: ['Ctrl', 'D'], label: 'Bookmark page' },
-  { keys: ['Ctrl', 'B'], label: 'Bookmarks' },
+  { keys: ['Ctrl', 'B'], label: 'Bookmarks page' },
   { keys: ['Ctrl', ','], label: 'Settings' },
   { keys: ['Ctrl', 'R'], label: 'Reload' },
   { keys: ['Ctrl', '['], label: 'Back' },
