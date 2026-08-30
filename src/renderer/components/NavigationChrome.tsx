@@ -1,18 +1,27 @@
-import { Box, useColorModeValue } from '@chakra-ui/react'
-import { APP_SURFACE_DARK, APP_SURFACE_LIGHT, type TabState } from '@shared/types'
+import type { TabState } from '@shared/types'
+import { ChromePanel } from './ChromePanel'
 import { Omnibox } from './Omnibox'
 import { TabBar } from './TabBar'
+import type { CommandAction } from '../utils/suggestions'
 
 interface NavigationChromeProps {
   tabs: TabState[]
   activeTabId: string | null
   initialValue: string
   focusToken: number
+  canGoBack: boolean
+  canGoForward: boolean
+  isLoading: boolean
   onSwitchTab: (id: string) => void
   onCloseTab: (id: string) => void
   onNewTab: () => void
   onSubmit: (value: string) => void
   onClose: () => void
+  onBack: () => void
+  onForward: () => void
+  onReload: () => void
+  onStop: () => void
+  onCommand: (action: CommandAction) => void
 }
 
 export function NavigationChrome({
@@ -20,35 +29,45 @@ export function NavigationChrome({
   activeTabId,
   initialValue,
   focusToken,
+  canGoBack,
+  canGoForward,
+  isLoading,
   onSwitchTab,
   onCloseTab,
   onNewTab,
   onSubmit,
-  onClose
+  onClose,
+  onBack,
+  onForward,
+  onReload,
+  onStop,
+  onCommand
 }: NavigationChromeProps) {
-  const surface = useColorModeValue(APP_SURFACE_LIGHT, APP_SURFACE_DARK)
-  const border = useColorModeValue('blackAlpha.200', 'whiteAlpha.200')
-
   return (
-    <Box
-      height="212px"
-      overflow="hidden"
-      bg={surface}
-      backdropFilter="blur(12px)"
-      borderBottom="1px solid"
-      borderColor={border}
-      pt="32px"
-      style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-    >
+    <ChromePanel>
       <TabBar
         tabs={tabs}
         activeTabId={activeTabId}
         onSwitch={onSwitchTab}
         onClose={onCloseTab}
         onNew={onNewTab}
-        onClosePanel={onClose}
       />
-      <Omnibox initialValue={initialValue} focusToken={focusToken} onSubmit={onSubmit} onClose={onClose} />
-    </Box>
+      <Omnibox
+        initialValue={initialValue}
+        focusToken={focusToken}
+        canGoBack={canGoBack}
+        canGoForward={canGoForward}
+        isLoading={isLoading}
+        tabs={tabs}
+        onSubmit={onSubmit}
+        onClose={onClose}
+        onBack={onBack}
+        onForward={onForward}
+        onReload={onReload}
+        onStop={onStop}
+        onSwitchTab={onSwitchTab}
+        onCommand={onCommand}
+      />
+    </ChromePanel>
   )
 }

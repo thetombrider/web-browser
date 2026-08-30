@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Box } from '@chakra-ui/react'
 import type { Bookmark, BrowserState, PopupRequest } from '@shared/types'
+import { CHROME_DRAG_HEIGHT } from '@shared/types'
 import { NavigationChrome } from './components/NavigationChrome'
 import { BookmarksPanel } from './components/BookmarksPanel'
 import { SettingsPanel } from './components/SettingsPanel'
 import { PopupDialog } from './components/PopupDialog'
 import { DragRegion } from './components/DragRegion'
+import type { CommandAction } from './utils/suggestions'
 
 export default function App() {
   const [state, setState] = useState<BrowserState>({
@@ -38,6 +40,46 @@ export default function App() {
     }
   }, [state.chromePanel, refreshBookmarks])
 
+  // Expand overlay to full window while a popup dialog is open.
+  useEffect(() => {
+    if (popup) {
+      void window.browsy.setChromeHeight(window.innerHeight)
+    } else if (!state.chromeVisible) {
+      void window.browsy.setChromeHeight(CHROME_DRAG_HEIGHT)
+    }
+  }, [popup, state.chromeVisible])
+
+  const runCommand = useCallback((action: CommandAction) => {
+    switch (action) {
+      case 'bookmarks':
+        void window.browsy.showChrome('bookmarks')
+        break
+      case 'settings':
+        void window.browsy.showChrome('settings')
+        break
+      case 'new-tab':
+        void window.browsy.newTab()
+        break
+      case 'new-window':
+        void window.browsy.newWindow()
+        break
+      case 'reload':
+        void window.browsy.reload()
+        void window.browsy.hideChrome()
+        break
+      case 'home':
+        void window.browsy.navigate('browsy://home')
+        break
+      case 'close-tab':
+        void window.browsy.closeTab()
+        break
+      case 'devtools':
+        void window.browsy.toggleDevTools()
+        void window.browsy.hideChrome()
+        break
+    }
+  }, [])
+
   const activeTab = state.tabs.find((t) => t.id === state.activeTabId)
 
   return (
@@ -52,11 +94,19 @@ export default function App() {
                 activeTabId={state.activeTabId}
                 initialValue={activeTab?.url ?? ''}
                 focusToken={state.chromeFocusToken}
+                canGoBack={activeTab?.canGoBack ?? false}
+                canGoForward={activeTab?.canGoForward ?? false}
+                isLoading={activeTab?.isLoading ?? false}
                 onSwitchTab={(id) => window.browsy.switchTab(id)}
                 onCloseTab={(id) => window.browsy.closeTab(id)}
                 onNewTab={() => window.browsy.newTab()}
                 onSubmit={(value) => window.browsy.navigate(value)}
                 onClose={() => window.browsy.hideChrome()}
+                onBack={() => window.browsy.goBack()}
+                onForward={() => window.browsy.goForward()}
+                onReload={() => window.browsy.reload()}
+                onStop={() => window.browsy.stop()}
+                onCommand={runCommand}
               />
             )}
             {state.chromePanel === 'bookmarks' && (

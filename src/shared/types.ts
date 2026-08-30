@@ -3,8 +3,13 @@ export const BROWSY_CDP_PORT = 9222
 export const RECENT_SITES_COUNT = 12
 export const GOOGLE_SEARCH_URL = 'https://www.google.com/search?q='
 export const APP_NAME = 'Browsy'
-export const APP_SURFACE_LIGHT = '#f5f5f7'
-export const APP_SURFACE_DARK = '#0f0f12'
+export const APP_SURFACE_LIGHT = '#f4f4f5'
+export const APP_SURFACE_DARK = '#111114'
+export const APP_SURFACE_ELEVATED_LIGHT = '#ffffff'
+export const APP_SURFACE_ELEVATED_DARK = '#1a1a1f'
+export const CHROME_NAV_HEIGHT = 100
+export const CHROME_PANEL_HEIGHT = 280
+export const CHROME_DRAG_HEIGHT = 32
 
 export type ChromePanel = 'navigation' | 'bookmarks' | 'settings' | null
 
@@ -67,6 +72,7 @@ export const IPC = {
   NEW_WINDOW: 'browser:new-window',
   SHOW_CHROME: 'browser:show-chrome',
   HIDE_CHROME: 'browser:hide-chrome',
+  SET_CHROME_HEIGHT: 'browser:set-chrome-height',
   TOGGLE_DEVTOOLS: 'browser:toggle-devtools',
   GET_BOOKMARKS: 'browser:get-bookmarks',
   ADD_BOOKMARK: 'browser:add-bookmark',
@@ -97,6 +103,7 @@ export interface BrowsyAPI {
   newWindow: () => Promise<void>
   showChrome: (panel: ChromePanel) => Promise<void>
   hideChrome: () => Promise<void>
+  setChromeHeight: (height: number) => Promise<void>
   toggleDevTools: () => Promise<void>
   getBookmarks: () => Promise<Bookmark[]>
   addBookmark: (url?: string, title?: string) => Promise<void>

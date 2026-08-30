@@ -14,6 +14,7 @@ const api: BrowsyAPI = {
   newWindow: () => ipcRenderer.invoke(IPC.NEW_WINDOW),
   showChrome: (panel: ChromePanel) => ipcRenderer.invoke(IPC.SHOW_CHROME, panel),
   hideChrome: () => ipcRenderer.invoke(IPC.HIDE_CHROME),
+  setChromeHeight: (height) => ipcRenderer.invoke(IPC.SET_CHROME_HEIGHT, height),
   toggleDevTools: () => ipcRenderer.invoke(IPC.TOGGLE_DEVTOOLS),
   getBookmarks: () => ipcRenderer.invoke(IPC.GET_BOOKMARKS),
   addBookmark: (url, title) => ipcRenderer.invoke(IPC.ADD_BOOKMARK, url, title),

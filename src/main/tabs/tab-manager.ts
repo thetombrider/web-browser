@@ -1,5 +1,5 @@
 import {
-  BrowserView,
+  WebContentsView,
   dialog,
   type BrowserWindow,
   type DownloadItem,
@@ -8,17 +8,19 @@ import {
 } from 'electron'
 import { generateId } from '../../shared/utils'
 import type { ChromePanel, TabState } from '../../shared/types'
+import { APP_SURFACE_DARK } from '../../shared/types'
 import { addHistoryEntry } from '../services/store'
 
 export interface Tab {
   id: string
-  view: BrowserView
+  view: WebContentsView
   devToolsOpen: boolean
 }
 
 export type TabUpdateCallback = () => void
 export type PopupCallback = (id: string, url: string) => void
 export type ShortcutCallback = (action: string) => void
+export type LayoutCallback = () => void
 
 export class TabManager {
   private tabs: Tab[] = []
@@ -32,9 +34,10 @@ export class TabManager {
     private window: BrowserWindow,
     private onUpdate: TabUpdateCallback,
     private onPopup: PopupCallback,
-    private onShortcut: ShortcutCallback
+    private onShortcut: ShortcutCallback,
+    private onLayout: LayoutCallback
   ) {
-    this.setupWindowResize()
+    this.window.on('resize', () => this.onLayout())
   }
 
   getTabs(): Tab[] {
@@ -67,29 +70,30 @@ export class TabManager {
     if (panel === 'navigation') {
       this.chromeFocusToken += 1
     }
-    this.layoutViews()
+    this.onLayout()
     this.onUpdate()
   }
 
   hideChrome(): void {
     this.chromeVisible = false
     this.chromePanel = null
-    this.layoutViews()
+    this.onLayout()
     this.onUpdate()
     const active = this.getActiveTab()
-    if (active) {
+    if (active && !active.view.webContents.isDestroyed()) {
       active.view.webContents.focus()
     }
   }
 
   async createTab(url = 'browsy://home', activate = true): Promise<Tab> {
-    const view = new BrowserView({
+    const view = new WebContentsView({
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
         sandbox: true
       }
     })
+    view.setBackgroundColor(APP_SURFACE_DARK)
 
     const tab: Tab = {
       id: generateId(),
@@ -98,13 +102,12 @@ export class TabManager {
     }
 
     this.tabs.push(tab)
-    this.window.addBrowserView(view)
-    this.layoutViews()
-
     this.attachWebContentsHandlers(tab)
 
     if (activate) {
       this.switchTab(tab.id)
+    } else {
+      this.onLayout()
     }
 
     if (activate && url === 'browsy://home') {
@@ -120,13 +123,7 @@ export class TabManager {
     if (!tab) return
 
     this.activeTabId = tabId
-    for (const t of this.tabs) {
-      if (t.id === tabId) {
-        this.window.setTopBrowserView(t.view)
-        t.view.setAutoResize({ width: true, height: true })
-      }
-    }
-    this.layoutViews()
+    this.onLayout()
     this.syncChromeWithActiveTab()
     this.onUpdate()
   }
@@ -136,21 +133,18 @@ export class TabManager {
     if (index === -1) return
 
     const [tab] = this.tabs.splice(index, 1)
-    const wc = tab.view.webContents
-    if (!wc.isDestroyed() && tab.devToolsOpen) {
-      wc.closeDevTools()
-    }
-    if (!this.window.isDestroyed()) {
-      this.window.removeBrowserView(tab.view)
-    }
-    if (!wc.isDestroyed()) {
-      ;(wc as unknown as { destroy?: () => void }).destroy?.()
-    }
+    this.detachTabView(tab)
 
     if (this.activeTabId === tabId) {
       const next = this.tabs[Math.min(index, this.tabs.length - 1)]
       this.activeTabId = next?.id ?? null
-      if (next) this.switchTab(next.id)
+      if (next) {
+        this.switchTab(next.id)
+      } else {
+        this.onLayout()
+      }
+    } else {
+      this.onLayout()
     }
 
     if (this.tabs.length === 0) {
@@ -169,13 +163,17 @@ export class TabManager {
   goBack(): void {
     const active = this.getActiveTab()
     const wc = active?.view.webContents
-    if (wc?.canGoBack()) wc.goBack()
+    if (wc && !wc.isDestroyed() && wc.navigationHistory.canGoBack()) {
+      wc.navigationHistory.goBack()
+    }
   }
 
   goForward(): void {
     const active = this.getActiveTab()
     const wc = active?.view.webContents
-    if (wc?.canGoForward()) wc.goForward()
+    if (wc && !wc.isDestroyed() && wc.navigationHistory.canGoForward()) {
+      wc.navigationHistory.goForward()
+    }
   }
 
   reload(): void {
@@ -197,7 +195,7 @@ export class TabManager {
       active.view.webContents.openDevTools({ mode: 'right' })
       active.devToolsOpen = true
     }
-    this.layoutViews()
+    this.onLayout()
   }
 
   getTabStates(): TabState[] {
@@ -219,37 +217,57 @@ export class TabManager {
     }
   }
 
-  layoutViews(): void {
+  /** Full-bleed page layer — chrome overlays on top via WindowManager. */
+  layoutTabViews(): void {
+    if (this.window.isDestroyed()) return
     const bounds = this.window.getContentBounds()
-    const dragHeight = process.platform === 'linux' ? 28 : 0
-    const top = this.chromeVisible ? this.getChromeHeight() : dragHeight
+    const contentView = this.window.contentView
 
     for (const tab of this.tabs) {
-      tab.view.setBounds({
-        x: 0,
-        y: top,
-        width: bounds.width,
-        height: Math.max(0, bounds.height - top)
-      })
+      const isActive = tab.id === this.activeTabId
+      if (isActive) {
+        if (!contentView.children.includes(tab.view)) {
+          contentView.addChildView(tab.view)
+        }
+        tab.view.setBounds({
+          x: 0,
+          y: 0,
+          width: bounds.width,
+          height: bounds.height
+        })
+      } else if (contentView.children.includes(tab.view)) {
+        contentView.removeChildView(tab.view)
+      }
     }
   }
 
-  private getChromeHeight(): number {
-    switch (this.chromePanel) {
-      case 'navigation':
-        return 212
-      case 'bookmarks':
-        return 220
-      case 'settings':
-        return 200
-      default:
-        return 100
+  destroy(): void {
+    for (const tab of this.tabs) {
+      this.detachTabView(tab)
+    }
+    this.tabs = []
+    this.activeTabId = null
+  }
+
+  private detachTabView(tab: Tab): void {
+    const wc = tab.view.webContents
+    if (!wc.isDestroyed() && tab.devToolsOpen) {
+      wc.closeDevTools()
+    }
+    if (!this.window.isDestroyed()) {
+      const { children } = this.window.contentView
+      if (children.includes(tab.view)) {
+        this.window.contentView.removeChildView(tab.view)
+      }
+    }
+    if (!wc.isDestroyed()) {
+      wc.close()
     }
   }
 
   private syncChromeWithActiveTab(): void {
     const active = this.getActiveTab()
-    if (!active) return
+    if (!active || active.view.webContents.isDestroyed()) return
 
     const isHome = active.view.webContents.getURL().startsWith('browsy://home')
     if (isHome && (!this.chromeVisible || this.chromePanel !== 'navigation')) {
@@ -259,34 +277,15 @@ export class TabManager {
     }
   }
 
-  destroy(): void {
-    for (const tab of this.tabs) {
-      const wc = tab.view.webContents
-      if (!wc.isDestroyed() && tab.devToolsOpen) wc.closeDevTools()
-      if (!this.window.isDestroyed()) {
-        this.window.removeBrowserView(tab.view)
-      }
-      if (!wc.isDestroyed()) {
-        ;(wc as unknown as { destroy?: () => void }).destroy?.()
-      }
-    }
-    this.tabs = []
-    this.activeTabId = null
-  }
-
-  private setupWindowResize(): void {
-    this.window.on('resize', () => this.layoutViews())
-  }
-
   private toTabState(tab: Tab): TabState {
     const wc = tab.view.webContents
     return {
       id: tab.id,
-      title: wc.getTitle() || 'New Tab',
-      url: wc.getURL() || 'browsy://home',
-      isLoading: wc.isLoading(),
-      canGoBack: wc.canGoBack(),
-      canGoForward: wc.canGoForward()
+      title: wc.isDestroyed() ? 'New Tab' : wc.getTitle() || 'New Tab',
+      url: wc.isDestroyed() ? 'browsy://home' : wc.getURL() || 'browsy://home',
+      isLoading: !wc.isDestroyed() && wc.isLoading(),
+      canGoBack: !wc.isDestroyed() && wc.navigationHistory.canGoBack(),
+      canGoForward: !wc.isDestroyed() && wc.navigationHistory.canGoForward()
     }
   }
 
@@ -316,6 +315,7 @@ export class TabManager {
     wc.on('did-navigate-in-page', () => this.onUpdate())
 
     wc.on('did-finish-load', () => {
+      if (wc.isDestroyed()) return
       const url = wc.getURL()
       const title = wc.getTitle()
       if (url && !url.startsWith('browsy://error')) {
@@ -330,7 +330,7 @@ export class TabManager {
     wc.on(
       'did-fail-load',
       (_event: Event, errorCode: number, errorDescription: string, validatedURL: string, isMainFrame: boolean) => {
-        if (!isMainFrame || errorCode === -3) return // aborted
+        if (!isMainFrame || errorCode === -3) return
         const errorUrl = `browsy://error?url=${encodeURIComponent(validatedURL)}&code=${errorCode}&desc=${encodeURIComponent(errorDescription)}`
         void wc.loadURL(errorUrl)
       }

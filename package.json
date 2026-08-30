@@ -10,7 +10,11 @@
     "mcp": "tsx src/mcp/bridge.ts",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json"
   },
-  "keywords": ["electron", "browser", "mcp"],
+  "keywords": [
+    "electron",
+    "browser",
+    "mcp"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
@@ -30,7 +34,7 @@
     "@types/react": "^18.2.79",
     "@types/react-dom": "^18.2.25",
     "@vitejs/plugin-react": "^4.2.1",
-    "electron": "^29.3.0",
+    "electron": "^33.2.1",
     "electron-vite": "^2.1.0",
     "tsx": "^4.7.2",
     "typescript": "^5.4.5",

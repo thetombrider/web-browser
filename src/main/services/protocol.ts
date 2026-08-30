@@ -1,6 +1,12 @@
 import { protocol } from 'electron'
-import { getRecentSites } from './store'
-import { APP_SURFACE_DARK, APP_SURFACE_LIGHT, RECENT_SITES_COUNT } from '../../shared/types'
+import { getRecentSites, getSettings } from './store'
+import {
+  APP_SURFACE_DARK,
+  APP_SURFACE_ELEVATED_DARK,
+  APP_SURFACE_ELEVATED_LIGHT,
+  APP_SURFACE_LIGHT,
+  RECENT_SITES_COUNT
+} from '../../shared/types'
 
 function escapeHtml(value: string): string {
   return value
@@ -21,74 +27,127 @@ function getSiteName(title: string, url: string): string {
   }
 }
 
+function letterForUrl(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./i, '')[0]?.toUpperCase() ?? '?'
+  } catch {
+    return '?'
+  }
+}
+
 function baseStyles(): string {
   return `
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-family: "IBM Plex Sans", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
       background: ${APP_SURFACE_DARK};
-      color: #e8e8ec;
+      color: #f4f4f5;
       min-height: 100vh;
-      padding: 48px 32px;
+      padding: 120px 32px 48px;
     }
     @media (prefers-color-scheme: light) {
-      body { background: ${APP_SURFACE_LIGHT}; color: #1a1a1e; }
-      .muted { color: #666; }
+      body { background: ${APP_SURFACE_LIGHT}; color: #18181b; }
+      .muted { color: #71717a; }
+      .site:hover { background: ${APP_SURFACE_ELEVATED_LIGHT}; }
+      .glyph { background: rgba(0,0,0,0.06); color: #52525b; }
+      .btn { background: #2563eb; }
     }
-    h1 { font-size: 1.5rem; font-weight: 600; margin-bottom: 8px; }
-    .muted { color: #999; margin-bottom: 32px; font-size: 0.9rem; }
-    .grid {
-      display: grid;
-      grid-template-columns: minmax(0, 640px);
-      gap: 12px;
-      justify-content: center;
-      width: 100%;
-      margin: 0 auto;
+    .brand {
+      font-size: 1.75rem;
+      font-weight: 600;
+      letter-spacing: -0.03em;
+      margin-bottom: 4px;
+    }
+    .muted { color: #a1a1aa; margin-bottom: 28px; font-size: 0.9rem; }
+    .list {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      max-width: 520px;
     }
     .site {
-      display: block;
-      padding: 16px;
-      background: #1a1a22;
-      border: 1px solid #2a2a35;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
       border-radius: 8px;
       text-decoration: none;
       color: inherit;
-      transition: border-color 0.15s;
+      transition: background 0.12s ease;
     }
-    .site:hover { border-color: #666; }
-    .site-title { font-weight: 500; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .site-url { font-size: 0.8rem; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    @media (prefers-color-scheme: light) {
-      .site { background: #fff; border-color: #ddd; }
-      .site:hover { border-color: #888; }
-      .site-url { color: #666; }
+    .site:hover { background: ${APP_SURFACE_ELEVATED_DARK}; }
+    .glyph {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.08);
+      color: #a1a1aa;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      font-weight: 600;
+      flex-shrink: 0;
     }
-    .empty { color: #888; font-size: 0.95rem; }
-    .error-code { font-size: 3rem; font-weight: 700; color: #e55; margin-bottom: 8px; }
-    .error-msg { margin-bottom: 24px; max-width: 600px; line-height: 1.5; }
+    .site-meta { min-width: 0; }
+    .site-title {
+      font-weight: 500;
+      font-size: 0.925rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .site-url {
+      font-size: 0.75rem;
+      color: #71717a;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .empty { color: #71717a; font-size: 0.9rem; max-width: 420px; line-height: 1.5; }
+    .error-wrap { max-width: 520px; padding-top: 24px; }
+    .error-title { font-size: 1.35rem; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 8px; }
+    .error-msg { margin-bottom: 12px; line-height: 1.5; color: #a1a1aa; }
+    .error-code { font-size: 0.75rem; color: #71717a; margin-bottom: 24px; font-family: "IBM Plex Mono", Menlo, Consolas, monospace; }
+    .actions { display: flex; gap: 10px; }
     .btn {
       display: inline-block;
-      padding: 8px 16px;
+      padding: 8px 14px;
       background: #3b82f6;
       color: #fff;
       border-radius: 6px;
       text-decoration: none;
-      font-size: 0.9rem;
+      font-size: 0.85rem;
+      font-weight: 500;
     }
+    .btn-ghost {
+      display: inline-block;
+      padding: 8px 14px;
+      color: inherit;
+      border-radius: 6px;
+      text-decoration: none;
+      font-size: 0.85rem;
+      opacity: 0.7;
+    }
+    .btn-ghost:hover { opacity: 1; }
   `
 }
 
 export function renderHomePage(): string {
-  const recent = getRecentSites(RECENT_SITES_COUNT)
+  const settings = getSettings()
+  const recent = settings.homepage === 'blank' ? [] : getRecentSites(RECENT_SITES_COUNT)
   const sitesHtml =
     recent.length === 0
-      ? '<p class="empty">No recent sites yet. Use the address bar above to start browsing.</p>'
-      : `<div class="grid">${recent
+      ? '<p class="empty">Type a URL or search above to get started.</p>'
+      : `<div class="list">${recent
           .map(
             (site) => `
         <a class="site" href="${escapeHtml(site.url)}">
-          <div class="site-title">${escapeHtml(getSiteName(site.title, site.url))}</div>
-          <div class="site-url">${escapeHtml(site.url)}</div>
+          <div class="glyph">${escapeHtml(letterForUrl(site.url))}</div>
+          <div class="site-meta">
+            <div class="site-title">${escapeHtml(getSiteName(site.title, site.url))}</div>
+            <div class="site-url">${escapeHtml(site.url)}</div>
+          </div>
         </a>`
           )
           .join('')}</div>`
@@ -99,31 +158,42 @@ export function renderHomePage(): string {
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Browsy</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <style>${baseStyles()}</style>
 </head>
 <body>
-  <h1>Browsy</h1>
-  <p class="muted">Recent sites</p>
+  <div class="brand">Browsy</div>
+  <p class="muted">${recent.length === 0 ? 'A quieter place to browse' : 'Recent'}</p>
   ${sitesHtml}
 </body>
 </html>`
 }
 
 export function renderErrorPage(url: string, errorCode: number, errorDescription: string): string {
+  const retryHref = escapeHtml(url || 'browsy://home')
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Page not available — Browsy</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <style>${baseStyles()}</style>
 </head>
 <body>
-  <div class="error-code">${errorCode || 'Error'}</div>
-  <h1>Can't reach this page</h1>
-  <p class="error-msg">${escapeHtml(errorDescription)}</p>
-  <p class="muted" style="margin-bottom:24px">${escapeHtml(url)}</p>
-  <a class="btn" href="browsy://home">Go home</a>
+  <div class="error-wrap">
+    <div class="error-title">Can't reach this page</div>
+    <p class="error-msg">${escapeHtml(errorDescription)}</p>
+    <p class="error-code">${errorCode || 'Error'} · ${escapeHtml(url)}</p>
+    <div class="actions">
+      <a class="btn" href="${retryHref}">Try again</a>
+      <a class="btn-ghost" href="browsy://home">Home</a>
+    </div>
+  </div>
 </body>
 </html>`
 }
