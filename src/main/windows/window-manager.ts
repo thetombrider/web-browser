@@ -1,4 +1,11 @@
-import { BrowserWindow, WebContentsView, ipcMain, app, type IpcMainInvokeEvent } from 'electron'
+import {
+  BrowserWindow,
+  WebContentsView,
+  ipcMain,
+  app,
+  type IpcMainEvent,
+  type IpcMainInvokeEvent
+} from 'electron'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
 import { TabManager } from '../tabs/tab-manager'
@@ -28,7 +35,6 @@ import {
   CHROME_NAV_HEIGHT,
   CHROME_PANEL_HEIGHT,
   CHROME_HEIGHT_MAX,
-  CHROME_PEEK_HEIGHT,
   IPC
 } from '../../shared/types'
 
@@ -39,6 +45,11 @@ interface BrowserWindowEntry {
   chromeHeight: number
   toastExpandUntil: number
   toastExpandTimer: ReturnType<typeof setTimeout> | null
+  windowDrag: { startScreenX: number; startScreenY: number; startWindowX: number; startWindowY: number } | null
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
 }
 
 export class WindowManager {
@@ -121,7 +132,8 @@ export class WindowManager {
       chromeView,
       chromeHeight: CHROME_NAV_HEIGHT,
       toastExpandUntil: 0,
-      toastExpandTimer: null
+      toastExpandTimer: null,
+      windowDrag: null
     })
 
     win.on('ready-to-show', () => win.show())
@@ -182,9 +194,7 @@ export class WindowManager {
     const chromeVisible = entry.tabs.isChromeVisible()
     let height = chromeVisible
       ? Math.max(CHROME_DRAG_HEIGHT, entry.chromeHeight)
-      : process.platform === 'linux'
-        ? CHROME_DRAG_HEIGHT
-        : CHROME_PEEK_HEIGHT
+      : CHROME_DRAG_HEIGHT
 
     // Keep overlay tall enough for an in-flight toast after bookmark, etc.
     if (!chromeVisible && Date.now() < entry.toastExpandUntil) {
@@ -222,6 +232,15 @@ export class WindowManager {
     this.layoutWindow(windowId)
   }
 
+  private toggleChromePanel(entry: BrowserWindowEntry, panel: Exclude<ChromePanel, null>, height: number): void {
+    if (entry.tabs.isChromeVisible() && entry.tabs.getChromePanel() === panel) {
+      entry.tabs.hideChrome()
+      return
+    }
+    entry.chromeHeight = height
+    entry.tabs.showChrome(panel)
+  }
+
   private handleShortcut(windowId: number, action: string): void {
     const entry = this.windows.get(windowId)
     if (!entry) return
@@ -229,8 +248,7 @@ export class WindowManager {
 
     switch (action) {
       case 'navigation':
-        tabs.showChrome('navigation')
-        entry.chromeHeight = CHROME_NAV_HEIGHT
+        this.toggleChromePanel(entry, 'navigation', CHROME_NAV_HEIGHT)
         break
       case 'bookmarks':
         void tabs.navigate('browsy://bookmarks').then(() => {
@@ -240,12 +258,10 @@ export class WindowManager {
         })
         return
       case 'settings':
-        tabs.showChrome('settings')
-        entry.chromeHeight = CHROME_PANEL_HEIGHT
+        this.toggleChromePanel(entry, 'settings', CHROME_PANEL_HEIGHT)
         break
       case 'shortcuts':
-        tabs.showChrome('shortcuts')
-        entry.chromeHeight = CHROME_PANEL_HEIGHT
+        this.toggleChromePanel(entry, 'shortcuts', CHROME_PANEL_HEIGHT)
         break
       case 'hide-chrome':
         tabs.hideChrome()
@@ -359,9 +375,8 @@ export class WindowManager {
       else if (key === 'd') action = 'bookmark-page'
       else if (key === ',') action = 'settings'
       else if (key === '/' || key === '?' || code === 'Slash') action = 'shortcuts'
-      else if (key === 'tab') action = input.shift ? 'prev-tab' : 'next-tab'
-      else if (key === 'pagedown') action = 'next-tab'
-      else if (key === 'pageup') action = 'prev-tab'
+      else if (input.meta && key === 'arrowright') action = 'next-tab'
+      else if (input.meta && key === 'arrowleft') action = 'prev-tab'
 
       if (action) {
         event.preventDefault()
@@ -454,7 +469,7 @@ export class WindowManager {
     entry.chromeView.webContents.send(IPC.STATE_CHANGED, state)
   }
 
-  private getEntryFromEvent(event: IpcMainInvokeEvent): BrowserWindowEntry | null {
+  private getEntryFromEvent(event: IpcMainEvent | IpcMainInvokeEvent): BrowserWindowEntry | null {
     const wc = event.sender
     for (const entry of this.windows.values()) {
       if (entry.chromeView.webContents.id === wc.id) return entry
@@ -470,6 +485,35 @@ export class WindowManager {
   }
 
   private registerIpc(): void {
+    ipcMain.on(IPC.WINDOW_DRAG_START, (event, screenX: unknown, screenY: unknown) => {
+      if (!isFiniteNumber(screenX) || !isFiniteNumber(screenY)) return
+      const entry = this.getEntryFromEvent(event)
+      if (!entry || entry.window.isDestroyed()) return
+      const [windowX, windowY] = entry.window.getPosition()
+      entry.windowDrag = {
+        startScreenX: screenX,
+        startScreenY: screenY,
+        startWindowX: windowX,
+        startWindowY: windowY
+      }
+    })
+
+    ipcMain.on(IPC.WINDOW_DRAG_MOVE, (event, screenX: unknown, screenY: unknown) => {
+      if (!isFiniteNumber(screenX) || !isFiniteNumber(screenY)) return
+      const entry = this.getEntryFromEvent(event)
+      const drag = entry?.windowDrag
+      if (!entry || !drag || entry.window.isDestroyed()) return
+      entry.window.setPosition(
+        Math.round(drag.startWindowX + screenX - drag.startScreenX),
+        Math.round(drag.startWindowY + screenY - drag.startScreenY)
+      )
+    })
+
+    ipcMain.on(IPC.WINDOW_DRAG_END, (event) => {
+      const entry = this.getEntryFromEvent(event)
+      if (entry) entry.windowDrag = null
+    })
+
     ipcMain.handle(IPC.GET_STATE, (event) => {
       const entry = this.getEntryFromEvent(event)
       return entry ? this.buildState(entry.tabs) : this.getFocusedState()
