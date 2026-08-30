@@ -9,7 +9,6 @@ import {
   InputRightElement,
   Text,
   Spinner,
-  Tooltip,
   useColorModeValue,
   VStack
 } from '@chakra-ui/react'
@@ -17,10 +16,8 @@ import {
   ArrowBackIcon,
   ArrowForwardIcon,
   CloseIcon,
-  LockIcon,
   RepeatIcon,
-  SearchIcon,
-  WarningIcon
+  SearchIcon
 } from '@chakra-ui/icons'
 import type { Bookmark, HistoryEntry, TabState } from '@shared/types'
 import {
@@ -30,7 +27,8 @@ import {
   type CommandAction,
   type Suggestion
 } from '../utils/suggestions'
-import { getUrlScheme, schemeLabel } from '../utils/origin'
+import { getUrlScheme } from '../utils/origin'
+import { OriginCue } from './OriginCue'
 
 interface OmniboxProps {
   initialValue: string
@@ -70,7 +68,6 @@ export function Omnibox({
   onCommand
 }: OmniboxProps) {
   const [value, setValue] = useState(displayValueForUrl(initialValue))
-  const [edited, setEdited] = useState(false)
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([])
   const [history, setHistory] = useState<HistoryEntry[]>([])
   const [activeIndex, setActiveIndex] = useState(-1)
@@ -84,28 +81,26 @@ export function Omnibox({
   const suggestionActive = useColorModeValue('blackAlpha.100', 'whiteAlpha.200')
   const muted = useColorModeValue('gray.500', 'gray.400')
   const glyphBg = useColorModeValue('blackAlpha.100', 'whiteAlpha.200')
-  const secureColor = useColorModeValue('green.600', 'green.300')
-  const insecureColor = useColorModeValue('orange.600', 'orange.300')
 
   const suggestions = showSuggestions
     ? buildSuggestions(value, tabs, bookmarks, history)
     : []
 
+  const liveDisplay = displayValueForUrl(initialValue)
   const scheme = getUrlScheme(initialValue)
-  const showOriginCue = !edited && !isLoading && value.length > 0
-  const originHint = schemeLabel(scheme)
+  // Show origin cue only when the field still mirrors the live tab URL (not while typing).
+  const showingLiveUrl = value === liveDisplay && liveDisplay.length > 0
+  const showOriginCue = showingLiveUrl && !isLoading && (scheme === 'https' || scheme === 'http' || scheme === 'browsy')
 
   useEffect(() => {
     inputRef.current?.focus()
     inputRef.current?.select()
     setShowSuggestions(true)
     setActiveIndex(-1)
-    setEdited(false)
   }, [focusToken])
 
   useEffect(() => {
     setValue(displayValueForUrl(initialValue))
-    setEdited(false)
   }, [initialValue])
 
   useEffect(() => {
@@ -163,41 +158,10 @@ export function Omnibox({
     if (isLoading) {
       return <Spinner size="xs" color="gray.400" thickness="1.5px" />
     }
-    if (showOriginCue && scheme === 'https') {
-      return (
-        <Tooltip label={originHint} openDelay={400} hasArrow>
-          <Box as="span" display="inline-flex" pointerEvents="auto">
-            <LockIcon color={secureColor} boxSize={3} aria-label={originHint} />
-          </Box>
-        </Tooltip>
-      )
+    if (showOriginCue) {
+      return <OriginCue scheme={scheme} />
     }
-    if (showOriginCue && scheme === 'http') {
-      return (
-        <Tooltip label={originHint} openDelay={400} hasArrow>
-          <Box as="span" display="inline-flex" alignItems="center" gap="4px" pointerEvents="auto">
-            <WarningIcon color={insecureColor} boxSize={3} aria-label={originHint} />
-          </Box>
-        </Tooltip>
-      )
-    }
-    if (showOriginCue && scheme === 'browsy') {
-      return (
-        <Tooltip label={originHint} openDelay={400} hasArrow>
-          <Box
-            as="span"
-            fontSize="10px"
-            fontWeight="700"
-            color={muted}
-            pointerEvents="auto"
-            aria-label={originHint}
-          >
-            B
-          </Box>
-        </Tooltip>
-      )
-    }
-    return <SearchIcon color="gray.400" boxSize={3} />
+    return <SearchIcon color="gray.400" boxSize={3.5} />
   })()
 
   return (
@@ -227,10 +191,7 @@ export function Omnibox({
           onClick={isLoading ? onStop : onReload}
         />
         <InputGroup size="sm" flex={1}>
-          <InputLeftElement
-            h="32px"
-            pointerEvents={showOriginCue && (scheme === 'https' || scheme === 'http' || scheme === 'browsy') ? 'auto' : 'none'}
-          >
+          <InputLeftElement h="32px" pointerEvents={showOriginCue ? 'auto' : 'none'}>
             {leftIcon}
           </InputLeftElement>
           <Input
@@ -241,7 +202,6 @@ export function Omnibox({
             borderRadius="md"
             onChange={(e) => {
               setValue(e.target.value)
-              setEdited(true)
               setShowSuggestions(true)
               setActiveIndex(-1)
             }}
@@ -282,7 +242,6 @@ export function Omnibox({
                 variant="ghost"
                 onClick={() => {
                   setValue('')
-                  setEdited(true)
                   setActiveIndex(-1)
                   inputRef.current?.focus()
                 }}
