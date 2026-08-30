@@ -7,6 +7,7 @@ import {
   type HandlerDetails
 } from 'electron'
 import { generateId, isAllowedNavigationUrl, sanitizeNavigationUrl } from '../../shared/utils'
+import { showsNavigationChrome } from '../../shared/internal-pages'
 import type { ChromePanel, TabState } from '../../shared/types'
 import { APP_SURFACE_DARK } from '../../shared/types'
 import { addHistoryEntry } from '../services/store'
@@ -86,6 +87,32 @@ export class TabManager {
     }
   }
 
+  /** Tab still on the default new-tab page (not navigated away). */
+  private isNewTabPage(tab: Tab): boolean {
+    const wc = tab.view.webContents
+    if (wc.isDestroyed()) return false
+    const url = wc.getURL()
+    return !url || url === 'browsy://home' || url.startsWith('browsy://home')
+  }
+
+  findNewTab(): Tab | undefined {
+    return this.tabs.find((tab) => this.isNewTabPage(tab))
+  }
+
+  /** Focus an existing new-tab page, or create one if none is open. */
+  async openNewTab(url = 'browsy://home'): Promise<Tab> {
+    const safeUrl = sanitizeNavigationUrl(url) ?? 'browsy://home'
+    if (safeUrl === 'browsy://home' || safeUrl.startsWith('browsy://home')) {
+      const existing = this.findNewTab()
+      if (existing) {
+        this.switchTab(existing.id)
+        this.showChrome('navigation')
+        return existing
+      }
+    }
+    return await this.createTab(safeUrl)
+  }
+
   async createTab(url = 'browsy://home', activate = true): Promise<Tab> {
     const safeUrl = sanitizeNavigationUrl(url) ?? 'browsy://home'
 
@@ -117,7 +144,7 @@ export class TabManager {
       this.onLayout()
     }
 
-    if (activate && safeUrl === 'browsy://home') {
+    if (activate && showsNavigationChrome(safeUrl)) {
       this.showChrome('navigation')
     }
 
@@ -295,10 +322,11 @@ export class TabManager {
     const active = this.getActiveTab()
     if (!active || active.view.webContents.isDestroyed()) return
 
-    const isHome = active.view.webContents.getURL().startsWith('browsy://home')
-    if (isHome && (!this.chromeVisible || this.chromePanel !== 'navigation')) {
+    const url = active.view.webContents.getURL()
+    const isInternal = showsNavigationChrome(url)
+    if (isInternal && (!this.chromeVisible || this.chromePanel !== 'navigation')) {
       this.showChrome('navigation')
-    } else if (!isHome && this.chromePanel === 'navigation' && this.chromeVisible) {
+    } else if (!isInternal && this.chromePanel === 'navigation' && this.chromeVisible) {
       this.hideChrome()
     }
   }

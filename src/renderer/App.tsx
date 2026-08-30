@@ -4,7 +4,6 @@ import { AnimatePresence } from 'framer-motion'
 import type { BrowserState, PopupRequest, ToastPayload } from '@shared/types'
 import { CHROME_DRAG_HEIGHT } from '@shared/types'
 import { NavigationChrome } from './components/NavigationChrome'
-import { SettingsPanel } from './components/SettingsPanel'
 import { ShortcutsPanel } from './components/ShortcutsPanel'
 import { PopupDialog } from './components/PopupDialog'
 import { DragRegion } from './components/DragRegion'
@@ -67,7 +66,7 @@ export default function App() {
         void window.browsy.navigate('browsy://bookmarks')
         break
       case 'settings':
-        void window.browsy.showChrome('settings')
+        void window.browsy.navigate('browsy://settings')
         break
       case 'shortcuts':
         void window.browsy.showChrome('shortcuts')
@@ -128,9 +127,6 @@ export default function App() {
                   onStop={() => window.browsy.stop()}
                   onCommand={runCommand}
                 />
-              )}
-              {state.chromePanel === 'settings' && (
-                <SettingsPanel key="settings" onClose={() => window.browsy.hideChrome()} />
               )}
               {state.chromePanel === 'shortcuts' && (
                 <ShortcutsPanel key="shortcuts" onClose={() => window.browsy.hideChrome()} />

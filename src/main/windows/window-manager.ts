@@ -23,6 +23,7 @@ import {
   setSettings
 } from '../services/store'
 import { resolveNavigationInput, generateId, sanitizeNavigationUrl } from '../../shared/utils'
+import { showsNavigationChrome } from '../../shared/internal-pages'
 import {
   parseBookmarkTitle,
   parseBookmarkUrl,
@@ -258,7 +259,8 @@ export class WindowManager {
         })
         return
       case 'settings':
-        this.toggleChromePanel(entry, 'settings', CHROME_PANEL_HEIGHT)
+        void tabs.navigate('browsy://settings')
+        entry.chromeHeight = CHROME_NAV_HEIGHT
         break
       case 'shortcuts':
         this.toggleChromePanel(entry, 'shortcuts', CHROME_PANEL_HEIGHT)
@@ -267,7 +269,7 @@ export class WindowManager {
         tabs.hideChrome()
         break
       case 'new-tab':
-        void tabs.createTab()
+        void tabs.openNewTab()
         break
       case 'close-tab': {
         const id = tabs.getActiveTabId()
@@ -404,7 +406,7 @@ export class WindowManager {
     if (!entry) return
     const url = resolveNavigationInput(input, getSettings().searchEngine)
     await entry.tabs.navigate(url)
-    if (url === 'browsy://home') entry.tabs.showChrome('navigation')
+    if (showsNavigationChrome(url)) entry.tabs.showChrome('navigation')
     else entry.tabs.hideChrome()
     this.layoutWindow(entry.window.id)
   }
@@ -428,8 +430,12 @@ export class WindowManager {
   async newTabFocused(url?: string): Promise<void> {
     const entry = this.getFocusedEntry()
     if (!entry) return
-    const resolved = url ? resolveNavigationInput(url, getSettings().searchEngine) : 'browsy://home'
-    await entry.tabs.createTab(resolved)
+    if (url) {
+      const resolved = resolveNavigationInput(url, getSettings().searchEngine)
+      await entry.tabs.openNewTab(resolved)
+    } else {
+      await entry.tabs.openNewTab()
+    }
     this.layoutWindow(entry.window.id)
   }
 
@@ -524,7 +530,7 @@ export class WindowManager {
       if (!entry) return
       const url = resolveNavigationInput(input, getSettings().searchEngine)
       await entry.tabs.navigate(url)
-      if (url === 'browsy://home') entry.tabs.showChrome('navigation')
+      if (showsNavigationChrome(url)) entry.tabs.showChrome('navigation')
       else entry.tabs.hideChrome()
       this.layoutWindow(entry.window.id)
     })
@@ -548,8 +554,12 @@ export class WindowManager {
     ipcMain.handle(IPC.NEW_TAB, async (event, url?: string) => {
       const entry = this.getEntryFromEvent(event)
       if (!entry) return
-      const resolved = url ? resolveNavigationInput(url, getSettings().searchEngine) : 'browsy://home'
-      await entry.tabs.createTab(resolved)
+      if (url) {
+        const resolved = resolveNavigationInput(url, getSettings().searchEngine)
+        await entry.tabs.openNewTab(resolved)
+      } else {
+        await entry.tabs.openNewTab()
+      }
       this.layoutWindow(entry.window.id)
     })
 

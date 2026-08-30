@@ -67,7 +67,6 @@ export function resolveNavigationInput(input: string, searchEngine: SearchEngine
 export function generateId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`
 }
-
 export function faviconUrlForPage(pageUrl: string, pageFavicon?: string | null): string | null {
   if (pageFavicon) {
     if (pageFavicon.startsWith('data:image/')) return pageFavicon

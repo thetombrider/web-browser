@@ -8,6 +8,7 @@ import {
 } from '@chakra-ui/react'
 import { AddIcon } from '@chakra-ui/icons'
 import type { TabState } from '@shared/types'
+import { browsyPageLabel } from '@shared/internal-pages'
 import { Favicon } from './Favicon'
 
 interface TabBarProps {
@@ -38,12 +39,7 @@ export function TabBar({ tabs, activeTabId, onSwitch, onClose, onNew }: TabBarPr
     >
       {tabs.map((tab) => {
         const isActive = tab.id === activeTabId
-        const label =
-          tab.url === 'browsy://bookmarks' || tab.title.startsWith('Bookmarks')
-            ? 'Bookmarks'
-            : tab.title === 'Browsy' || tab.url === 'browsy://home'
-              ? 'Home'
-              : tab.title
+        const label = browsyPageLabel(tab.url) ?? (tab.title === 'Browsy' ? 'Home' : tab.title)
         return (
           <HStack
             key={tab.id}
