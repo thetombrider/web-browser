@@ -21,6 +21,7 @@ export interface Suggestion {
   title: string
   subtitle: string
   url?: string
+  completionValues?: string[]
   tabId?: string
   favicon?: string | null
   action?: CommandAction
@@ -168,9 +169,32 @@ function toCommandSuggestion(command: CommandDef): Suggestion {
     kind: 'command',
     title: command.title,
     subtitle: command.subtitle,
+    completionValues: [command.title, ...command.keywords, ...command.slashes],
     action: command.action,
     glyph: command.glyph
   }
+}
+
+export function completionForSuggestion(suggestion: Suggestion, query: string): string | null {
+  const typed = query.trim().toLowerCase()
+  if (!typed) return null
+
+  for (const candidate of suggestion.completionValues ?? []) {
+    if (candidate.toLowerCase().startsWith(typed)) return candidate
+  }
+
+  return null
+}
+
+export function findCompletion(
+  suggestions: Suggestion[],
+  query: string
+): { suggestion: Suggestion; value: string } | null {
+  for (const suggestion of suggestions) {
+    const value = completionForSuggestion(suggestion, query)
+    if (value) return { suggestion, value }
+  }
+  return null
 }
 
 export function matchingCommands(query: string): Suggestion[] {
@@ -235,6 +259,12 @@ export function buildSuggestions(
         title: browsyPageLabel(tab.url) ?? (tab.title === 'Browsy' ? 'Home' : tab.title),
         subtitle: tab.url,
         url: tab.url,
+        completionValues: [
+          tab.title,
+          tab.url,
+          tab.url.replace(/^https?:\/\/(www\.)?/i, ''),
+          hostnameOf(tab.url)
+        ],
         tabId: tab.id,
         favicon: tab.favicon,
         glyph: letterForUrl(tab.url)
@@ -251,6 +281,12 @@ export function buildSuggestions(
         title: bookmark.title,
         subtitle: bookmark.url,
         url: bookmark.url,
+        completionValues: [
+          bookmark.title,
+          bookmark.url,
+          bookmark.url.replace(/^https?:\/\/(www\.)?/i, ''),
+          hostnameOf(bookmark.url)
+        ],
         glyph: letterForUrl(bookmark.url)
       })
     }
@@ -265,6 +301,12 @@ export function buildSuggestions(
         title: entry.title || hostnameOf(entry.url),
         subtitle: entry.url,
         url: entry.url,
+        completionValues: [
+          entry.title,
+          entry.url,
+          entry.url.replace(/^https?:\/\/(www\.)?/i, ''),
+          hostnameOf(entry.url)
+        ],
         glyph: letterForUrl(entry.url)
       })
     }

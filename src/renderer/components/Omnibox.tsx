@@ -23,6 +23,7 @@ import { browsyPageLabel } from '@shared/internal-pages'
 import {
   buildSuggestions,
   commandForExactQuery,
+  findCompletion,
   kindLabel,
   type CommandAction,
   type Suggestion
@@ -73,35 +74,16 @@ export function Omnibox({
   const [history, setHistory] = useState<HistoryEntry[]>([])
   const [activeIndex, setActiveIndex] = useState(-1)
   const [showSuggestions, setShowSuggestions] = useState(false)
+  const [completionSuppressedFor, setCompletionSuppressedFor] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const suggestions = showSuggestions
     ? buildSuggestions(value, tabs, bookmarks, history)
     : []
 
-  // Inline autocomplete: the first suggestion's URL extends the typed text.
-  // The input shows the completed value with the tail selected; typing replaces
-  // the tail, and Enter accepts the full suggestion.
-  const completion = (() => {
-    if (activeIndex !== -1) return null
-    const first = suggestions[0]
-    if (!first?.url) return null
-    const typed = value.trim()
-    if (!typed) return null
-    const lower = typed.toLowerCase()
-    const url = first.url
-    const candidates = [url, url.replace(/^https?:\/\/(www\.)?/i, '')]
-    try {
-      const host = new URL(url).hostname.replace(/^www\./i, '')
-      if (!candidates.includes(host)) candidates.push(host)
-    } catch {
-      /* keep url candidates */
-    }
-    for (const candidate of candidates) {
-      if (candidate.toLowerCase().startsWith(lower)) return candidate
-    }
-    return null
-  })()
+  const completionMatch =
+    activeIndex === -1 && completionSuppressedFor !== value ? findCompletion(suggestions, value) : null
+  const completion = completionMatch?.value ?? null
   const displayedValue = completion ?? value
 
   const liveDisplay = displayValueForUrl(initialValue)
@@ -115,12 +97,14 @@ export function Omnibox({
     inputRef.current?.focus()
     inputRef.current?.select()
     setActiveIndex(-1)
+    setCompletionSuppressedFor(null)
   }, [focusToken])
 
   useEffect(() => {
     setValue(displayValueForUrl(initialValue))
     setShowSuggestions(false)
     setActiveIndex(-1)
+    setCompletionSuppressedFor(null)
   }, [initialValue])
 
   useEffect(() => {
@@ -241,9 +225,14 @@ export function Omnibox({
               setValue(e.target.value)
               setShowSuggestions(true)
               setActiveIndex(-1)
+              setCompletionSuppressedFor(null)
             }}
             onKeyDown={(e) => {
-              if (e.key === 'ArrowDown') {
+              if ((e.key === 'Delete' || e.key === 'Backspace') && completionMatch) {
+                e.preventDefault()
+                setCompletionSuppressedFor(value)
+                inputRef.current?.setSelectionRange(value.length, value.length)
+              } else if (e.key === 'ArrowDown') {
                 e.preventDefault()
                 if (!suggestions.length) return
                 setActiveIndex((i) => (i + 1) % suggestions.length)
@@ -255,8 +244,8 @@ export function Omnibox({
                 e.preventDefault()
                 if (activeIndex >= 0 && suggestions[activeIndex]) {
                   choose(suggestions[activeIndex])
-                } else if (completion) {
-                  onSubmit(completion)
+                } else if (completionMatch) {
+                  choose(completionMatch.suggestion)
                 } else {
                   commit(value)
                 }
@@ -281,6 +270,7 @@ export function Omnibox({
                 onClick={() => {
                   setValue('')
                   setActiveIndex(-1)
+                  setCompletionSuppressedFor(null)
                   inputRef.current?.focus()
                 }}
               />
