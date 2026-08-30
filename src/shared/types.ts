@@ -35,6 +35,29 @@ export interface TabState {
   canGoForward: boolean
 }
 
+export interface CarouselState {
+  selectedTabId: string
+  direction: -1 | 1
+}
+
+export interface ThumbnailReadyPayload {
+  tabId: string
+  dataUrl: string
+}
+
+export interface ThumbnailFailedPayload {
+  tabId: string
+}
+
+export interface BrowserState {
+  tabs: TabState[]
+  activeTabId: string | null
+  chromePanel: ChromePanel
+  chromeVisible: boolean
+  chromeFocusToken: number
+  carousel: CarouselState | null
+}
+
 export interface Bookmark {
   id: string
   title: string
@@ -56,14 +79,6 @@ export interface SessionTab {
 export interface SessionWindow {
   tabs: SessionTab[]
   bounds?: { x: number; y: number; width: number; height: number }
-}
-
-export interface BrowserState {
-  tabs: TabState[]
-  activeTabId: string | null
-  chromePanel: ChromePanel
-  chromeVisible: boolean
-  chromeFocusToken: number
 }
 
 export interface Settings {
@@ -115,6 +130,8 @@ export const IPC = {
   SET_SETTINGS: 'browser:set-settings',
   POPUP_REQUEST: 'browser:popup-request',
   POPUP_RESPONSE: 'browser:popup-response',
+  THUMBNAIL_READY: 'browser:thumbnail-ready',
+  THUMBNAIL_FAILED: 'browser:thumbnail-failed',
   TOAST: 'browser:toast',
   BOOKMARK_PAGE: 'browser:bookmark-page'
 } as const
@@ -161,6 +178,8 @@ export interface BrowsyAPI {
   setSettings: (settings: Partial<Settings>) => Promise<Settings>
   onStateChanged: (callback: (state: BrowserState) => void) => () => void
   onPopupRequest: (callback: (request: PopupRequest) => void) => () => void
+  onThumbnailReady: (callback: (payload: ThumbnailReadyPayload) => void) => () => void
+  onThumbnailFailed: (callback: (payload: ThumbnailFailedPayload) => void) => () => void
   onToast: (callback: (toast: ToastPayload) => void) => () => void
   respondToPopup: (id: string, allow: boolean) => Promise<void>
 }

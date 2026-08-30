@@ -6,6 +6,8 @@ import {
   type BrowserState,
   type ChromePanel,
   type PopupRequest,
+  type ThumbnailFailedPayload,
+  type ThumbnailReadyPayload,
   type ToastPayload
 } from '../shared/types'
 
@@ -46,6 +48,16 @@ const api: BrowsyAPI = {
     const handler = (_event: Electron.IpcRendererEvent, request: PopupRequest) => callback(request)
     ipcRenderer.on(IPC.POPUP_REQUEST, handler)
     return () => ipcRenderer.removeListener(IPC.POPUP_REQUEST, handler)
+  },
+  onThumbnailReady: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: ThumbnailReadyPayload) => callback(payload)
+    ipcRenderer.on(IPC.THUMBNAIL_READY, handler)
+    return () => ipcRenderer.removeListener(IPC.THUMBNAIL_READY, handler)
+  },
+  onThumbnailFailed: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: ThumbnailFailedPayload) => callback(payload)
+    ipcRenderer.on(IPC.THUMBNAIL_FAILED, handler)
+    return () => ipcRenderer.removeListener(IPC.THUMBNAIL_FAILED, handler)
   },
   onToast: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, toast: ToastPayload) => callback(toast)

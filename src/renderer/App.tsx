@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import type { ThumbnailReadyPayload } from '@shared/types'
 import { Box, Text, useColorModeValue } from '@chakra-ui/react'
 import { AnimatePresence } from 'framer-motion'
 import type { BrowserState, PopupRequest, ToastPayload } from '@shared/types'
@@ -7,6 +8,7 @@ import { NavigationChrome } from './components/NavigationChrome'
 import { PopupDialog } from './components/PopupDialog'
 import { DragRegion } from './components/DragRegion'
 import { ToastHost } from './components/ToastHost'
+import { TabCarousel } from './components/TabCarousel'
 import type { CommandAction } from './utils/suggestions'
 
 export default function App() {
@@ -15,10 +17,12 @@ export default function App() {
     activeTabId: null,
     chromePanel: null,
     chromeVisible: false,
-    chromeFocusToken: 0
+    chromeFocusToken: 0,
+    carousel: null
   })
   const [popup, setPopup] = useState<PopupRequest | null>(null)
   const [toast, setToast] = useState<ToastPayload | null>(null)
+  const [thumbnails, setThumbnails] = useState<Record<string, string>>({})
   const [shortcutTip, setShortcutTip] = useState(false)
   const tipBg = useColorModeValue('gray.900', 'whiteAlpha.900')
   const tipColor = useColorModeValue('white', 'gray.900')
@@ -27,6 +31,16 @@ export default function App() {
     window.browsy.getState().then(setState)
     const unsub = window.browsy.onStateChanged(setState)
     const unsubPopup = window.browsy.onPopupRequest(setPopup)
+    const unsubThumbnail = window.browsy.onThumbnailReady((payload: ThumbnailReadyPayload) => {
+      setThumbnails((current) => ({ ...current, [payload.tabId]: payload.dataUrl }))
+    })
+    const unsubThumbnailFailed = window.browsy.onThumbnailFailed(({ tabId }) => {
+      setThumbnails((current) => {
+        const next = { ...current }
+        delete next[tabId]
+        return next
+      })
+    })
     const unsubToast = window.browsy.onToast((next) => {
       setToast(next)
       window.setTimeout(() => {
@@ -36,6 +50,8 @@ export default function App() {
     return () => {
       unsub()
       unsubPopup()
+      unsubThumbnail()
+      unsubThumbnailFailed()
       unsubToast()
     }
   }, [])
@@ -98,9 +114,19 @@ export default function App() {
 
   const activeTab = state.tabs.find((t) => t.id === state.activeTabId)
 
+  useEffect(() => {
+    const openTabIds = new Set(state.tabs.map((tab) => tab.id))
+    setThumbnails((current) => {
+      const next = Object.fromEntries(Object.entries(current).filter(([id]) => openTabIds.has(id)))
+      return Object.keys(next).length === Object.keys(current).length ? current : next
+    })
+  }, [state.tabs])
+
   return (
     <>
-      {state.chromeVisible ? (
+      {state.carousel ? (
+        <TabCarousel tabs={state.tabs} carousel={state.carousel} thumbnails={thumbnails} />
+      ) : state.chromeVisible ? (
         <Box position="fixed" inset={0} pointerEvents="none" zIndex={1000}>
           <DragRegion />
           <Box pointerEvents="auto">

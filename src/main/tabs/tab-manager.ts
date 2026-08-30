@@ -23,6 +23,7 @@ export type TabUpdateCallback = () => void
 export type PopupCallback = (id: string, url: string) => void
 export type ShortcutCallback = (action: string) => void
 export type LayoutCallback = () => void
+export type CarouselOpenCallback = () => boolean
 
 export class TabManager {
   private tabs: Tab[] = []
@@ -37,7 +38,8 @@ export class TabManager {
     private onUpdate: TabUpdateCallback,
     private onPopup: PopupCallback,
     private onShortcut: ShortcutCallback,
-    private onLayout: LayoutCallback
+    private onLayout: LayoutCallback,
+    private isCarouselOpen: CarouselOpenCallback
   ) {
     this.window.on('resize', () => this.onLayout())
   }
@@ -256,6 +258,25 @@ export class TabManager {
     return this.tabs.map((tab) => this.toTabState(tab))
   }
 
+  async captureThumbnail(tabId: string): Promise<string | null> {
+    const tab = this.tabs.find((candidate) => candidate.id === tabId)
+    const wc = tab?.view.webContents
+    if (!wc || wc.isDestroyed()) return null
+
+    try {
+      const image = await wc.capturePage()
+      if (image.isEmpty()) return null
+      const resized = image.resize({ width: 320 })
+      return `data:image/jpeg;base64,${resized.toJPEG(72).toString('base64')}`
+    } catch {
+      return null
+    }
+  }
+
+  hasTab(tabId: string): boolean {
+    return this.tabs.some((tab) => tab.id === tabId)
+  }
+
   getSessionTabs(): { url: string; active: boolean }[] {
     return this.tabs.map((tab) => ({
       url: sanitizeNavigationUrl(tab.view.webContents.getURL()) ?? 'browsy://home',
@@ -443,6 +464,18 @@ export class TabManager {
 
     wc.on('before-input-event', (event, input) => {
       if (input.type !== 'keyDown') return
+
+      if (this.isCarouselOpen() && input.key === 'Escape') {
+        event.preventDefault()
+        this.onShortcut('dismiss-carousel')
+        return
+      }
+
+      if (this.isCarouselOpen() && input.key === 'Enter') {
+        event.preventDefault()
+        this.onShortcut('commit-carousel')
+        return
+      }
 
       if (input.key === 'Escape') {
         event.preventDefault()

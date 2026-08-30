@@ -9,8 +9,8 @@ const SHORTCUTS = [
   ['Ctrl/Cmd + L', 'Open address bar'],
   ['Ctrl/Cmd + T', 'New tab'],
   ['Ctrl/Cmd + W', 'Close tab'],
-  ['Cmd + Right Arrow', 'Next tab'],
-  ['Cmd + Left Arrow', 'Previous tab'],
+  ['Cmd + Right Arrow', 'Next tab, or move tab switcher'],
+  ['Cmd + Left Arrow', 'Previous tab, or move tab switcher'],
   ['Ctrl/Cmd + D', 'Bookmark page'],
   ['Ctrl/Cmd + B', 'Bookmarks page'],
   ['Ctrl/Cmd + ,', 'Settings'],
@@ -19,7 +19,8 @@ const SHORTCUTS = [
   ['Ctrl/Cmd + ]', 'Forward'],
   ['Ctrl/Cmd + N', 'New window'],
   ['Ctrl/Cmd + /', 'This shortcut list'],
-  ['Esc', 'Hide chrome']
+  ['Enter', 'Select centered tab in switcher'],
+  ['Esc', 'Dismiss switcher or hide chrome']
 ] as const
 
 function pageStyles(): string {

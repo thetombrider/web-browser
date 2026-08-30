@@ -30,7 +30,16 @@ import {
   parseFiniteHeight,
   parseSettingsPatch
 } from '../services/validation'
-import type { BookmarkResult, BrowserState, ChromePanel, SessionWindow, ToastPayload } from '../../shared/types'
+import type {
+  BookmarkResult,
+  BrowserState,
+  CarouselState,
+  ChromePanel,
+  SessionWindow,
+  ThumbnailFailedPayload,
+  ThumbnailReadyPayload,
+  ToastPayload
+} from '../../shared/types'
 import {
   CHROME_DRAG_HEIGHT,
   CHROME_NAV_HEIGHT,
@@ -49,6 +58,8 @@ interface BrowserWindowEntry {
   toastExpandUntil: number
   toastExpandTimer: ReturnType<typeof setTimeout> | null
   windowDrag: { startScreenX: number; startScreenY: number; startWindowX: number; startWindowY: number } | null
+  carousel: CarouselState | null
+  carouselTabIds: string[]
 }
 
 function isFiniteNumber(value: unknown): value is number {
@@ -126,7 +137,8 @@ export class WindowManager {
         chromeView.webContents.send(IPC.POPUP_REQUEST, { id, url })
       },
       (action) => this.handleShortcut(win.id, action),
-      () => this.layoutWindow(win.id)
+      () => this.layoutWindow(win.id),
+      () => this.windows.get(win.id)?.carousel !== null
     )
 
     this.windows.set(win.id, {
@@ -137,7 +149,9 @@ export class WindowManager {
       pageInset: CHROME_NAV_HEIGHT,
       toastExpandUntil: 0,
       toastExpandTimer: null,
-      windowDrag: null
+      windowDrag: null,
+      carousel: null,
+      carouselTabIds: []
     })
 
     win.on('ready-to-show', () => win.show())
@@ -212,6 +226,13 @@ export class WindowManager {
     const navigationInset = chromeVisible && entry.tabs.getChromePanel() === 'navigation' ? entry.pageInset : 0
     entry.tabs.layoutTabViews(navigationInset)
 
+    if (entry.carousel) {
+      entry.chromeView.setBounds({ x: 0, y: 0, width: bounds.width, height: bounds.height })
+      entry.window.contentView.addChildView(entry.chromeView)
+      entry.chromeView.webContents.focus()
+      return
+    }
+
     let height = chromeVisible
       ? Math.max(CHROME_DRAG_HEIGHT, entry.chromeHeight)
       : CHROME_DRAG_HEIGHT
@@ -272,6 +293,20 @@ export class WindowManager {
     if (!entry) return
     const { tabs } = entry
 
+    if (action === 'next-tab' || action === 'prev-tab') {
+      this.handleTabNavigationShortcut(windowId, action === 'next-tab' ? 1 : -1)
+      return
+    }
+
+    if (entry.carousel && action === 'commit-carousel') {
+      this.commitCarousel(windowId)
+      return
+    }
+    if (entry.carousel && action === 'dismiss-carousel') {
+      this.dismissCarousel(windowId)
+      return
+    }
+
     switch (action) {
       case 'navigation':
         this.toggleChromePanel(entry, 'navigation', CHROME_NAV_HEIGHT)
@@ -302,12 +337,6 @@ export class WindowManager {
         if (id) tabs.closeTab(id)
         break
       }
-      case 'next-tab':
-        tabs.nextTab()
-        break
-      case 'prev-tab':
-        tabs.prevTab()
-        break
       case 'reload':
         tabs.reload()
         break
@@ -327,6 +356,91 @@ export class WindowManager {
         this.bookmarkActivePage(windowId)
         break
     }
+    this.layoutWindow(windowId)
+    this.broadcastState(windowId)
+  }
+
+  private handleTabNavigationShortcut(windowId: number, direction: -1 | 1): void {
+    const entry = this.windows.get(windowId)
+    if (!entry) return
+
+    if (entry.carousel) {
+      entry.carouselTabIds = entry.carouselTabIds.filter((tabId) => entry.tabs.hasTab(tabId))
+      if (entry.carouselTabIds.length < 2) {
+        this.dismissCarousel(windowId)
+        return
+      }
+      const currentIndex = entry.carouselTabIds.indexOf(entry.carousel.selectedTabId)
+      if (currentIndex === -1) {
+        entry.carousel = { selectedTabId: entry.carouselTabIds[0], direction }
+        this.layoutWindow(windowId)
+        this.broadcastState(windowId)
+        return
+      }
+      const nextIndex = (currentIndex + direction + entry.carouselTabIds.length) % entry.carouselTabIds.length
+      entry.carousel = { selectedTabId: entry.carouselTabIds[nextIndex], direction }
+      this.layoutWindow(windowId)
+      this.broadcastState(windowId)
+      return
+    }
+
+    if (entry.tabs.isChromeVisible() || entry.tabs.getTabs().length < 2) {
+      if (direction === 1) entry.tabs.nextTab()
+      else entry.tabs.prevTab()
+      this.layoutWindow(windowId)
+      this.broadcastState(windowId)
+      return
+    }
+
+    const tabIds = entry.tabs.getTabs().map((tab) => tab.id)
+    const activeIndex = tabIds.indexOf(entry.tabs.getActiveTabId() ?? '')
+    const selectedIndex = (activeIndex + direction + tabIds.length) % tabIds.length
+    entry.carouselTabIds = tabIds
+    entry.carousel = { selectedTabId: tabIds[selectedIndex], direction }
+    this.layoutWindow(windowId)
+    this.broadcastState(windowId)
+    void this.captureCarouselThumbnails(windowId, tabIds)
+  }
+
+  private async captureCarouselThumbnails(windowId: number, tabIds: string[]): Promise<void> {
+    const entry = this.windows.get(windowId)
+    if (!entry) return
+
+    for (const tabId of tabIds) {
+      const current = this.windows.get(windowId)
+      if (!current || !current.carousel || !current.tabs.hasTab(tabId)) continue
+      const dataUrl = await current.tabs.captureThumbnail(tabId)
+      const latest = this.windows.get(windowId)
+      if (!latest || !latest.carousel || !dataUrl || !latest.tabs.hasTab(tabId)) {
+        if (latest?.carousel && latest.tabs.hasTab(tabId) && !dataUrl) {
+          latest.chromeView.webContents.send(IPC.THUMBNAIL_FAILED, { tabId } satisfies ThumbnailFailedPayload)
+        }
+        continue
+      }
+      latest.chromeView.webContents.send(IPC.THUMBNAIL_READY, { tabId, dataUrl } satisfies ThumbnailReadyPayload)
+    }
+  }
+
+  private commitCarousel(windowId: number): void {
+    const entry = this.windows.get(windowId)
+    const tabId = entry?.carousel?.selectedTabId
+    if (!entry || !tabId || !entry.tabs.hasTab(tabId)) {
+      this.dismissCarousel(windowId)
+      return
+    }
+
+    entry.carousel = null
+    entry.carouselTabIds = []
+    entry.tabs.switchTab(tabId)
+    this.layoutWindow(windowId)
+    this.broadcastState(windowId)
+  }
+
+  private dismissCarousel(windowId: number): void {
+    const entry = this.windows.get(windowId)
+    if (!entry?.carousel) return
+    entry.carousel = null
+    entry.carouselTabIds = []
     this.layoutWindow(windowId)
     this.broadcastState(windowId)
   }
@@ -386,6 +500,17 @@ export class WindowManager {
   private registerChromeShortcuts(chromeView: WebContentsView, windowId: number): void {
     chromeView.webContents.on('before-input-event', (event, input) => {
       if (input.type !== 'keyDown') return
+      const entry = this.windows.get(windowId)
+      if (entry?.carousel && input.key === 'Escape') {
+        event.preventDefault()
+        this.handleShortcut(windowId, 'dismiss-carousel')
+        return
+      }
+      if (entry?.carousel && input.key === 'Enter') {
+        event.preventDefault()
+        this.handleShortcut(windowId, 'commit-carousel')
+        return
+      }
       if (input.key === 'Escape') {
         event.preventDefault()
         this.handleShortcut(windowId, 'hide-chrome')
@@ -422,7 +547,7 @@ export class WindowManager {
   getFocusedState(): BrowserState {
     const entry = this.getFocusedEntry()
     if (!entry) {
-      return { tabs: [], activeTabId: null, chromePanel: null, chromeVisible: false, chromeFocusToken: 0 }
+      return { tabs: [], activeTabId: null, chromePanel: null, chromeVisible: false, chromeFocusToken: 0, carousel: null }
     }
     return this.buildState(entry.tabs)
   }
@@ -490,7 +615,8 @@ export class WindowManager {
       activeTabId: tabs.getActiveTabId(),
       chromeVisible: tabs.isChromeVisible(),
       chromePanel: tabs.getChromePanel(),
-      chromeFocusToken: tabs.getChromeFocusToken()
+      chromeFocusToken: tabs.getChromeFocusToken(),
+      carousel: [...this.windows.values()].find((entry) => entry.tabs === tabs)?.carousel ?? null
     }
   }
 
