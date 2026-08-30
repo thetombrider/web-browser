@@ -96,7 +96,7 @@ function pageStyles(): string {
       .glyph { background: rgba(0,0,0,0.06); color: #52525b; }
       .chevron { color: #a1a1aa; }
     }
-    .wrap { max-width: 640px; }
+    .wrap { max-width: 640px; margin: 0 auto; }
     .brand {
       font-size: 1.75rem;
       font-weight: 600;
