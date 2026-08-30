@@ -126,8 +126,17 @@ export function Omnibox({
       if (suggestions[0]) choose(suggestions[0])
       return
     }
-    if (next.startsWith('/') && suggestions[0]?.kind === 'command') {
-      choose(suggestions[0])
+    // Slash queries always run the top command match
+    if (next.startsWith('/')) {
+      if (suggestions[0]) choose(suggestions[0])
+      return
+    }
+    // Exact command title match (e.g. "settings", "new tab") runs the command
+    const exactCommand = suggestions.find(
+      (s) => s.kind === 'command' && s.title.toLowerCase() === next.toLowerCase()
+    )
+    if (exactCommand) {
+      choose(exactCommand)
       return
     }
     onSubmit(next)
