@@ -154,16 +154,6 @@ export function Omnibox({
     onSubmit(next)
   }
 
-  const leftIcon = (() => {
-    if (isLoading) {
-      return <Spinner size="xs" color="gray.400" thickness="1.5px" />
-    }
-    if (showOriginCue) {
-      return <OriginCue scheme={scheme} />
-    }
-    return <SearchIcon color="gray.400" boxSize={3.5} />
-  })()
-
   return (
     <Box px={3} pt={1.5} pb={2} style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
       <HStack spacing={1.5} align="center">
@@ -190,9 +180,29 @@ export function Omnibox({
           variant="ghost"
           onClick={isLoading ? onStop : onReload}
         />
+        {showOriginCue ? (
+          <Box
+            w="28px"
+            h="28px"
+            display="flex"
+            alignItems="center"
+            justifyContent="center"
+            flexShrink={0}
+            borderRadius="md"
+            bg={inputBackground}
+            border="1px solid"
+            borderColor={inputBorder}
+          >
+            <OriginCue scheme={scheme} />
+          </Box>
+        ) : null}
         <InputGroup size="sm" flex={1}>
-          <InputLeftElement h="32px" pointerEvents={showOriginCue ? 'auto' : 'none'}>
-            {leftIcon}
+          <InputLeftElement h="32px" pointerEvents="none">
+            {isLoading ? (
+              <Spinner size="xs" color="gray.400" thickness="1.5px" />
+            ) : (
+              <SearchIcon color="gray.400" boxSize={3.5} />
+            )}
           </InputLeftElement>
           <Input
             ref={inputRef}
