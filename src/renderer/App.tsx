@@ -52,11 +52,18 @@ export default function App() {
                 activeTabId={state.activeTabId}
                 initialValue={activeTab?.url ?? ''}
                 focusToken={state.chromeFocusToken}
+                canGoBack={activeTab?.canGoBack ?? false}
+                canGoForward={activeTab?.canGoForward ?? false}
+                isLoading={activeTab?.isLoading ?? false}
                 onSwitchTab={(id) => window.browsy.switchTab(id)}
                 onCloseTab={(id) => window.browsy.closeTab(id)}
                 onNewTab={() => window.browsy.newTab()}
                 onSubmit={(value) => window.browsy.navigate(value)}
                 onClose={() => window.browsy.hideChrome()}
+                onBack={() => window.browsy.goBack()}
+                onForward={() => window.browsy.goForward()}
+                onReload={() => window.browsy.reload()}
+                onStop={() => window.browsy.stop()}
               />
             )}
             {state.chromePanel === 'bookmarks' && (

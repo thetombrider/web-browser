@@ -59,7 +59,7 @@ export class WindowManager {
       y: session?.bounds?.y,
       show: false,
       title: 'Browsy',
-      backgroundColor: '#0f0f12',
+      backgroundColor: '#111114',
       ...(isMac
         ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 12, y: 12 } }
         : { frame: false }),
@@ -331,6 +331,10 @@ export class WindowManager {
       const entry = this.getEntryFromEvent(event)
       entry?.tabs.hideChrome()
       if (entry) this.broadcastState(entry.window.id)
+    })
+
+    ipcMain.handle(IPC.SET_CHROME_HEIGHT, (event, height: number) => {
+      this.getEntryFromEvent(event)?.tabs.setChromeHeight(height)
     })
 
     ipcMain.handle(IPC.TOGGLE_DEVTOOLS, (event) => {

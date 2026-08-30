@@ -5,7 +5,7 @@ A minimal, keyboard-first Electron browser built for learning and portfolio use.
 ## Features
 
 - Full-page browsing with hidden chrome by default
-- Unified navigation chrome with tabs and omnibox
+- Compact navigation chrome: tabs, omnibox suggestions, back/forward/reload
 - Multiple windows and tabs (`BrowserView` per tab)
 - Custom homepage with recent sites
 - Custom error pages

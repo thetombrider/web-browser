@@ -8,6 +8,7 @@ import {
 } from 'electron'
 import { generateId } from '../../shared/utils'
 import type { ChromePanel, TabState } from '../../shared/types'
+import { CHROME_NAV_HEIGHT, CHROME_PANEL_HEIGHT } from '../../shared/types'
 import { addHistoryEntry } from '../services/store'
 
 export interface Tab {
@@ -26,6 +27,7 @@ export class TabManager {
   private chromeVisible = false
   private chromePanel: ChromePanel = null
   private chromeFocusToken = 0
+  private chromeContentHeight = CHROME_NAV_HEIGHT
   private pendingPopups = new Map<string, (allow: boolean) => void>()
 
   constructor(
@@ -66,6 +68,9 @@ export class TabManager {
     this.chromePanel = panel
     if (panel === 'navigation') {
       this.chromeFocusToken += 1
+      this.chromeContentHeight = CHROME_NAV_HEIGHT
+    } else {
+      this.chromeContentHeight = CHROME_PANEL_HEIGHT
     }
     this.layoutViews()
     this.onUpdate()
@@ -80,6 +85,13 @@ export class TabManager {
     if (active) {
       active.view.webContents.focus()
     }
+  }
+
+  setChromeHeight(height: number): void {
+    const next = Math.max(0, Math.round(height))
+    if (next === this.chromeContentHeight) return
+    this.chromeContentHeight = next
+    this.layoutViews()
   }
 
   async createTab(url = 'browsy://home', activate = true): Promise<Tab> {
@@ -222,7 +234,7 @@ export class TabManager {
   layoutViews(): void {
     const bounds = this.window.getContentBounds()
     const dragHeight = process.platform === 'linux' ? 28 : 0
-    const top = this.chromeVisible ? this.getChromeHeight() : dragHeight
+    const top = this.chromeVisible ? this.chromeContentHeight : dragHeight
 
     for (const tab of this.tabs) {
       tab.view.setBounds({
@@ -231,19 +243,6 @@ export class TabManager {
         width: bounds.width,
         height: Math.max(0, bounds.height - top)
       })
-    }
-  }
-
-  private getChromeHeight(): number {
-    switch (this.chromePanel) {
-      case 'navigation':
-        return 212
-      case 'bookmarks':
-        return 220
-      case 'settings':
-        return 200
-      default:
-        return 100
     }
   }
 
