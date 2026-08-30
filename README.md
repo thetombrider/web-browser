@@ -46,8 +46,8 @@ npm start
 | `Ctrl/Cmd+L` | Navigation chrome (tabs and omnibox) |
 | `Ctrl/Cmd+T` | New tab |
 | `Ctrl/Cmd+W` | Close tab |
-| `Ctrl/Cmd+Tab` | Next tab |
-| `Ctrl/Cmd+Shift+Tab` | Previous tab |
+| `Cmd+Right Arrow` | Next tab |
+| `Cmd+Left Arrow` | Previous tab |
 | `Ctrl/Cmd+D` | Bookmark page |
 | `Ctrl/Cmd+N` | New window |
 | `Ctrl/Cmd+R` | Reload |

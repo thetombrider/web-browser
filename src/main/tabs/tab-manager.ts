@@ -132,7 +132,8 @@ export class TabManager {
 
     this.activeTabId = tabId
     this.onLayout()
-    this.syncChromeWithActiveTab()
+    // Keep the user's current chrome state when moving between tabs.
+    if (this.chromeVisible) this.chromeFocusToken += 1
     this.onUpdate()
   }
 
@@ -331,6 +332,12 @@ export class TabManager {
       if (!target) {
         return { action: 'deny' }
       }
+      // User-clicked target=_blank links, such as the YouTube logo in an
+      // embedded player, should behave like normal links instead of popups.
+      if (details.disposition === 'foreground-tab') {
+        void this.createTab(target, true)
+        return { action: 'deny' }
+      }
       const id = generateId()
       this.onPopup(id, target)
       this.pendingPopups.set(id, (allow) => {
@@ -440,9 +447,8 @@ export class TabManager {
       else if (key === '/' || key === '?' || code === 'Slash') action = 'shortcuts'
       else if (key === 'i' && input.shift) action = 'toggle-devtools'
       else if (key === 'n') action = 'new-window'
-      else if (key === 'tab') action = input.shift ? 'prev-tab' : 'next-tab'
-      else if (key === 'pagedown') action = 'next-tab'
-      else if (key === 'pageup') action = 'prev-tab'
+      else if (input.meta && key === 'arrowright') action = 'next-tab'
+      else if (input.meta && key === 'arrowleft') action = 'prev-tab'
 
       if (action) {
         event.preventDefault()

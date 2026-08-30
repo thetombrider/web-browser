@@ -95,14 +95,16 @@ export function Omnibox({
   const showOriginCue = showingLiveUrl && !isLoading && (scheme === 'https' || scheme === 'http' || scheme === 'browsy')
 
   useEffect(() => {
+    setValue(displayValueForUrl(initialValue))
     inputRef.current?.focus()
     inputRef.current?.select()
-    setShowSuggestions(true)
     setActiveIndex(-1)
   }, [focusToken])
 
   useEffect(() => {
     setValue(displayValueForUrl(initialValue))
+    setShowSuggestions(false)
+    setActiveIndex(-1)
   }, [initialValue])
 
   useEffect(() => {
@@ -217,7 +219,6 @@ export function Omnibox({
               setShowSuggestions(true)
               setActiveIndex(-1)
             }}
-            onFocus={() => setShowSuggestions(true)}
             onKeyDown={(e) => {
               if (e.key === 'ArrowDown') {
                 e.preventDefault()

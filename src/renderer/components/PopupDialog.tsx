@@ -27,7 +27,7 @@ export function PopupDialog({ request, onAllow, onDeny }: PopupDialogProps) {
       onClose={onDeny}
       isCentered
     >
-      <AlertDialogOverlay>
+      <AlertDialogOverlay bg="transparent">
         <AlertDialogContent mx={4} style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
           <AlertDialogHeader>Open pop-up?</AlertDialogHeader>
           <AlertDialogBody>
