@@ -22,6 +22,7 @@ import {
 import type { Bookmark, HistoryEntry, TabState } from '@shared/types'
 import {
   buildSuggestions,
+  commandForExactQuery,
   kindLabel,
   type CommandAction,
   type Suggestion
@@ -131,10 +132,11 @@ export function Omnibox({
       if (suggestions[0]) choose(suggestions[0])
       return
     }
-    // Exact command title match (e.g. "settings", "new tab") runs the command
-    const exactCommand = suggestions.find(
-      (s) => s.kind === 'command' && s.title.toLowerCase() === next.toLowerCase()
-    )
+    // Exact keyword/title (e.g. "home", "settings") runs that command
+    const exactCommand =
+      suggestions.find(
+        (s) => s.kind === 'command' && s.title.toLowerCase() === next.toLowerCase()
+      ) ?? commandForExactQuery(next)
     if (exactCommand) {
       choose(exactCommand)
       return
@@ -209,7 +211,7 @@ export function Omnibox({
                 setActiveIndex((i) => (i + 1) % suggestions.length)
               }
             }}
-            placeholder="Search, URL, or /command"
+            placeholder="Search, URL, or command"
             bg={inputBackground}
             border="1px solid"
             borderColor={inputBorder}

@@ -118,12 +118,58 @@ function matchesQuery(query: string, ...fields: string[]): boolean {
   return fields.some((field) => field.toLowerCase().includes(query))
 }
 
+/** True when query is a prefix/substring of a command keyword or title. */
 function commandMatches(query: string, command: CommandDef): boolean {
   if (!query) return false
   if (query.startsWith('/')) {
     return command.slashes.some((slash) => slash.startsWith(query) || query.startsWith(slash))
   }
-  return command.keywords.some((keyword) => keyword.includes(query) || query.includes(keyword))
+  const title = command.title.toLowerCase()
+  if (title === query || title.startsWith(query) || title.includes(query)) return true
+  return command.keywords.some(
+    (keyword) =>
+      keyword === query || keyword.startsWith(query) || (query.length >= 2 && keyword.includes(query))
+  )
+}
+
+/** Prefer exact / prefix keyword hits so "home" ranks above fuzzy page noise. */
+function commandRank(query: string, command: CommandDef): number {
+  const title = command.title.toLowerCase()
+  if (title === query) return 0
+  if (command.keywords.some((k) => k === query)) return 1
+  if (title.startsWith(query)) return 2
+  if (command.keywords.some((k) => k.startsWith(query))) return 3
+  return 4
+}
+
+function toCommandSuggestion(command: CommandDef): Suggestion {
+  return {
+    id: `command-${command.action}`,
+    kind: 'command',
+    title: command.title,
+    subtitle: command.subtitle,
+    action: command.action,
+    glyph: command.glyph
+  }
+}
+
+export function matchingCommands(query: string): Suggestion[] {
+  const q = query.trim().toLowerCase()
+  if (!q) return []
+  return COMMANDS.filter((command) => commandMatches(q, command))
+    .sort((a, b) => commandRank(q, a) - commandRank(q, b))
+    .map(toCommandSuggestion)
+}
+
+/** True when typed text should run this command on Enter (keyword/title exact). */
+export function commandForExactQuery(query: string): Suggestion | null {
+  const q = query.trim().toLowerCase()
+  if (!q || q.startsWith('/')) return null
+  const hit = COMMANDS.find(
+    (command) =>
+      command.title.toLowerCase() === q || command.keywords.some((keyword) => keyword === q)
+  )
+  return hit ? toCommandSuggestion(hit) : null
 }
 
 export function buildSuggestions(
@@ -143,22 +189,21 @@ export function buildSuggestions(
     results.push(item)
   }
 
-  // Slash mode prioritizes commands
+  // Slash mode: commands only
   if (q.startsWith('/')) {
-    for (const command of COMMANDS) {
+    for (const suggestion of matchingCommands(q)) {
       if (results.length >= limit) break
-      if (commandMatches(q, command)) {
-        results.push({
-          id: `command-${command.action}`,
-          kind: 'command',
-          title: command.title,
-          subtitle: command.subtitle,
-          action: command.action,
-          glyph: command.glyph
-        })
-      }
+      results.push(suggestion)
     }
     return results
+  }
+
+  // Plain text: matching commands first so "home" / "settings" always surface
+  if (q) {
+    for (const suggestion of matchingCommands(q)) {
+      if (results.length >= limit) break
+      results.push(suggestion)
+    }
   }
 
   for (const tab of tabs) {
@@ -201,23 +246,6 @@ export function buildSuggestions(
         url: entry.url,
         glyph: letterForUrl(entry.url)
       })
-    }
-  }
-
-  // Commands after pages when the query looks like an action
-  if (q) {
-    for (const command of COMMANDS) {
-      if (results.length >= limit) break
-      if (commandMatches(q, command)) {
-        results.push({
-          id: `command-${command.action}`,
-          kind: 'command',
-          title: command.title,
-          subtitle: command.subtitle,
-          action: command.action,
-          glyph: command.glyph
-        })
-      }
     }
   }
 
