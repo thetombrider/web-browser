@@ -5,7 +5,6 @@ import type { Bookmark, BrowserState, PopupRequest, ToastPayload } from '@shared
 import { CHROME_DRAG_HEIGHT } from '@shared/types'
 import { NavigationChrome } from './components/NavigationChrome'
 import { BookmarksPanel } from './components/BookmarksPanel'
-import { SettingsPanel } from './components/SettingsPanel'
 import { ShortcutsPanel } from './components/ShortcutsPanel'
 import { PopupDialog } from './components/PopupDialog'
 import { DragRegion } from './components/DragRegion'
@@ -79,7 +78,7 @@ export default function App() {
         void window.browsy.showChrome('bookmarks')
         break
       case 'settings':
-        void window.browsy.showChrome('settings')
+        void window.browsy.navigate('browsy://settings')
         break
       case 'shortcuts':
         void window.browsy.showChrome('shortcuts')
@@ -154,9 +153,6 @@ export default function App() {
                   }}
                   onClose={() => window.browsy.hideChrome()}
                 />
-              )}
-              {state.chromePanel === 'settings' && (
-                <SettingsPanel key="settings" onClose={() => window.browsy.hideChrome()} />
               )}
               {state.chromePanel === 'shortcuts' && (
                 <ShortcutsPanel key="shortcuts" onClose={() => window.browsy.hideChrome()} />

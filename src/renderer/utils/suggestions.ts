@@ -1,4 +1,5 @@
 import type { Bookmark, HistoryEntry, TabState } from '@shared/types'
+import { browsyPageLabel } from '@shared/internal-pages'
 
 export type SuggestionKind = 'tab' | 'bookmark' | 'history' | 'command'
 
@@ -55,7 +56,7 @@ const COMMANDS: CommandDef[] = [
   {
     action: 'settings',
     title: 'Settings',
-    subtitle: 'Open settings',
+    subtitle: 'Go to browsy://settings',
     glyph: '⚙',
     keywords: ['settings', 'preferences', 'options', 'config'],
     slashes: ['/settings', '/s', '/pref']
@@ -231,7 +232,7 @@ export function buildSuggestions(
       pushPage({
         id: `tab-${tab.id}`,
         kind: 'tab',
-        title: tab.title === 'Browsy' || tab.url === 'browsy://home' ? 'Home' : tab.title,
+        title: browsyPageLabel(tab.url) ?? (tab.title === 'Browsy' ? 'Home' : tab.title),
         subtitle: tab.url,
         url: tab.url,
         tabId: tab.id,

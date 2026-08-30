@@ -7,6 +7,7 @@ import {
   type HandlerDetails
 } from 'electron'
 import { generateId, isAllowedNavigationUrl, sanitizeNavigationUrl } from '../../shared/utils'
+import { showsNavigationChrome } from '../../shared/internal-pages'
 import type { ChromePanel, TabState } from '../../shared/types'
 import { APP_SURFACE_DARK } from '../../shared/types'
 import { addHistoryEntry } from '../services/store'
@@ -143,7 +144,7 @@ export class TabManager {
       this.onLayout()
     }
 
-    if (activate && safeUrl === 'browsy://home') {
+    if (activate && showsNavigationChrome(safeUrl)) {
       this.showChrome('navigation')
     }
 
@@ -321,10 +322,11 @@ export class TabManager {
     const active = this.getActiveTab()
     if (!active || active.view.webContents.isDestroyed()) return
 
-    const isHome = active.view.webContents.getURL().startsWith('browsy://home')
-    if (isHome && (!this.chromeVisible || this.chromePanel !== 'navigation')) {
+    const url = active.view.webContents.getURL()
+    const isInternal = showsNavigationChrome(url)
+    if (isInternal && (!this.chromeVisible || this.chromePanel !== 'navigation')) {
       this.showChrome('navigation')
-    } else if (!isHome && this.chromePanel === 'navigation' && this.chromeVisible) {
+    } else if (!isInternal && this.chromePanel === 'navigation' && this.chromeVisible) {
       this.hideChrome()
     }
   }
