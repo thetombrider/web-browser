@@ -92,7 +92,7 @@ export class WindowManager {
         backgroundThrottling: false
       }
     })
-    chromeView.setBackgroundColor('#00000000')
+    chromeView.setBackgroundColor('#00000001')
 
     const tabs = new TabManager(
       win,

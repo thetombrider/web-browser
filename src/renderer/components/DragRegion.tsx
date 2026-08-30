@@ -14,14 +14,15 @@ export function DragRegion({ onPeekClick, peek = false }: DragRegionProps) {
       right={0}
       height={peek ? '100%' : '32px'}
       minH={peek ? '6px' : '32px'}
-      // Near-invisible fill so Electron hit-tests the strip (transparent pixels are ignored).
-      bg={peek ? 'whiteAlpha.50' : undefined}
+      // Opaque enough for Electron hit-testing; still nearly invisible.
+      bg={peek ? 'blackAlpha.100' : undefined}
       style={{ WebkitAppRegion: peek ? 'no-drag' : 'drag' } as React.CSSProperties}
       pointerEvents="auto"
       cursor={peek ? 'pointer' : undefined}
       onMouseDown={
         peek
           ? (e) => {
+              if (e.button !== 0) return
               e.preventDefault()
               e.stopPropagation()
               onPeekClick?.()
