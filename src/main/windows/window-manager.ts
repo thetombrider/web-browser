@@ -248,7 +248,7 @@ export class WindowManager {
         tabs.hideChrome()
         break
       case 'new-tab':
-        void tabs.createTab()
+        void tabs.openNewTab()
         break
       case 'close-tab': {
         const id = tabs.getActiveTabId()
@@ -410,8 +410,12 @@ export class WindowManager {
   async newTabFocused(url?: string): Promise<void> {
     const entry = this.getFocusedEntry()
     if (!entry) return
-    const resolved = url ? resolveNavigationInput(url, getSettings().searchEngine) : 'browsy://home'
-    await entry.tabs.createTab(resolved)
+    if (url) {
+      const resolved = resolveNavigationInput(url, getSettings().searchEngine)
+      await entry.tabs.openNewTab(resolved)
+    } else {
+      await entry.tabs.openNewTab()
+    }
     this.layoutWindow(entry.window.id)
   }
 
@@ -501,8 +505,12 @@ export class WindowManager {
     ipcMain.handle(IPC.NEW_TAB, async (event, url?: string) => {
       const entry = this.getEntryFromEvent(event)
       if (!entry) return
-      const resolved = url ? resolveNavigationInput(url, getSettings().searchEngine) : 'browsy://home'
-      await entry.tabs.createTab(resolved)
+      if (url) {
+        const resolved = resolveNavigationInput(url, getSettings().searchEngine)
+        await entry.tabs.openNewTab(resolved)
+      } else {
+        await entry.tabs.openNewTab()
+      }
       this.layoutWindow(entry.window.id)
     })
 
