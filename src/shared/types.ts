@@ -1,6 +1,10 @@
 export const BROWSY_API_PORT = 9375
 export const BROWSY_CDP_PORT = 9222
+/** Max JSON body size for the local agent API (bytes). */
+export const BROWSY_API_MAX_BODY_BYTES = 64 * 1024
 export const RECENT_SITES_COUNT = 12
+/** Max chrome overlay height the renderer may request (px). */
+export const CHROME_HEIGHT_MAX = 4000
 export const GOOGLE_SEARCH_URL = 'https://www.google.com/search?q='
 export const DUCKDUCKGO_SEARCH_URL = 'https://duckduckgo.com/?q='
 export const BING_SEARCH_URL = 'https://www.bing.com/search?q='

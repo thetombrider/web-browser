@@ -6,7 +6,7 @@ import {
   type Event,
   type HandlerDetails
 } from 'electron'
-import { generateId } from '../../shared/utils'
+import { generateId, isAllowedNavigationUrl, sanitizeNavigationUrl } from '../../shared/utils'
 import type { ChromePanel, TabState } from '../../shared/types'
 import { APP_SURFACE_DARK } from '../../shared/types'
 import { addHistoryEntry } from '../services/store'
@@ -87,11 +87,16 @@ export class TabManager {
   }
 
   async createTab(url = 'browsy://home', activate = true): Promise<Tab> {
+    const safeUrl = sanitizeNavigationUrl(url) ?? 'browsy://home'
+
     const view = new WebContentsView({
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
-        sandbox: true
+        sandbox: true,
+        webSecurity: true,
+        allowRunningInsecureContent: false,
+        navigateOnDragDrop: false
       }
     })
     view.setBackgroundColor(APP_SURFACE_DARK)
@@ -112,11 +117,11 @@ export class TabManager {
       this.onLayout()
     }
 
-    if (activate && url === 'browsy://home') {
+    if (activate && safeUrl === 'browsy://home') {
       this.showChrome('navigation')
     }
 
-    await tab.view.webContents.loadURL(url)
+    await tab.view.webContents.loadURL(safeUrl)
     return tab
   }
 
@@ -175,7 +180,9 @@ export class TabManager {
   navigate(input: string): Promise<void> {
     const active = this.getActiveTab()
     if (!active) return Promise.resolve()
-    return active.view.webContents.loadURL(input)
+    const safeUrl = sanitizeNavigationUrl(input)
+    if (!safeUrl) return Promise.resolve()
+    return active.view.webContents.loadURL(safeUrl)
   }
 
   goBack(): void {
@@ -222,7 +229,7 @@ export class TabManager {
 
   getSessionTabs(): { url: string; active: boolean }[] {
     return this.tabs.map((tab) => ({
-      url: tab.view.webContents.getURL() || 'browsy://home',
+      url: sanitizeNavigationUrl(tab.view.webContents.getURL()) ?? 'browsy://home',
       active: tab.id === this.activeTabId
     }))
   }
@@ -311,22 +318,47 @@ export class TabManager {
   private attachWebContentsHandlers(tab: Tab): void {
     const wc = tab.view.webContents
 
+    // Deny powerful permissions for untrusted web content.
+    wc.session.setPermissionRequestHandler((_wc, _permission, callback) => {
+      callback(false)
+    })
+    wc.session.setPermissionCheckHandler(() => false)
+
     wc.setWindowOpenHandler((details: HandlerDetails) => {
+      const target = sanitizeNavigationUrl(details.url)
+      if (!target) {
+        return { action: 'deny' }
+      }
       const id = generateId()
-      this.onPopup(id, details.url)
+      this.onPopup(id, target)
       this.pendingPopups.set(id, (allow) => {
         if (allow) {
-          void this.createTab(details.url, true)
+          void this.createTab(target, true)
         }
       })
       return { action: 'deny' }
+    })
+
+    wc.on('will-navigate', (event, url) => {
+      if (!isAllowedNavigationUrl(url)) event.preventDefault()
+    })
+
+    wc.on('will-redirect', (event, url) => {
+      if (!isAllowedNavigationUrl(url)) event.preventDefault()
+    })
+
+    wc.on('certificate-error', (event, _url, _error, _certificate, callback) => {
+      // Never silently trust invalid TLS certificates.
+      event.preventDefault()
+      callback(false)
     })
 
     wc.on('did-start-loading', () => this.onUpdate())
     wc.on('did-stop-loading', () => this.onUpdate())
     wc.on('page-title-updated', () => this.onUpdate())
     wc.on('page-favicon-updated', (_event, favicons: string[]) => {
-      tab.favicon = favicons[0] ?? null
+      const next = favicons.find((icon) => icon.startsWith('data:image/') || isAllowedNavigationUrl(icon))
+      tab.favicon = next ?? null
       this.onUpdate()
     })
     wc.on('did-navigate', () => {
@@ -342,7 +374,7 @@ export class TabManager {
       if (wc.isDestroyed()) return
       const url = wc.getURL()
       const title = wc.getTitle()
-      if (url && !url.startsWith('browsy://error')) {
+      if (url && !url.startsWith('browsy://error') && isAllowedNavigationUrl(url)) {
         addHistoryEntry(url, title)
       }
       if (tab.id === this.activeTabId) {
@@ -355,7 +387,8 @@ export class TabManager {
       'did-fail-load',
       (_event: Event, errorCode: number, errorDescription: string, validatedURL: string, isMainFrame: boolean) => {
         if (!isMainFrame || errorCode === -3) return
-        const errorUrl = `browsy://error?url=${encodeURIComponent(validatedURL)}&code=${errorCode}&desc=${encodeURIComponent(errorDescription)}`
+        const safeFailed = sanitizeNavigationUrl(validatedURL) ?? ''
+        const errorUrl = `browsy://error?url=${encodeURIComponent(safeFailed)}&code=${errorCode}&desc=${encodeURIComponent(errorDescription)}`
         void wc.loadURL(errorUrl)
       }
     )

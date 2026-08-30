@@ -15,12 +15,19 @@ import {
   saveSession,
   setSettings
 } from '../services/store'
-import { resolveNavigationInput, generateId } from '../../shared/utils'
+import { resolveNavigationInput, generateId, sanitizeNavigationUrl } from '../../shared/utils'
+import {
+  parseBookmarkTitle,
+  parseBookmarkUrl,
+  parseFiniteHeight,
+  parseSettingsPatch
+} from '../services/validation'
 import type { BookmarkResult, BrowserState, ChromePanel, SessionWindow, ToastPayload } from '../../shared/types'
 import {
   CHROME_DRAG_HEIGHT,
   CHROME_NAV_HEIGHT,
   CHROME_PANEL_HEIGHT,
+  CHROME_HEIGHT_MAX,
   CHROME_PEEK_HEIGHT,
   IPC
 } from '../../shared/types'
@@ -36,16 +43,19 @@ interface BrowserWindowEntry {
 
 export class WindowManager {
   private windows = new Map<number, BrowserWindowEntry>()
-  private apiServer: ApiServer
+  private apiServer: ApiServer | null = null
 
-  constructor() {
-    this.apiServer = new ApiServer(this)
+  constructor(options?: { apiToken?: string | null }) {
+    const token = options?.apiToken ?? null
+    if (token) {
+      this.apiServer = new ApiServer(this, token)
+    }
   }
 
   async initialize(): Promise<void> {
     setupProtocolHandler()
     this.registerIpc()
-    this.apiServer.start()
+    this.apiServer?.start()
 
     const session = getSettings().restoreSession === 'always' ? getSession() : []
     if (session.length > 0) {
@@ -88,7 +98,8 @@ export class WindowManager {
         preload: join(__dirname, '../preload/index.js'),
         contextIsolation: true,
         nodeIntegration: false,
-        sandbox: false,
+        sandbox: true,
+        webSecurity: true,
         backgroundThrottling: false
       }
     })
@@ -136,9 +147,19 @@ export class WindowManager {
 
     await chromeView.webContents.loadURL(chromeUrl)
 
+    // Lock the privileged chrome UI to its own origin.
+    chromeView.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+    chromeView.webContents.on('will-navigate', (event, url) => {
+      const allowed =
+        url === chromeUrl ||
+        (url.startsWith('file://') && chromeUrl.startsWith('file://')) ||
+        (typeof rendererUrl === 'string' && rendererUrl.length > 0 && url.startsWith(rendererUrl))
+      if (!allowed) event.preventDefault()
+    })
+
     if (session?.tabs?.length) {
       for (const tab of session.tabs) {
-        const url = tab.url && tab.url.length > 0 ? tab.url : 'browsy://home'
+        const url = sanitizeNavigationUrl(tab.url) ?? 'browsy://home'
         await tabs.createTab(url, tab.active)
       }
     } else {
@@ -536,10 +557,11 @@ export class WindowManager {
       this.broadcastState(entry.window.id)
     })
 
-    ipcMain.handle(IPC.SET_CHROME_HEIGHT, (event, height: number) => {
+    ipcMain.handle(IPC.SET_CHROME_HEIGHT, (event, height: unknown) => {
       const entry = this.getEntryFromEvent(event)
       if (!entry) return
-      this.setChromeHeight(entry.window.id, height)
+      const safeHeight = parseFiniteHeight(height, entry.chromeHeight, CHROME_HEIGHT_MAX)
+      this.setChromeHeight(entry.window.id, safeHeight)
     })
 
     ipcMain.handle(IPC.TOGGLE_DEVTOOLS, (event) => {
@@ -553,13 +575,17 @@ export class WindowManager {
         return { added: false, alreadyExists: false, title: '', url: '' } satisfies BookmarkResult
       }
       if (url) {
-        const bookmarkTitle = title ?? url
-        const result = addBookmark({ id: generateId(), title: bookmarkTitle, url, createdAt: Date.now() })
+        const safeUrl = parseBookmarkUrl(url)
+        if (!safeUrl) {
+          return { added: false, alreadyExists: false, title: '', url: '' } satisfies BookmarkResult
+        }
+        const bookmarkTitle = parseBookmarkTitle(title, safeUrl)
+        const result = addBookmark({ id: generateId(), title: bookmarkTitle, url: safeUrl, createdAt: Date.now() })
         return {
           added: result.added,
           alreadyExists: result.alreadyExists,
           title: bookmarkTitle,
-          url
+          url: safeUrl
         } satisfies BookmarkResult
       }
       return this.bookmarkActivePage(entry.window.id)
@@ -580,7 +606,11 @@ export class WindowManager {
     ipcMain.handle(IPC.GET_HISTORY, () => getHistory())
     ipcMain.handle(IPC.GET_RECENT_SITES, () => getRecentSites())
     ipcMain.handle(IPC.GET_SETTINGS, () => getSettings())
-    ipcMain.handle(IPC.SET_SETTINGS, (_event, settings) => setSettings(settings))
+    ipcMain.handle(IPC.SET_SETTINGS, (_event, settings) => {
+      const patch = parseSettingsPatch(settings)
+      if (!patch) return getSettings()
+      return setSettings(patch)
+    })
 
     ipcMain.handle(IPC.POPUP_RESPONSE, (event, id: string, allow: boolean) => {
       this.getEntryFromEvent(event)?.tabs.respondToPopup(id, allow)

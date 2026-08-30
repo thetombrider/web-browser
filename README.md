@@ -13,7 +13,7 @@ A minimal, keyboard-first Electron browser built for learning and portfolio use.
 - DevTools docked right, one per tab (`F12`)
 - Session restore on launch
 - MCP bridge for agent control
-- Chrome DevTools Protocol on port `9222`
+- Optional Chrome DevTools Protocol (off by default)
 
 ## Requirements
 
@@ -59,11 +59,35 @@ npm start
 | `F12` / `Ctrl/Cmd+Shift+I` | DevTools |
 | `Esc` | Hide chrome |
 
+## Security notes
+
+By default Browsy keeps local control surfaces **off**:
+
+- **CDP** is disabled unless `BROWSY_ENABLE_CDP=1` or `BROWSY_CDP_PORT` is set.
+- **Local HTTP API** is disabled unless `BROWSY_ENABLE_API=1` or `BROWSY_API_TOKEN` is set.
+- When the API is enabled, every request requires `Authorization: Bearer <token>` (or `X-Browsy-Token`).
+- Navigation is limited to `http:`, `https:`, and `browsy:` (blocks `javascript:`, `file:`, `data:`, etc.).
+- Tab content runs sandboxed with permissions and invalid TLS certificates denied by default.
+
 ## Agent integration
 
 ### Local HTTP API
 
-When Browsy is running, a control API is available at `http://127.0.0.1:9375`.
+Disabled by default. Start with a token:
+
+```bash
+BROWSY_API_TOKEN=dev-secret npm run dev
+# or
+BROWSY_ENABLE_API=1 npm run dev   # prints a generated token
+```
+
+API base: `http://127.0.0.1:9375`
+
+Auth header (required):
+
+```bash
+curl -H "Authorization: Bearer dev-secret" http://127.0.0.1:9375/state
+```
 
 Endpoints:
 
@@ -76,9 +100,11 @@ Endpoints:
 - `POST /devtools` — toggle DevTools
 - `POST /windows` — new window
 
+There is no CORS; the API is loopback-only and intended for local tooling.
+
 ### MCP bridge
 
-Add to your Cursor MCP config (browser must be running):
+Browser must be running with the API enabled, and the bridge must receive the same token:
 
 ```json
 {
@@ -86,7 +112,10 @@ Add to your Cursor MCP config (browser must be running):
     "browsy": {
       "command": "npm",
       "args": ["run", "mcp"],
-      "cwd": "/path/to/browsy"
+      "cwd": "/path/to/browsy",
+      "env": {
+        "BROWSY_API_TOKEN": "dev-secret"
+      }
     }
   }
 }
@@ -96,13 +125,15 @@ Tools: `browse_url`, `list_tabs`, `new_tab`, `close_tab`, `switch_tab`, `go_back
 
 ### Chrome DevTools Protocol
 
-CDP is exposed on port `9222` by default. Override with `BROWSY_CDP_PORT`.
+Disabled by default. Enable explicitly:
 
 ```bash
+BROWSY_ENABLE_CDP=1 npm run dev
+# or
 BROWSY_CDP_PORT=9223 npm run dev
 ```
 
-Connect with Playwright, Puppeteer, or any CDP client.
+Connect with Playwright, Puppeteer, or any CDP client. Treat CDP as full browser control — only enable on trusted machines.
 
 ## Architecture
 
