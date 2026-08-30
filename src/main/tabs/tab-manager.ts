@@ -86,6 +86,32 @@ export class TabManager {
     }
   }
 
+  /** Tab still on the default new-tab page (not navigated away). */
+  private isNewTabPage(tab: Tab): boolean {
+    const wc = tab.view.webContents
+    if (wc.isDestroyed()) return false
+    const url = wc.getURL()
+    return !url || url === 'browsy://home' || url.startsWith('browsy://home')
+  }
+
+  findNewTab(): Tab | undefined {
+    return this.tabs.find((tab) => this.isNewTabPage(tab))
+  }
+
+  /** Focus an existing new-tab page, or create one if none is open. */
+  async openNewTab(url = 'browsy://home'): Promise<Tab> {
+    const safeUrl = sanitizeNavigationUrl(url) ?? 'browsy://home'
+    if (safeUrl === 'browsy://home' || safeUrl.startsWith('browsy://home')) {
+      const existing = this.findNewTab()
+      if (existing) {
+        this.switchTab(existing.id)
+        this.showChrome('navigation')
+        return existing
+      }
+    }
+    return await this.createTab(safeUrl)
+  }
+
   async createTab(url = 'browsy://home', activate = true): Promise<Tab> {
     const safeUrl = sanitizeNavigationUrl(url) ?? 'browsy://home'
 
