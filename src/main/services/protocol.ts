@@ -1,5 +1,6 @@
 import { protocol } from 'electron'
 import { getRecentSites, getSettings, setSettings } from './store'
+import { renderBookmarksPage } from './bookmarks-page'
 import { isAllowedNavigationUrl, sanitizeNavigationUrl } from '../../shared/utils'
 import {
   APP_SURFACE_DARK,
@@ -385,6 +386,12 @@ export function setupProtocolHandler(): void {
 
     if (url.hostname === 'home' || url.pathname === '/home') {
       return new Response(renderHomePage(), {
+        headers: { 'Content-Type': 'text/html; charset=utf-8' }
+      })
+    }
+
+    if (url.hostname === 'bookmarks' || url.pathname === '/bookmarks') {
+      return new Response(renderBookmarksPage(), {
         headers: { 'Content-Type': 'text/html; charset=utf-8' }
       })
     }

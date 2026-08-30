@@ -9,6 +9,7 @@ A minimal, keyboard-first Electron browser built for learning and portfolio use.
 - Omnibox suggestions and command palette (`/` shortcuts)
 - Multiple windows and tabs
 - Custom homepage with recent sites
+- Custom bookmarks page grouped by domain
 - Custom error pages
 - DevTools docked right, one per tab (`F12`)
 - Session restore on launch
@@ -53,7 +54,7 @@ npm start
 | `Ctrl/Cmd+R` | Reload |
 | `Ctrl/Cmd+[` | Back |
 | `Ctrl/Cmd+]` | Forward |
-| `Ctrl/Cmd+B` | Bookmarks |
+| `Ctrl/Cmd+B` | Bookmarks page (`browsy://bookmarks`) |
 | `Ctrl/Cmd+,` | Settings |
 | `Ctrl/Cmd+/` | Shortcut list |
 | `F12` / `Ctrl/Cmd+Shift+I` | DevTools |

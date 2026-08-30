@@ -40,7 +40,7 @@ const COMMANDS: CommandDef[] = [
   {
     action: 'bookmarks',
     title: 'Bookmarks',
-    subtitle: 'Open bookmarks',
+    subtitle: 'Go to browsy://bookmarks',
     glyph: '★',
     keywords: ['bookmarks', 'bookmark', 'saved', 'favorites'],
     slashes: ['/bookmarks', '/b', '/bm']

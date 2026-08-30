@@ -6,6 +6,7 @@ export function showsNavigationChrome(url: string): boolean {
 /** Human-readable tab label for internal browsy pages. */
 export function browsyPageLabel(url: string): string | null {
   if (url.startsWith('browsy://home')) return 'Home'
+  if (url.startsWith('browsy://bookmarks')) return 'Bookmarks'
   if (url.startsWith('browsy://settings')) return 'Settings'
   return null
 }

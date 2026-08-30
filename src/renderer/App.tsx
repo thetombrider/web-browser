@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Box, Text, useColorModeValue } from '@chakra-ui/react'
 import { AnimatePresence } from 'framer-motion'
-import type { Bookmark, BrowserState, PopupRequest, ToastPayload } from '@shared/types'
+import type { BrowserState, PopupRequest, ToastPayload } from '@shared/types'
 import { CHROME_DRAG_HEIGHT } from '@shared/types'
 import { NavigationChrome } from './components/NavigationChrome'
-import { BookmarksPanel } from './components/BookmarksPanel'
 import { ShortcutsPanel } from './components/ShortcutsPanel'
 import { PopupDialog } from './components/PopupDialog'
 import { DragRegion } from './components/DragRegion'
@@ -19,16 +18,11 @@ export default function App() {
     chromeVisible: false,
     chromeFocusToken: 0
   })
-  const [bookmarks, setBookmarks] = useState<Bookmark[]>([])
   const [popup, setPopup] = useState<PopupRequest | null>(null)
   const [toast, setToast] = useState<ToastPayload | null>(null)
   const [shortcutTip, setShortcutTip] = useState(false)
   const tipBg = useColorModeValue('gray.900', 'whiteAlpha.900')
   const tipColor = useColorModeValue('white', 'gray.900')
-
-  const refreshBookmarks = useCallback(async () => {
-    setBookmarks(await window.browsy.getBookmarks())
-  }, [])
 
   useEffect(() => {
     window.browsy.getState().then(setState)
@@ -46,12 +40,6 @@ export default function App() {
       unsubToast()
     }
   }, [])
-
-  useEffect(() => {
-    if (state.chromePanel === 'bookmarks') {
-      void refreshBookmarks()
-    }
-  }, [state.chromePanel, refreshBookmarks])
 
   useEffect(() => {
     if (popup) {
@@ -75,7 +63,7 @@ export default function App() {
   const runCommand = useCallback((action: CommandAction) => {
     switch (action) {
       case 'bookmarks':
-        void window.browsy.showChrome('bookmarks')
+        void window.browsy.navigate('browsy://bookmarks')
         break
       case 'settings':
         void window.browsy.navigate('browsy://settings')
@@ -138,20 +126,6 @@ export default function App() {
                   onReload={() => window.browsy.reload()}
                   onStop={() => window.browsy.stop()}
                   onCommand={runCommand}
-                />
-              )}
-              {state.chromePanel === 'bookmarks' && (
-                <BookmarksPanel
-                  key="bookmarks"
-                  bookmarks={bookmarks}
-                  onRemove={(id) => {
-                    void window.browsy.removeBookmark(id).then(refreshBookmarks)
-                  }}
-                  onNavigate={(url) => window.browsy.navigate(url)}
-                  onAdd={() => {
-                    void window.browsy.bookmarkPage().then(refreshBookmarks)
-                  }}
-                  onClose={() => window.browsy.hideChrome()}
                 />
               )}
               {state.chromePanel === 'shortcuts' && (
