@@ -100,6 +100,9 @@ export const IPC = {
   SHOW_CHROME: 'browser:show-chrome',
   HIDE_CHROME: 'browser:hide-chrome',
   SET_CHROME_HEIGHT: 'browser:set-chrome-height',
+  WINDOW_DRAG_START: 'browser:window-drag-start',
+  WINDOW_DRAG_MOVE: 'browser:window-drag-move',
+  WINDOW_DRAG_END: 'browser:window-drag-end',
   TOGGLE_DEVTOOLS: 'browser:toggle-devtools',
   GET_BOOKMARKS: 'browser:get-bookmarks',
   ADD_BOOKMARK: 'browser:add-bookmark',
@@ -142,6 +145,9 @@ export interface BrowsyAPI {
   showChrome: (panel: ChromePanel) => Promise<void>
   hideChrome: () => Promise<void>
   setChromeHeight: (height: number) => Promise<void>
+  startWindowDrag: (screenX: number, screenY: number) => void
+  moveWindowDrag: (screenX: number, screenY: number) => void
+  endWindowDrag: () => void
   toggleDevTools: () => Promise<void>
   getBookmarks: () => Promise<Bookmark[]>
   addBookmark: (url?: string, title?: string) => Promise<BookmarkResult>
