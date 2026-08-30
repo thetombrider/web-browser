@@ -9,6 +9,7 @@ import {
   InputRightElement,
   Text,
   Spinner,
+  Tooltip,
   useColorModeValue,
   VStack
 } from '@chakra-ui/react'
@@ -16,8 +17,10 @@ import {
   ArrowBackIcon,
   ArrowForwardIcon,
   CloseIcon,
+  LockIcon,
   RepeatIcon,
-  SearchIcon
+  SearchIcon,
+  UnlockIcon
 } from '@chakra-ui/icons'
 import type { Bookmark, HistoryEntry, TabState } from '@shared/types'
 import {
@@ -27,6 +30,7 @@ import {
   type CommandAction,
   type Suggestion
 } from '../utils/suggestions'
+import { getUrlScheme, schemeLabel } from '../utils/origin'
 
 interface OmniboxProps {
   initialValue: string
@@ -45,6 +49,10 @@ interface OmniboxProps {
   onCommand: (action: CommandAction) => void
 }
 
+function displayValueForUrl(url: string): string {
+  return url === 'browsy://home' ? '' : url
+}
+
 export function Omnibox({
   initialValue,
   focusToken,
@@ -61,7 +69,8 @@ export function Omnibox({
   onSwitchTab,
   onCommand
 }: OmniboxProps) {
-  const [value, setValue] = useState(initialValue === 'browsy://home' ? '' : initialValue)
+  const [value, setValue] = useState(displayValueForUrl(initialValue))
+  const [edited, setEdited] = useState(false)
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([])
   const [history, setHistory] = useState<HistoryEntry[]>([])
   const [activeIndex, setActiveIndex] = useState(-1)
@@ -75,20 +84,28 @@ export function Omnibox({
   const suggestionActive = useColorModeValue('blackAlpha.100', 'whiteAlpha.200')
   const muted = useColorModeValue('gray.500', 'gray.400')
   const glyphBg = useColorModeValue('blackAlpha.100', 'whiteAlpha.200')
+  const secureColor = useColorModeValue('green.600', 'green.300')
+  const insecureColor = useColorModeValue('orange.600', 'orange.300')
 
   const suggestions = showSuggestions
     ? buildSuggestions(value, tabs, bookmarks, history)
     : []
+
+  const scheme = getUrlScheme(initialValue)
+  const showOriginCue = !edited && !isLoading && value.length > 0
+  const originHint = schemeLabel(scheme)
 
   useEffect(() => {
     inputRef.current?.focus()
     inputRef.current?.select()
     setShowSuggestions(true)
     setActiveIndex(-1)
+    setEdited(false)
   }, [focusToken])
 
   useEffect(() => {
-    setValue(initialValue === 'browsy://home' ? '' : initialValue)
+    setValue(displayValueForUrl(initialValue))
+    setEdited(false)
   }, [initialValue])
 
   useEffect(() => {
@@ -127,12 +144,10 @@ export function Omnibox({
       if (suggestions[0]) choose(suggestions[0])
       return
     }
-    // Slash queries always run the top command match
     if (next.startsWith('/')) {
       if (suggestions[0]) choose(suggestions[0])
       return
     }
-    // Exact keyword/title (e.g. "home", "settings") runs that command
     const exactCommand =
       suggestions.find(
         (s) => s.kind === 'command' && s.title.toLowerCase() === next.toLowerCase()
@@ -143,6 +158,47 @@ export function Omnibox({
     }
     onSubmit(next)
   }
+
+  const leftIcon = (() => {
+    if (isLoading) {
+      return <Spinner size="xs" color="gray.400" thickness="1.5px" />
+    }
+    if (showOriginCue && scheme === 'https') {
+      return (
+        <Tooltip label={originHint} openDelay={400} hasArrow>
+          <Box as="span" display="inline-flex" pointerEvents="auto">
+            <LockIcon color={secureColor} boxSize={3} aria-label={originHint} />
+          </Box>
+        </Tooltip>
+      )
+    }
+    if (showOriginCue && scheme === 'http') {
+      return (
+        <Tooltip label={originHint} openDelay={400} hasArrow>
+          <Box as="span" display="inline-flex" pointerEvents="auto">
+            <UnlockIcon color={insecureColor} boxSize={3} aria-label={originHint} />
+          </Box>
+        </Tooltip>
+      )
+    }
+    if (showOriginCue && scheme === 'browsy') {
+      return (
+        <Tooltip label={originHint} openDelay={400} hasArrow>
+          <Box
+            as="span"
+            fontSize="10px"
+            fontWeight="700"
+            color={muted}
+            pointerEvents="auto"
+            aria-label={originHint}
+          >
+            B
+          </Box>
+        </Tooltip>
+      )
+    }
+    return <SearchIcon color="gray.400" boxSize={3} />
+  })()
 
   return (
     <Box px={3} pt={1.5} pb={2} style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
@@ -171,12 +227,11 @@ export function Omnibox({
           onClick={isLoading ? onStop : onReload}
         />
         <InputGroup size="sm" flex={1}>
-          <InputLeftElement pointerEvents="none" h="32px">
-            {isLoading ? (
-              <Spinner size="xs" color="gray.400" thickness="1.5px" />
-            ) : (
-              <SearchIcon color="gray.400" boxSize={3} />
-            )}
+          <InputLeftElement
+            h="32px"
+            pointerEvents={showOriginCue && (scheme === 'https' || scheme === 'http' || scheme === 'browsy') ? 'auto' : 'none'}
+          >
+            {leftIcon}
           </InputLeftElement>
           <Input
             ref={inputRef}
@@ -186,6 +241,7 @@ export function Omnibox({
             borderRadius="md"
             onChange={(e) => {
               setValue(e.target.value)
+              setEdited(true)
               setShowSuggestions(true)
               setActiveIndex(-1)
             }}
@@ -226,6 +282,7 @@ export function Omnibox({
                 variant="ghost"
                 onClick={() => {
                   setValue('')
+                  setEdited(true)
                   setActiveIndex(-1)
                   inputRef.current?.focus()
                 }}
