@@ -16,8 +16,14 @@ import {
   setSettings
 } from '../services/store'
 import { resolveNavigationInput, generateId } from '../../shared/utils'
-import type { BrowserState, ChromePanel, SessionWindow } from '../../shared/types'
-import { CHROME_DRAG_HEIGHT, CHROME_NAV_HEIGHT, CHROME_PANEL_HEIGHT, IPC } from '../../shared/types'
+import type { BookmarkResult, BrowserState, ChromePanel, SessionWindow, ToastPayload } from '../../shared/types'
+import {
+  CHROME_DRAG_HEIGHT,
+  CHROME_NAV_HEIGHT,
+  CHROME_PANEL_HEIGHT,
+  CHROME_PEEK_HEIGHT,
+  IPC
+} from '../../shared/types'
 
 interface BrowserWindowEntry {
   window: BrowserWindow
@@ -39,7 +45,7 @@ export class WindowManager {
     this.registerIpc()
     this.apiServer.start()
 
-    const session = getSession()
+    const session = getSettings().restoreSession === 'always' ? getSession() : []
     if (session.length > 0) {
       for (const winSession of session) {
         await this.createWindow(winSession)
@@ -151,7 +157,9 @@ export class WindowManager {
     const chromeVisible = entry.tabs.isChromeVisible()
     const height = chromeVisible
       ? Math.max(CHROME_DRAG_HEIGHT, entry.chromeHeight)
-      : CHROME_DRAG_HEIGHT
+      : process.platform === 'linux'
+        ? CHROME_DRAG_HEIGHT
+        : CHROME_PEEK_HEIGHT
 
     entry.chromeView.setBounds({
       x: 0,
@@ -195,6 +203,10 @@ export class WindowManager {
         tabs.showChrome('settings')
         entry.chromeHeight = CHROME_PANEL_HEIGHT
         break
+      case 'shortcuts':
+        tabs.showChrome('shortcuts')
+        entry.chromeHeight = CHROME_PANEL_HEIGHT
+        break
       case 'hide-chrome':
         tabs.hideChrome()
         break
@@ -206,6 +218,12 @@ export class WindowManager {
         if (id) tabs.closeTab(id)
         break
       }
+      case 'next-tab':
+        tabs.nextTab()
+        break
+      case 'prev-tab':
+        tabs.prevTab()
+        break
       case 'reload':
         tabs.reload()
         break
@@ -221,9 +239,49 @@ export class WindowManager {
       case 'new-window':
         void this.createWindow()
         break
+      case 'bookmark-page':
+        this.bookmarkActivePage(windowId)
+        break
     }
     this.layoutWindow(windowId)
     this.broadcastState(windowId)
+  }
+
+  private bookmarkActivePage(windowId: number): BookmarkResult {
+    const entry = this.windows.get(windowId)
+    const empty: BookmarkResult = { added: false, alreadyExists: false, title: '', url: '' }
+    if (!entry) return empty
+
+    const active = entry.tabs.getActiveTab()
+    const wc = active?.view.webContents
+    if (!wc || wc.isDestroyed()) return empty
+
+    const url = wc.getURL()
+    const title = wc.getTitle() || url
+    if (!url || url.startsWith('browsy://')) {
+      this.sendToast(windowId, { id: generateId(), message: 'This page can’t be bookmarked', tone: 'default' })
+      return empty
+    }
+
+    const result = addBookmark({ id: generateId(), title, url, createdAt: Date.now() })
+    const payload: BookmarkResult = {
+      added: result.added,
+      alreadyExists: result.alreadyExists,
+      title,
+      url
+    }
+    this.sendToast(windowId, {
+      id: generateId(),
+      message: result.alreadyExists ? 'Already bookmarked' : 'Bookmarked',
+      tone: 'success'
+    })
+    return payload
+  }
+
+  private sendToast(windowId: number, toast: ToastPayload): void {
+    const entry = this.windows.get(windowId)
+    if (!entry || entry.chromeView.webContents.isDestroyed()) return
+    entry.chromeView.webContents.send(IPC.TOAST, toast)
   }
 
   private registerChromeShortcuts(chromeView: WebContentsView, windowId: number): void {
@@ -234,14 +292,25 @@ export class WindowManager {
         return
       }
       const mod = input.control || input.meta
-      if (!mod) return
+      if (!mod) {
+        if (input.key === '?' || (input.key === '/' && input.shift)) {
+          event.preventDefault()
+          this.handleShortcut(windowId, 'shortcuts')
+        }
+        return
+      }
       const key = input.key.toLowerCase()
       let action: string | null = null
       if (key === 'l') action = 'navigation'
       else if (key === 't' && !input.shift) action = 'new-tab'
       else if (key === 'w') action = 'close-tab'
       else if (key === 'b') action = 'bookmarks'
+      else if (key === 'd') action = 'bookmark-page'
       else if (key === ',') action = 'settings'
+      else if (key === '/' || key === '?') action = 'shortcuts'
+      else if (key === 'tab') action = input.shift ? 'prev-tab' : 'next-tab'
+      else if (key === 'pagedown') action = 'next-tab'
+      else if (key === 'pageup') action = 'prev-tab'
 
       if (action) {
         event.preventDefault()
@@ -267,7 +336,7 @@ export class WindowManager {
   async navigateFocused(input: string): Promise<void> {
     const entry = this.getFocusedEntry()
     if (!entry) return
-    const url = resolveNavigationInput(input)
+    const url = resolveNavigationInput(input, getSettings().searchEngine)
     await entry.tabs.navigate(url)
     if (url === 'browsy://home') entry.tabs.showChrome('navigation')
     else entry.tabs.hideChrome()
@@ -293,7 +362,7 @@ export class WindowManager {
   async newTabFocused(url?: string): Promise<void> {
     const entry = this.getFocusedEntry()
     if (!entry) return
-    const resolved = url ? resolveNavigationInput(url) : 'browsy://home'
+    const resolved = url ? resolveNavigationInput(url, getSettings().searchEngine) : 'browsy://home'
     await entry.tabs.createTab(resolved)
     this.layoutWindow(entry.window.id)
   }
@@ -358,7 +427,7 @@ export class WindowManager {
     ipcMain.handle(IPC.NAVIGATE, async (event, input: string) => {
       const entry = this.getEntryFromEvent(event)
       if (!entry) return
-      const url = resolveNavigationInput(input)
+      const url = resolveNavigationInput(input, getSettings().searchEngine)
       await entry.tabs.navigate(url)
       if (url === 'browsy://home') entry.tabs.showChrome('navigation')
       else entry.tabs.hideChrome()
@@ -384,7 +453,7 @@ export class WindowManager {
     ipcMain.handle(IPC.NEW_TAB, async (event, url?: string) => {
       const entry = this.getEntryFromEvent(event)
       if (!entry) return
-      const resolved = url ? resolveNavigationInput(url) : 'browsy://home'
+      const resolved = url ? resolveNavigationInput(url, getSettings().searchEngine) : 'browsy://home'
       await entry.tabs.createTab(resolved)
       this.layoutWindow(entry.window.id)
     })
@@ -401,6 +470,20 @@ export class WindowManager {
       const entry = this.getEntryFromEvent(event)
       if (!entry) return
       entry.tabs.switchTab(tabId)
+      this.layoutWindow(entry.window.id)
+    })
+
+    ipcMain.handle(IPC.NEXT_TAB, (event) => {
+      const entry = this.getEntryFromEvent(event)
+      if (!entry) return
+      entry.tabs.nextTab()
+      this.layoutWindow(entry.window.id)
+    })
+
+    ipcMain.handle(IPC.PREV_TAB, (event) => {
+      const entry = this.getEntryFromEvent(event)
+      if (!entry) return
+      entry.tabs.prevTab()
       this.layoutWindow(entry.window.id)
     })
 
@@ -439,13 +522,28 @@ export class WindowManager {
     ipcMain.handle(IPC.GET_BOOKMARKS, () => getBookmarks())
     ipcMain.handle(IPC.ADD_BOOKMARK, (event, url?: string, title?: string) => {
       const entry = this.getEntryFromEvent(event)
-      const active = entry?.tabs.getActiveTab()
-      const wc = active?.view.webContents
-      const bookmarkUrl = url ?? wc?.getURL() ?? ''
-      const bookmarkTitle = title ?? wc?.getTitle() ?? bookmarkUrl
-      if (bookmarkUrl && !bookmarkUrl.startsWith('browsy://')) {
-        addBookmark({ id: generateId(), title: bookmarkTitle, url: bookmarkUrl, createdAt: Date.now() })
+      if (!entry) {
+        return { added: false, alreadyExists: false, title: '', url: '' } satisfies BookmarkResult
       }
+      if (url) {
+        const bookmarkTitle = title ?? url
+        const result = addBookmark({ id: generateId(), title: bookmarkTitle, url, createdAt: Date.now() })
+        return {
+          added: result.added,
+          alreadyExists: result.alreadyExists,
+          title: bookmarkTitle,
+          url
+        } satisfies BookmarkResult
+      }
+      return this.bookmarkActivePage(entry.window.id)
+    })
+
+    ipcMain.handle(IPC.BOOKMARK_PAGE, (event) => {
+      const entry = this.getEntryFromEvent(event)
+      if (!entry) {
+        return { added: false, alreadyExists: false, title: '', url: '' } satisfies BookmarkResult
+      }
+      return this.bookmarkActivePage(entry.window.id)
     })
 
     ipcMain.handle(IPC.REMOVE_BOOKMARK, (_event, id: string) => {

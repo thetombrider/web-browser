@@ -46,12 +46,16 @@ npm start
 | `Ctrl/Cmd+L` | Navigation chrome (tabs and omnibox) |
 | `Ctrl/Cmd+T` | New tab |
 | `Ctrl/Cmd+W` | Close tab |
+| `Ctrl/Cmd+Tab` | Next tab |
+| `Ctrl/Cmd+Shift+Tab` | Previous tab |
+| `Ctrl/Cmd+D` | Bookmark page |
 | `Ctrl/Cmd+N` | New window |
 | `Ctrl/Cmd+R` | Reload |
 | `Ctrl/Cmd+[` | Back |
 | `Ctrl/Cmd+]` | Forward |
 | `Ctrl/Cmd+B` | Bookmarks |
 | `Ctrl/Cmd+,` | Settings |
+| `?` | Shortcut list |
 | `F12` / `Ctrl/Cmd+Shift+I` | DevTools |
 | `Esc` | Hide chrome |
 

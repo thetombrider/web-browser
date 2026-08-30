@@ -15,7 +15,7 @@ import {
 import { DeleteIcon, SearchIcon } from '@chakra-ui/icons'
 import type { Bookmark } from '@shared/types'
 import { ChromePanel } from './ChromePanel'
-import { letterForUrl } from '../utils/suggestions'
+import { Favicon } from './Favicon'
 
 interface BookmarksPanelProps {
   bookmarks: Bookmark[]
@@ -35,7 +35,6 @@ export function BookmarksPanel({
   const [query, setQuery] = useState('')
   const hoverBackground = useColorModeValue('blackAlpha.50', 'whiteAlpha.100')
   const muted = useColorModeValue('gray.500', 'gray.400')
-  const glyphBg = useColorModeValue('blackAlpha.100', 'whiteAlpha.200')
   const inputBackground = useColorModeValue('blackAlpha.50', 'whiteAlpha.100')
 
   const filtered = useMemo(() => {
@@ -99,21 +98,7 @@ export function BookmarksPanel({
                   '&:hover .bm-delete': { opacity: 1 }
                 }}
               >
-                <Box
-                  w="20px"
-                  h="20px"
-                  borderRadius="sm"
-                  bg={glyphBg}
-                  display="flex"
-                  alignItems="center"
-                  justifyContent="center"
-                  fontSize="10px"
-                  fontWeight="600"
-                  color={muted}
-                  flexShrink={0}
-                >
-                  {letterForUrl(bookmark.url)}
-                </Box>
+                <Favicon url={bookmark.url} size={20} />
                 <Box flex={1} minW={0} onClick={() => onNavigate(bookmark.url)}>
                   <Text fontSize="sm" fontWeight="500" noOfLines={1}>
                     {bookmark.title}

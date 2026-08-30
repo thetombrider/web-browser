@@ -4,12 +4,11 @@ import {
   IconButton,
   Text,
   CloseButton,
-  Spinner,
   useColorModeValue
 } from '@chakra-ui/react'
 import { AddIcon } from '@chakra-ui/icons'
 import type { TabState } from '@shared/types'
-import { letterForUrl } from '../utils/suggestions'
+import { Favicon } from './Favicon'
 
 interface TabBarProps {
   tabs: TabState[]
@@ -23,8 +22,6 @@ export function TabBar({ tabs, activeTabId, onSwitch, onClose, onNew }: TabBarPr
   const activeBg = useColorModeValue('blackAlpha.100', 'whiteAlpha.200')
   const inactiveBg = useColorModeValue('transparent', 'transparent')
   const hoverBg = useColorModeValue('blackAlpha.50', 'whiteAlpha.100')
-  const glyphBg = useColorModeValue('blackAlpha.100', 'whiteAlpha.200')
-  const muted = useColorModeValue('gray.600', 'gray.400')
 
   return (
     <HStack
@@ -65,21 +62,7 @@ export function TabBar({ tabs, activeTabId, onSwitch, onClose, onNew }: TabBarPr
               '&:hover .tab-close': { opacity: 1 }
             }}
           >
-            <Box
-              w="16px"
-              h="16px"
-              borderRadius="sm"
-              bg={glyphBg}
-              display="flex"
-              alignItems="center"
-              justifyContent="center"
-              flexShrink={0}
-              fontSize="9px"
-              fontWeight="600"
-              color={muted}
-            >
-              {tab.isLoading ? <Spinner size="xs" thickness="1px" speed="0.6s" /> : letterForUrl(tab.url)}
-            </Box>
+            <Favicon url={tab.url} favicon={tab.favicon} isLoading={tab.isLoading} size={16} />
             <Text fontSize="xs" noOfLines={1} flex={1} fontWeight={isActive ? '600' : '400'}>
               {label}
             </Text>
