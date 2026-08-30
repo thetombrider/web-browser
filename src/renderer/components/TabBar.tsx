@@ -3,8 +3,7 @@ import {
   HStack,
   IconButton,
   Text,
-  CloseButton,
-  useColorModeValue
+  CloseButton
 } from '@chakra-ui/react'
 import { AddIcon } from '@chakra-ui/icons'
 import type { TabState } from '@shared/types'
@@ -20,10 +19,6 @@ interface TabBarProps {
 }
 
 export function TabBar({ tabs, activeTabId, onSwitch, onClose, onNew }: TabBarProps) {
-  const activeBg = useColorModeValue('blackAlpha.100', 'whiteAlpha.200')
-  const inactiveBg = useColorModeValue('transparent', 'transparent')
-  const hoverBg = useColorModeValue('blackAlpha.50', 'whiteAlpha.100')
-
   return (
     <HStack
       px={3}
@@ -45,8 +40,8 @@ export function TabBar({ tabs, activeTabId, onSwitch, onClose, onNew }: TabBarPr
             key={tab.id}
             role="tab"
             aria-selected={isActive}
-            bg={isActive ? activeBg : inactiveBg}
-            _hover={{ bg: isActive ? activeBg : hoverBg }}
+            bg={isActive ? 'browsy.active' : 'transparent'}
+            _hover={{ bg: isActive ? 'browsy.active' : 'browsy.hover' }}
             borderRadius="md"
             px={2}
             py={1}

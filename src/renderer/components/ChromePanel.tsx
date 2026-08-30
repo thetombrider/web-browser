@@ -1,6 +1,5 @@
-import { Box, useColorModeValue } from '@chakra-ui/react'
+import { Box } from '@chakra-ui/react'
 import { motion } from 'framer-motion'
-import { APP_SURFACE_DARK, APP_SURFACE_LIGHT } from '@shared/types'
 import { useChromeHeight } from '../hooks/useChromeHeight'
 import type { ReactNode } from 'react'
 
@@ -14,15 +13,12 @@ interface ChromePanelProps {
 /** Shared chrome shell: unified surface, drag inset, height sync, enter motion. */
 export function ChromePanel({ children, maxHeight }: ChromePanelProps) {
   const ref = useChromeHeight<HTMLDivElement>()
-  const surface = useColorModeValue(APP_SURFACE_LIGHT, APP_SURFACE_DARK)
-  const border = useColorModeValue('blackAlpha.200', 'whiteAlpha.200')
-
   return (
     <MotionBox
       ref={ref}
-      bg={surface}
+      bg="browsy.surface"
       borderBottom="1px solid"
-      borderColor={border}
+      borderColor="browsy.border"
       pt="32px"
       maxH={maxHeight}
       overflow="hidden"

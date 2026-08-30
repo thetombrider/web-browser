@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { ThumbnailReadyPayload } from '@shared/types'
-import { Box, Text, useColorModeValue } from '@chakra-ui/react'
+import { Box, Text } from '@chakra-ui/react'
 import { AnimatePresence } from 'framer-motion'
 import type { BrowserState, PopupRequest, ToastPayload } from '@shared/types'
 import { CHROME_DRAG_HEIGHT } from '@shared/types'
@@ -24,8 +24,6 @@ export default function App() {
   const [toast, setToast] = useState<ToastPayload | null>(null)
   const [thumbnails, setThumbnails] = useState<Record<string, string>>({})
   const [shortcutTip, setShortcutTip] = useState(false)
-  const tipBg = useColorModeValue('gray.900', 'whiteAlpha.900')
-  const tipColor = useColorModeValue('white', 'gray.900')
 
   useEffect(() => {
     window.browsy.getState().then(setState)
@@ -170,8 +168,8 @@ export default function App() {
           transform="translateX(-50%)"
           zIndex={1800}
           pointerEvents="none"
-          bg={tipBg}
-          color={tipColor}
+          bg="browsy.tooltip"
+          color="browsy.tooltipText"
           px={3}
           py={2}
           borderRadius="md"

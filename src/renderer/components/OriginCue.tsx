@@ -1,4 +1,4 @@
-import { Box, Tooltip, useColorModeValue } from '@chakra-ui/react'
+import { Box, Tooltip } from '@chakra-ui/react'
 import type { UrlScheme } from '../utils/origin'
 import { schemeLabel } from '../utils/origin'
 
@@ -24,16 +24,13 @@ function LockOpen({ color }: { color: string }) {
 
 /** Unmistakable origin cue for the omnibox left slot. */
 export function OriginCue({ scheme }: OriginCueProps) {
-  const secureColor = useColorModeValue('#16a34a', '#4ade80')
-  const insecureColor = useColorModeValue('#ea580c', '#fb923c')
-  const browsyColor = useColorModeValue('#52525b', '#a1a1aa')
   const label = schemeLabel(scheme)
 
   if (scheme === 'https') {
     return (
       <Tooltip label={label} openDelay={300} hasArrow>
         <Box as="span" display="inline-flex" lineHeight={0} aria-label={label}>
-          <LockClosed color={secureColor} />
+          <LockClosed color="browsy.secure" />
         </Box>
       </Tooltip>
     )
@@ -43,7 +40,7 @@ export function OriginCue({ scheme }: OriginCueProps) {
     return (
       <Tooltip label={label} openDelay={300} hasArrow>
         <Box as="span" display="inline-flex" lineHeight={0} aria-label={label}>
-          <LockOpen color={insecureColor} />
+          <LockOpen color="browsy.insecure" />
         </Box>
       </Tooltip>
     )
@@ -56,7 +53,7 @@ export function OriginCue({ scheme }: OriginCueProps) {
           as="span"
           fontSize="11px"
           fontWeight="700"
-          color={browsyColor}
+          color="browsy.internal"
           lineHeight="14px"
           aria-label={label}
         >

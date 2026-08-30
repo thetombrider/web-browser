@@ -9,7 +9,6 @@ import {
   InputRightElement,
   Text,
   Spinner,
-  useColorModeValue,
   VStack
 } from '@chakra-ui/react'
 import {
@@ -75,14 +74,6 @@ export function Omnibox({
   const [activeIndex, setActiveIndex] = useState(-1)
   const [showSuggestions, setShowSuggestions] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
-
-  const inputBackground = useColorModeValue('blackAlpha.50', 'whiteAlpha.100')
-  const inputBorder = useColorModeValue('blackAlpha.200', 'whiteAlpha.200')
-  const focusBorder = useColorModeValue('blue.500', 'blue.300')
-  const suggestionHover = useColorModeValue('blackAlpha.50', 'whiteAlpha.100')
-  const suggestionActive = useColorModeValue('blackAlpha.100', 'whiteAlpha.200')
-  const muted = useColorModeValue('gray.500', 'gray.400')
-  const glyphBg = useColorModeValue('blackAlpha.100', 'whiteAlpha.200')
 
   const suggestions = showSuggestions
     ? buildSuggestions(value, tabs, bookmarks, history)
@@ -225,9 +216,9 @@ export function Omnibox({
             justifyContent="center"
             flexShrink={0}
             borderRadius="md"
-            bg={inputBackground}
+            bg="browsy.input"
             border="1px solid"
-            borderColor={inputBorder}
+            borderColor="browsy.inputBorder"
           >
             <OriginCue scheme={scheme} />
           </Box>
@@ -235,9 +226,9 @@ export function Omnibox({
         <InputGroup size="sm" flex={1}>
           <InputLeftElement h="32px" pointerEvents="none">
             {isLoading ? (
-              <Spinner size="xs" color="gray.400" thickness="1.5px" />
+              <Spinner size="xs" color="browsy.icon" thickness="1.5px" />
             ) : (
-              <SearchIcon color="gray.400" boxSize={3.5} />
+              <SearchIcon color="browsy.icon" boxSize={3.5} />
             )}
           </InputLeftElement>
           <Input
@@ -275,10 +266,10 @@ export function Omnibox({
               }
             }}
             placeholder="Search, URL, or command"
-            bg={inputBackground}
+            bg="browsy.input"
             border="1px solid"
-            borderColor={inputBorder}
-            _focus={{ borderColor: focusBorder, boxShadow: 'none' }}
+            borderColor="browsy.inputBorder"
+            _focus={{ borderColor: 'browsy.focusBorder', boxShadow: 'none' }}
           />
           {value && (
             <InputRightElement h="32px">
@@ -311,8 +302,8 @@ export function Omnibox({
                 py={1.5}
                 borderRadius="md"
                 cursor="pointer"
-                bg={selected ? suggestionActive : 'transparent'}
-                _hover={{ bg: selected ? suggestionActive : suggestionHover }}
+                bg={selected ? 'browsy.active' : 'transparent'}
+                _hover={{ bg: selected ? 'browsy.active' : 'browsy.hover' }}
                 onMouseEnter={() => setActiveIndex(index)}
                 onMouseDown={(e) => {
                   e.preventDefault()
@@ -325,13 +316,13 @@ export function Omnibox({
                     w="20px"
                     h="20px"
                     borderRadius="sm"
-                    bg={glyphBg}
+                    bg="browsy.glyph"
                     display="flex"
                     alignItems="center"
                     justifyContent="center"
                     fontSize="10px"
                     fontWeight="600"
-                    color={muted}
+                    color="browsy.muted"
                     flexShrink={0}
                   >
                     {suggestion.glyph}
@@ -343,11 +334,11 @@ export function Omnibox({
                   <Text fontSize="sm" noOfLines={1} fontWeight="500">
                     {suggestion.title}
                   </Text>
-                  <Text fontSize="xs" color={muted} noOfLines={1}>
+                  <Text fontSize="xs" color="browsy.muted" noOfLines={1}>
                     {suggestion.subtitle}
                   </Text>
                 </Box>
-                <Text fontSize="xs" color={muted} flexShrink={0}>
+                <Text fontSize="xs" color="browsy.muted" flexShrink={0}>
                   {kindLabel(suggestion.kind)}
                 </Text>
               </HStack>
