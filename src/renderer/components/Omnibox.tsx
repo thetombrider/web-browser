@@ -20,6 +20,7 @@ import {
   SearchIcon
 } from '@chakra-ui/icons'
 import type { Bookmark, HistoryEntry, TabState } from '@shared/types'
+import { browsyPageLabel } from '@shared/internal-pages'
 import {
   buildSuggestions,
   commandForExactQuery,
@@ -49,7 +50,7 @@ interface OmniboxProps {
 }
 
 function displayValueForUrl(url: string): string {
-  return url === 'browsy://home' ? '' : url
+  return browsyPageLabel(url) ? '' : url
 }
 
 export function Omnibox({

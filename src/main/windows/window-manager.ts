@@ -16,6 +16,7 @@ import {
   setSettings
 } from '../services/store'
 import { resolveNavigationInput, generateId, sanitizeNavigationUrl } from '../../shared/utils'
+import { showsNavigationChrome } from '../../shared/internal-pages'
 import {
   parseBookmarkTitle,
   parseBookmarkUrl,
@@ -237,8 +238,8 @@ export class WindowManager {
         entry.chromeHeight = CHROME_PANEL_HEIGHT
         break
       case 'settings':
-        tabs.showChrome('settings')
-        entry.chromeHeight = CHROME_PANEL_HEIGHT
+        void tabs.navigate('browsy://settings')
+        entry.chromeHeight = CHROME_NAV_HEIGHT
         break
       case 'shortcuts':
         tabs.showChrome('shortcuts')
@@ -386,7 +387,7 @@ export class WindowManager {
     if (!entry) return
     const url = resolveNavigationInput(input, getSettings().searchEngine)
     await entry.tabs.navigate(url)
-    if (url === 'browsy://home') entry.tabs.showChrome('navigation')
+    if (showsNavigationChrome(url)) entry.tabs.showChrome('navigation')
     else entry.tabs.hideChrome()
     this.layoutWindow(entry.window.id)
   }
@@ -477,7 +478,7 @@ export class WindowManager {
       if (!entry) return
       const url = resolveNavigationInput(input, getSettings().searchEngine)
       await entry.tabs.navigate(url)
-      if (url === 'browsy://home') entry.tabs.showChrome('navigation')
+      if (showsNavigationChrome(url)) entry.tabs.showChrome('navigation')
       else entry.tabs.hideChrome()
       this.layoutWindow(entry.window.id)
     })
