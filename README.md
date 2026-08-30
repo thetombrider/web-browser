@@ -55,7 +55,7 @@ npm start
 | `Ctrl/Cmd+]` | Forward |
 | `Ctrl/Cmd+B` | Bookmarks |
 | `Ctrl/Cmd+,` | Settings |
-| `?` | Shortcut list |
+| `Ctrl/Cmd+/` | Shortcut list |
 | `F12` / `Ctrl/Cmd+Shift+I` | DevTools |
 | `Esc` | Hide chrome |
 

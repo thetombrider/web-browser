@@ -12,14 +12,22 @@ export function DragRegion({ onPeekClick, peek = false }: DragRegionProps) {
       top={0}
       left={0}
       right={0}
-      height={peek ? '6px' : '32px'}
+      height={peek ? '100%' : '32px'}
+      minH={peek ? '6px' : '32px'}
       style={{ WebkitAppRegion: peek ? 'no-drag' : 'drag' } as React.CSSProperties}
       pointerEvents="auto"
       cursor={peek ? 'pointer' : undefined}
-      onClick={peek ? onPeekClick : undefined}
+      onMouseDown={
+        peek
+          ? (e) => {
+              e.preventDefault()
+              onPeekClick?.()
+            }
+          : undefined
+      }
       title={peek ? 'Show navigation' : undefined}
       zIndex={2}
-      _hover={peek ? { bg: 'blackAlpha.200' } : undefined}
+      _hover={peek ? { bg: 'blackAlpha.300' } : undefined}
     />
   )
 }

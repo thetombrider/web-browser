@@ -186,8 +186,8 @@ export default function App() {
           boxShadow="md"
         >
           <Text fontSize="sm">
-            Press <Text as="span" fontWeight="700">Ctrl+L</Text> anytime · <Text as="span" fontWeight="700">?</Text> for
-            shortcuts
+            Press <Text as="span" fontWeight="700">Ctrl+L</Text> anytime ·{' '}
+            <Text as="span" fontWeight="700">Ctrl+/</Text> for shortcuts
           </Text>
         </Box>
       )}

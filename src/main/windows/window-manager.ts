@@ -30,6 +30,7 @@ interface BrowserWindowEntry {
   tabs: TabManager
   chromeView: WebContentsView
   chromeHeight: number
+  toastExpandTimer: ReturnType<typeof setTimeout> | null
 }
 
 export class WindowManager {
@@ -106,7 +107,8 @@ export class WindowManager {
       window: win,
       tabs,
       chromeView,
-      chromeHeight: CHROME_NAV_HEIGHT
+      chromeHeight: CHROME_NAV_HEIGHT,
+      toastExpandTimer: null
     })
 
     win.on('ready-to-show', () => win.show())
@@ -282,6 +284,25 @@ export class WindowManager {
     const entry = this.windows.get(windowId)
     if (!entry || entry.chromeView.webContents.isDestroyed()) return
     entry.chromeView.webContents.send(IPC.TOAST, toast)
+
+    // Expand overlay briefly so the toast isn't clipped when chrome is hidden.
+    if (!entry.tabs.isChromeVisible()) {
+      const bounds = entry.window.getContentBounds()
+      entry.chromeView.setBounds({
+        x: 0,
+        y: 0,
+        width: bounds.width,
+        height: Math.min(120, bounds.height)
+      })
+      entry.window.contentView.addChildView(entry.chromeView)
+      if (entry.toastExpandTimer) clearTimeout(entry.toastExpandTimer)
+      entry.toastExpandTimer = setTimeout(() => {
+        entry.toastExpandTimer = null
+        if (this.windows.has(windowId) && !entry.tabs.isChromeVisible()) {
+          this.layoutWindow(windowId)
+        }
+      }, 2000)
+    }
   }
 
   private registerChromeShortcuts(chromeView: WebContentsView, windowId: number): void {
@@ -292,13 +313,7 @@ export class WindowManager {
         return
       }
       const mod = input.control || input.meta
-      if (!mod) {
-        if (input.key === '?' || (input.key === '/' && input.shift)) {
-          event.preventDefault()
-          this.handleShortcut(windowId, 'shortcuts')
-        }
-        return
-      }
+      if (!mod) return
       const key = input.key.toLowerCase()
       let action: string | null = null
       if (key === 'l') action = 'navigation'

@@ -18,7 +18,7 @@ const SHORTCUTS: { keys: string[]; label: string }[] = [
   { keys: ['Ctrl', '['], label: 'Back' },
   { keys: ['Ctrl', ']'], label: 'Forward' },
   { keys: ['Ctrl', 'N'], label: 'New window' },
-  { keys: ['?'], label: 'This shortcut list' },
+  { keys: ['Ctrl', '/'], label: 'This shortcut list' },
   { keys: ['Esc'], label: 'Hide chrome' }
 ]
 

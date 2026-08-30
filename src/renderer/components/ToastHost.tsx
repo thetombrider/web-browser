@@ -13,7 +13,7 @@ export function ToastHost({ toast }: ToastHostProps) {
   const color = useColorModeValue('white', 'gray.900')
 
   return (
-    <Box position="fixed" top="48px" left="50%" transform="translateX(-50%)" zIndex={2000} pointerEvents="none">
+    <Box position="fixed" top="36px" left="50%" transform="translateX(-50%)" zIndex={2000} pointerEvents="none">
       <AnimatePresence>
         {toast && (
           <MotionBox
