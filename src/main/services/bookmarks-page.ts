@@ -285,8 +285,8 @@ function clientScript(): string {
   `
 }
 
-export function renderBookmarksPage(): string {
-  const bookmarks = getBookmarks().filter((b) => isAllowedNavigationUrl(b.url))
+export function renderBookmarksPage(bookmarksOverride?: Bookmark[]): string {
+  const bookmarks = (bookmarksOverride ?? getBookmarks()).filter((b) => isAllowedNavigationUrl(b.url))
   const groups = groupBookmarksByDomain(bookmarks)
 
   const groupsHtml =
@@ -308,8 +308,8 @@ export function renderBookmarksPage(): string {
               .join('')
 
             return `
-        <section class="group" data-domain="${escapeHtml(group.domain)}">
-          <button type="button" class="domain-head" aria-expanded="true">
+        <section class="group${group.bookmarks.length === 1 ? ' collapsed' : ''}" data-domain="${escapeHtml(group.domain)}">
+          <button type="button" class="domain-head" aria-expanded="${group.bookmarks.length === 1 ? 'false' : 'true'}">
             <span class="glyph">${escapeHtml(letterForDomain(group.domain))}</span>
             <span class="domain-name">${escapeHtml(group.domain)}</span>
             <span class="count">${group.bookmarks.length}</span>
@@ -343,7 +343,7 @@ export function renderBookmarksPage(): string {
     <p class="muted">${escapeHtml(subtitle)}</p>
     <div class="filter-wrap">
       <input id="filter" class="filter" type="search" placeholder="Filter by title, path, or site" autocomplete="off" spellcheck="false" />
-      <p class="hint">Click a site header to collapse · type to filter</p>
+      <p class="hint">Sites with one save start collapsed · click a header to toggle · type to filter</p>
     </div>
     <p id="empty-all" class="empty${bookmarks.length === 0 ? '' : ' hidden'}">No bookmarks yet. Press Ctrl+D on any page to save it.</p>
     <p id="empty-filter" class="empty hidden">No matches.</p>
