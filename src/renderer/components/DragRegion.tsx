@@ -14,6 +14,8 @@ export function DragRegion({ onPeekClick, peek = false }: DragRegionProps) {
       right={0}
       height={peek ? '100%' : '32px'}
       minH={peek ? '6px' : '32px'}
+      // Near-invisible fill so Electron hit-tests the strip (transparent pixels are ignored).
+      bg={peek ? 'whiteAlpha.50' : undefined}
       style={{ WebkitAppRegion: peek ? 'no-drag' : 'drag' } as React.CSSProperties}
       pointerEvents="auto"
       cursor={peek ? 'pointer' : undefined}
@@ -21,13 +23,14 @@ export function DragRegion({ onPeekClick, peek = false }: DragRegionProps) {
         peek
           ? (e) => {
               e.preventDefault()
+              e.stopPropagation()
               onPeekClick?.()
             }
           : undefined
       }
       title={peek ? 'Show navigation' : undefined}
       zIndex={2}
-      _hover={peek ? { bg: 'blackAlpha.300' } : undefined}
+      _hover={peek ? { bg: 'blackAlpha.400' } : undefined}
     />
   )
 }

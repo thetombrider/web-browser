@@ -30,6 +30,7 @@ interface BrowserWindowEntry {
   tabs: TabManager
   chromeView: WebContentsView
   chromeHeight: number
+  toastExpandUntil: number
   toastExpandTimer: ReturnType<typeof setTimeout> | null
 }
 
@@ -108,6 +109,7 @@ export class WindowManager {
       tabs,
       chromeView,
       chromeHeight: CHROME_NAV_HEIGHT,
+      toastExpandUntil: 0,
       toastExpandTimer: null
     })
 
@@ -157,11 +159,16 @@ export class WindowManager {
 
     const bounds = entry.window.getContentBounds()
     const chromeVisible = entry.tabs.isChromeVisible()
-    const height = chromeVisible
+    let height = chromeVisible
       ? Math.max(CHROME_DRAG_HEIGHT, entry.chromeHeight)
       : process.platform === 'linux'
         ? CHROME_DRAG_HEIGHT
         : CHROME_PEEK_HEIGHT
+
+    // Keep overlay tall enough for an in-flight toast after bookmark, etc.
+    if (!chromeVisible && Date.now() < entry.toastExpandUntil) {
+      height = Math.max(height, 120)
+    }
 
     entry.chromeView.setBounds({
       x: 0,
@@ -286,27 +293,24 @@ export class WindowManager {
     entry.chromeView.webContents.send(IPC.TOAST, toast)
 
     // Expand overlay briefly so the toast isn't clipped when chrome is hidden.
+    // layoutWindow (called after shortcuts) must respect this window.
     if (!entry.tabs.isChromeVisible()) {
-      const bounds = entry.window.getContentBounds()
-      entry.chromeView.setBounds({
-        x: 0,
-        y: 0,
-        width: bounds.width,
-        height: Math.min(120, bounds.height)
-      })
-      entry.window.contentView.addChildView(entry.chromeView)
+      entry.toastExpandUntil = Date.now() + 2200
       if (entry.toastExpandTimer) clearTimeout(entry.toastExpandTimer)
       entry.toastExpandTimer = setTimeout(() => {
         entry.toastExpandTimer = null
+        entry.toastExpandUntil = 0
         if (this.windows.has(windowId) && !entry.tabs.isChromeVisible()) {
           this.layoutWindow(windowId)
         }
-      }, 2000)
+      }, 2200)
+      this.layoutWindow(windowId)
     }
   }
 
   private registerChromeShortcuts(chromeView: WebContentsView, windowId: number): void {
     chromeView.webContents.on('before-input-event', (event, input) => {
+      if (input.type !== 'keyDown') return
       if (input.key === 'Escape') {
         event.preventDefault()
         this.handleShortcut(windowId, 'hide-chrome')
@@ -315,6 +319,7 @@ export class WindowManager {
       const mod = input.control || input.meta
       if (!mod) return
       const key = input.key.toLowerCase()
+      const code = input.code
       let action: string | null = null
       if (key === 'l') action = 'navigation'
       else if (key === 't' && !input.shift) action = 'new-tab'
@@ -322,7 +327,7 @@ export class WindowManager {
       else if (key === 'b') action = 'bookmarks'
       else if (key === 'd') action = 'bookmark-page'
       else if (key === ',') action = 'settings'
-      else if (key === '/' || key === '?') action = 'shortcuts'
+      else if (key === '/' || key === '?' || code === 'Slash') action = 'shortcuts'
       else if (key === 'tab') action = input.shift ? 'prev-tab' : 'next-tab'
       else if (key === 'pagedown') action = 'next-tab'
       else if (key === 'pageup') action = 'prev-tab'

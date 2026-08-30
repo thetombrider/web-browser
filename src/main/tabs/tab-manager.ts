@@ -373,6 +373,8 @@ export class TabManager {
     })
 
     wc.on('before-input-event', (event, input) => {
+      if (input.type !== 'keyDown') return
+
       if (input.key === 'Escape') {
         event.preventDefault()
         this.onShortcut('hide-chrome')
@@ -389,6 +391,7 @@ export class TabManager {
       if (!mod) return
 
       const key = input.key.toLowerCase()
+      const code = input.code
       let action: string | null = null
       if (key === 'l') action = 'navigation'
       else if (key === 't' && !input.shift) action = 'new-tab'
@@ -399,7 +402,7 @@ export class TabManager {
       else if (key === 'b') action = 'bookmarks'
       else if (key === 'd') action = 'bookmark-page'
       else if (key === ',') action = 'settings'
-      else if (key === '/' || key === '?') action = 'shortcuts'
+      else if (key === '/' || key === '?' || code === 'Slash') action = 'shortcuts'
       else if (key === 'i' && input.shift) action = 'toggle-devtools'
       else if (key === 'n') action = 'new-window'
       else if (key === 'tab') action = input.shift ? 'prev-tab' : 'next-tab'
