@@ -74,9 +74,12 @@ export function Omnibox({
   const queryEmpty = suggestionQuery.trim().length === 0
   const showingTabsInventory = queryEmpty && suggestions.some((s) => s.kind === 'tab')
 
-  // Unified list: quick cards first, then suggestion rows — one ↑↓/Enter model.
+  // Flat index space for Enter/hover: cards [0..quickCount), then suggestion rows.
+  // Arrow nav is spatial (omnibox hub), not a single cycle — see moveUp/moveDown.
   const selectable = [...SPOTLIGHT_QUICK_ACTIONS, ...suggestions]
   const quickCount = SPOTLIGHT_QUICK_ACTIONS.length
+  const firstResult = quickCount
+  const lastResult = selectable.length - 1
 
   const completionMatch =
     activeIndex === -1 && completionSuppressedFor !== value && !showingLiveUrl
@@ -143,11 +146,23 @@ export function Omnibox({
     if (item) choose(item)
   }
 
-  const moveSelection = (delta: number) => {
-    if (!selectable.length) return
+  // Spatial zones: cards above ← omnibox (-1) → results below.
+  // ↑ from omnibox enters cards; ↓ enters results. Zones don't bleed into each other.
+  const moveDown = () => {
     setActiveIndex((i) => {
-      if (i < 0) return delta > 0 ? 0 : selectable.length - 1
-      return (i + delta + selectable.length) % selectable.length
+      if (i < 0) return suggestions.length ? firstResult : -1
+      if (i < quickCount) return -1
+      if (!suggestions.length) return -1
+      return i >= lastResult ? firstResult : i + 1
+    })
+  }
+
+  const moveUp = () => {
+    setActiveIndex((i) => {
+      if (i < 0) return quickCount ? 0 : -1
+      if (i < quickCount) return i
+      if (i <= firstResult) return -1
+      return i - 1
     })
   }
 
@@ -252,10 +267,10 @@ export function Omnibox({
                 inputRef.current?.setSelectionRange(value.length, value.length)
               } else if (e.key === 'ArrowDown') {
                 e.preventDefault()
-                moveSelection(1)
+                moveDown()
               } else if (e.key === 'ArrowUp') {
                 e.preventDefault()
-                moveSelection(-1)
+                moveUp()
               } else if (
                 (e.key === 'ArrowLeft' || e.key === 'ArrowRight') &&
                 activeIndex >= 0 &&
@@ -273,9 +288,10 @@ export function Omnibox({
                 } else {
                   commit(value)
                 }
-              } else if (e.key === 'Tab' && selectable.length) {
+              } else if (e.key === 'Tab') {
                 e.preventDefault()
-                moveSelection(e.shiftKey ? -1 : 1)
+                if (e.shiftKey) moveUp()
+                else moveDown()
               }
             }}
             placeholder="Search, URL, tab, or /command"
@@ -422,7 +438,7 @@ export function Omnibox({
         bg="browsy.input"
       >
         <Text fontSize="xs" color="browsy.muted">
-          ↑↓←→ select · Enter open · Esc dismiss
+          ↑ cards · ↓ results · ←→ · Enter · Esc
         </Text>
         <Text fontSize="xs" color="browsy.muted">
           Cmd←/→ tabs
