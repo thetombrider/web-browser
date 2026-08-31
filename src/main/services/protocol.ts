@@ -313,12 +313,15 @@ function baseStyles(): string {
     .settings-section:last-child { margin-bottom: 0; }
     .settings-section .home-cards { margin-top: 0; }
     .settings-home {
-      width: 100%;
-      max-width: 360px;
-      margin-top: 8px;
+      display: block;
+      max-width: 920px;
+      margin: 28px auto 0;
       padding: 6px 12px;
       text-align: left;
       box-sizing: border-box;
+    }
+    @media (max-width: 820px) {
+      .settings-home { max-width: 360px; }
     }
     .options {
       display: flex;
@@ -759,7 +762,6 @@ export function renderSettingsPage(showDev = false): string {
     <section class="home-col" aria-label="Browsing">
       ${renderSettingsSection('New tab', newTabOptions)}
       ${renderSettingsSection('Search engine', searchOptions)}
-      <a class="footer-link settings-home" href="browsy://home">← Home</a>
     </section>
     <section class="home-col" aria-label="Session">
       ${renderSettingsSection('On startup', startupOptions)}
@@ -767,6 +769,7 @@ export function renderSettingsPage(showDev = false): string {
       ${developerSection}
     </section>
   </div>
+  <a class="footer-link settings-home" href="browsy://home">← Home</a>
   <script>${settingsClientScript()}</script>
 </body>
 </html>`
