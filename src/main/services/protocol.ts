@@ -132,7 +132,8 @@ function baseStyles(): string {
       text-transform: uppercase;
       color: #71717a;
       margin-bottom: 10px;
-      text-align: center;
+      text-align: left;
+      padding: 0 12px;
     }
     .list {
       display: flex;
