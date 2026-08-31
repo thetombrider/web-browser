@@ -20,6 +20,7 @@ import {
   commandForExactQuery,
   findCompletion,
   kindLabel,
+  SPOTLIGHT_QUICK_ACTIONS,
   type CommandAction,
   type Suggestion
 } from '../utils/suggestions'
@@ -72,6 +73,10 @@ export function Omnibox({
   const suggestions = buildSuggestions(suggestionQuery, tabs, bookmarks, history, activeTabId)
   const queryEmpty = suggestionQuery.trim().length === 0
   const showingTabsInventory = queryEmpty && suggestions.some((s) => s.kind === 'tab')
+
+  // Unified list: quick cards first, then suggestion rows — one ↑↓/Enter model.
+  const selectable = [...SPOTLIGHT_QUICK_ACTIONS, ...suggestions]
+  const quickCount = SPOTLIGHT_QUICK_ACTIONS.length
 
   const completionMatch =
     activeIndex === -1 && completionSuppressedFor !== value && !showingLiveUrl
@@ -133,11 +138,24 @@ export function Omnibox({
     if (suggestion.url) onSubmit(suggestion.url)
   }
 
+  const activateIndex = (index: number) => {
+    const item = selectable[index]
+    if (item) choose(item)
+  }
+
+  const moveSelection = (delta: number) => {
+    if (!selectable.length) return
+    setActiveIndex((i) => {
+      if (i < 0) return delta > 0 ? 0 : selectable.length - 1
+      return (i + delta + selectable.length) % selectable.length
+    })
+  }
+
   const commit = (raw: string) => {
     const next = raw.trim()
     if (!next) {
       // Empty Enter: act on highlighted row only — don't auto-jump to first tab.
-      if (activeIndex >= 0 && suggestions[activeIndex]) choose(suggestions[activeIndex])
+      if (activeIndex >= 0) activateIndex(activeIndex)
       return
     }
     if (next.startsWith('/')) {
@@ -157,8 +175,63 @@ export function Omnibox({
 
   return (
     <Box>
-      <Box px={3} pt={3} pb={2}>
-        <InputGroup size="md">
+      <Box px={3} pt={3} pb={0}>
+        <HStack spacing={2} role="listbox" aria-label="Quick actions" mb={2.5}>
+          {SPOTLIGHT_QUICK_ACTIONS.map((action, index) => {
+            const selected = index === activeIndex
+            return (
+              <Box
+                key={action.id}
+                role="option"
+                aria-selected={selected}
+                flex={1}
+                minW={0}
+                px={2.5}
+                py={2}
+                borderRadius="lg"
+                border="1px solid"
+                borderColor={selected ? 'browsy.focusBorder' : 'browsy.border'}
+                bg={selected ? 'browsy.active' : 'browsy.input'}
+                cursor="pointer"
+                transition="background 0.12s ease, border-color 0.12s ease"
+                _hover={{ bg: selected ? 'browsy.active' : 'browsy.hover' }}
+                onMouseEnter={() => setActiveIndex(index)}
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  choose(action)
+                }}
+              >
+                <HStack spacing={2} align="center">
+                  <Box
+                    w="22px"
+                    h="22px"
+                    borderRadius="sm"
+                    bg="browsy.glyph"
+                    display="flex"
+                    alignItems="center"
+                    justifyContent="center"
+                    fontSize="11px"
+                    fontWeight="600"
+                    color="browsy.muted"
+                    flexShrink={0}
+                  >
+                    {action.glyph}
+                  </Box>
+                  <Box minW={0}>
+                    <Text fontSize="sm" fontWeight="600" noOfLines={1}>
+                      {action.title}
+                    </Text>
+                    <Text fontSize="xs" color="browsy.muted" noOfLines={1}>
+                      {action.subtitle}
+                    </Text>
+                  </Box>
+                </HStack>
+              </Box>
+            )
+          })}
+        </HStack>
+
+        <InputGroup size="md" pb={2}>
           <InputLeftElement h="44px" pointerEvents="none">
             {isLoading ? (
               <Spinner size="sm" color="browsy.icon" thickness="1.5px" />
@@ -186,24 +259,30 @@ export function Omnibox({
                 inputRef.current?.setSelectionRange(value.length, value.length)
               } else if (e.key === 'ArrowDown') {
                 e.preventDefault()
-                if (!suggestions.length) return
-                setActiveIndex((i) => (i + 1) % suggestions.length)
+                moveSelection(1)
               } else if (e.key === 'ArrowUp') {
                 e.preventDefault()
-                if (!suggestions.length) return
-                setActiveIndex((i) => (i <= 0 ? suggestions.length - 1 : i - 1))
+                moveSelection(-1)
+              } else if (
+                (e.key === 'ArrowLeft' || e.key === 'ArrowRight') &&
+                activeIndex >= 0 &&
+                activeIndex < quickCount
+              ) {
+                e.preventDefault()
+                const delta = e.key === 'ArrowRight' ? 1 : -1
+                setActiveIndex((i) => (i + delta + quickCount) % quickCount)
               } else if (e.key === 'Enter') {
                 e.preventDefault()
-                if (activeIndex >= 0 && suggestions[activeIndex]) {
-                  choose(suggestions[activeIndex])
+                if (activeIndex >= 0 && selectable[activeIndex]) {
+                  activateIndex(activeIndex)
                 } else if (completionMatch) {
                   choose(completionMatch.suggestion)
                 } else {
                   commit(value)
                 }
-              } else if (e.key === 'Tab' && suggestions.length) {
+              } else if (e.key === 'Tab' && selectable.length) {
                 e.preventDefault()
-                setActiveIndex((i) => (i + 1) % suggestions.length)
+                moveSelection(e.shiftKey ? -1 : 1)
               }
             }}
             placeholder="Search, URL, tab, or /command"
@@ -252,7 +331,8 @@ export function Omnibox({
           )}
           <VStack align="stretch" spacing={0} px={2} py={1.5} role="listbox" aria-label="Suggestions">
             {suggestions.map((suggestion, index) => {
-              const selected = index === activeIndex
+              const itemIndex = quickCount + index
+              const selected = itemIndex === activeIndex
               const isTabRow = suggestion.kind === 'tab'
               return (
                 <HStack
@@ -265,7 +345,7 @@ export function Omnibox({
                   cursor="pointer"
                   bg={selected ? 'browsy.active' : suggestion.isActiveTab ? 'browsy.hover' : 'transparent'}
                   _hover={{ bg: selected ? 'browsy.active' : 'browsy.hover' }}
-                  onMouseEnter={() => setActiveIndex(index)}
+                  onMouseEnter={() => setActiveIndex(itemIndex)}
                   onMouseDown={(e) => {
                     e.preventDefault()
                     choose(suggestion)
@@ -349,7 +429,7 @@ export function Omnibox({
         bg="browsy.input"
       >
         <Text fontSize="xs" color="browsy.muted">
-          ↑↓ select · Enter open · Esc dismiss
+          ↑↓←→ select · Enter open · Esc dismiss
         </Text>
         <Text fontSize="xs" color="browsy.muted">
           Cmd←/→ tabs

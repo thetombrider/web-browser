@@ -347,3 +347,35 @@ export function kindLabel(kind: SuggestionKind): string {
       return 'Command'
   }
 }
+
+/** Always-visible Spotlight quick cards above the omnibox. */
+export const SPOTLIGHT_QUICK_ACTIONS: Suggestion[] = [
+  {
+    id: 'quick-settings',
+    kind: 'command',
+    title: 'Settings',
+    subtitle: 'Preferences',
+    action: 'settings',
+    glyph: '⚙',
+    completionValues: []
+  },
+  {
+    id: 'quick-bookmarks',
+    kind: 'command',
+    title: 'Bookmarks',
+    subtitle: 'Saved pages',
+    action: 'bookmarks',
+    glyph: '★',
+    completionValues: []
+  },
+  {
+    id: 'quick-shortcuts',
+    kind: 'command',
+    title: 'Shortcuts',
+    subtitle: 'Keyboard',
+    action: 'shortcuts',
+    glyph: '?',
+    completionValues: []
+  }
+]
+
