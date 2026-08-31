@@ -101,15 +101,30 @@ function baseStyles(): string {
     .muted { color: #a1a1aa; margin-bottom: 28px; font-size: 0.9rem; }
     .home-layout {
       display: grid;
-      grid-template-columns: minmax(260px, 520px) minmax(240px, 380px);
+      grid-template-columns: minmax(260px, 1fr) minmax(240px, 1fr);
       gap: 48px 56px;
       align-items: start;
-      max-width: 1000px;
+      max-width: 920px;
+      margin: 0 auto;
     }
     @media (max-width: 820px) {
       .home-layout { grid-template-columns: 1fr; gap: 36px; }
     }
-    .home-col { min-width: 0; }
+    .home-col {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .home-col > .list,
+    .home-col > .home-cards,
+    .home-col > .empty,
+    .home-col > .right-stack,
+    .home-col > .right-panel,
+    .home-col > .col-label {
+      width: 100%;
+      max-width: 360px;
+    }
     .col-label {
       font-size: 0.7rem;
       font-weight: 500;
@@ -117,6 +132,7 @@ function baseStyles(): string {
       text-transform: uppercase;
       color: #71717a;
       margin-bottom: 10px;
+      text-align: center;
     }
     .list {
       display: flex;
@@ -213,8 +229,20 @@ function baseStyles(): string {
       flex-direction: column;
       gap: 28px;
       min-width: 0;
+      align-items: center;
     }
-    .right-panel { min-width: 0; }
+    .right-panel {
+      min-width: 0;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .right-panel > .list,
+    .right-panel > .tip-list,
+    .right-panel > .col-label {
+      width: 100%;
+    }
     .col-footer {
       display: inline-block;
       margin-top: 10px;
@@ -222,6 +250,7 @@ function baseStyles(): string {
       font-size: 0.8rem;
       color: #71717a;
       text-decoration: none;
+      text-align: center;
     }
     .col-footer:hover { color: inherit; }
     .tip-list { display: flex; flex-direction: column; gap: 2px; }
@@ -249,7 +278,7 @@ function baseStyles(): string {
     @media (min-height: 760px) {
       .clip-list > .clip-item:nth-child(4) { display: flex; }
     }
-    .empty { color: #71717a; font-size: 0.9rem; max-width: 420px; line-height: 1.5; padding: 0 12px; }
+    .empty { color: #71717a; font-size: 0.9rem; max-width: 420px; line-height: 1.5; padding: 0 12px; text-align: center; }
     .error-wrap { max-width: 520px; padding-top: 24px; }
     .error-title { font-size: 1.35rem; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 8px; }
     .error-msg { margin-bottom: 12px; line-height: 1.5; color: #a1a1aa; }
