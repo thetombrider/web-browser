@@ -81,7 +81,7 @@ function pageStyles(): string {
       background: ${APP_SURFACE_DARK};
       color: #f4f4f5;
       min-height: 100vh;
-      padding: 120px 32px 64px;
+      padding: 48px 32px 64px;
     }
     @media (prefers-color-scheme: light) {
       body { background: ${APP_SURFACE_LIGHT}; color: #18181b; }

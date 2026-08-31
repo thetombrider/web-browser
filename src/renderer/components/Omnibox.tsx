@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   Box,
+  CloseButton,
   HStack,
   IconButton,
   Input,
@@ -39,6 +40,7 @@ interface OmniboxProps {
   canGoForward: boolean
   isLoading: boolean
   tabs: TabState[]
+  activeTabId: string | null
   onSubmit: (value: string) => void
   onClose: () => void
   onBack: () => void
@@ -46,6 +48,8 @@ interface OmniboxProps {
   onReload: () => void
   onStop: () => void
   onSwitchTab: (id: string) => void
+  onCloseTab: (id: string) => void
+  onNewTab: () => void
   onCommand: (action: CommandAction) => void
 }
 
@@ -60,6 +64,7 @@ export function Omnibox({
   canGoForward,
   isLoading,
   tabs,
+  activeTabId,
   onSubmit,
   onClose,
   onBack,
@@ -67,19 +72,21 @@ export function Omnibox({
   onReload,
   onStop,
   onSwitchTab,
+  onCloseTab,
+  onNewTab,
   onCommand
 }: OmniboxProps) {
   const [value, setValue] = useState(displayValueForUrl(initialValue))
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([])
   const [history, setHistory] = useState<HistoryEntry[]>([])
   const [activeIndex, setActiveIndex] = useState(-1)
-  const [showSuggestions, setShowSuggestions] = useState(false)
   const [completionSuppressedFor, setCompletionSuppressedFor] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const suggestions = showSuggestions
-    ? buildSuggestions(value, tabs, bookmarks, history)
-    : []
+  // Spotlight always shows inventory / matches while open.
+  const suggestions = buildSuggestions(value, tabs, bookmarks, history, activeTabId)
+  const queryEmpty = value.trim().length === 0
+  const showingTabsInventory = queryEmpty && suggestions.some((s) => s.kind === 'tab')
 
   const completionMatch =
     activeIndex === -1 && completionSuppressedFor !== value ? findCompletion(suggestions, value) : null
@@ -88,9 +95,9 @@ export function Omnibox({
 
   const liveDisplay = displayValueForUrl(initialValue)
   const scheme = getUrlScheme(initialValue)
-  // Show origin cue only when the field still mirrors the live tab URL (not while typing).
   const showingLiveUrl = value === liveDisplay && liveDisplay.length > 0
-  const showOriginCue = showingLiveUrl && !isLoading && (scheme === 'https' || scheme === 'http' || scheme === 'browsy')
+  const showOriginCue =
+    showingLiveUrl && !isLoading && (scheme === 'https' || scheme === 'http' || scheme === 'browsy')
 
   useEffect(() => {
     setValue(displayValueForUrl(initialValue))
@@ -102,7 +109,6 @@ export function Omnibox({
 
   useEffect(() => {
     setValue(displayValueForUrl(initialValue))
-    setShowSuggestions(false)
     setActiveIndex(-1)
     setCompletionSuppressedFor(null)
   }, [initialValue])
@@ -116,7 +122,6 @@ export function Omnibox({
     )
   }, [focusToken])
 
-  // Select the autocompleted tail so typing replaces it and Enter accepts it.
   useEffect(() => {
     const el = inputRef.current
     if (!el || !completion) return
@@ -147,7 +152,8 @@ export function Omnibox({
   const commit = (raw: string) => {
     const next = raw.trim()
     if (!next) {
-      if (suggestions[0]) choose(suggestions[0])
+      // Empty Enter: act on highlighted row only — don't auto-jump to first tab.
+      if (activeIndex >= 0 && suggestions[activeIndex]) choose(suggestions[activeIndex])
       return
     }
     if (next.startsWith('/')) {
@@ -166,12 +172,12 @@ export function Omnibox({
   }
 
   return (
-    <Box px={3} pt={1.5} pb={2} style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-      <HStack spacing={1.5} align="center">
+    <Box>
+      <HStack spacing={1} px={3} pt={3} pb={2} align="center">
         <IconButton
           aria-label="Back"
           icon={<ArrowBackIcon />}
-          size="xs"
+          size="sm"
           variant="ghost"
           isDisabled={!canGoBack}
           onClick={onBack}
@@ -179,22 +185,22 @@ export function Omnibox({
         <IconButton
           aria-label="Forward"
           icon={<ArrowForwardIcon />}
-          size="xs"
+          size="sm"
           variant="ghost"
           isDisabled={!canGoForward}
           onClick={onForward}
         />
         <IconButton
           aria-label={isLoading ? 'Stop' : 'Reload'}
-          icon={isLoading ? <CloseIcon boxSize={2} /> : <RepeatIcon />}
-          size="xs"
+          icon={isLoading ? <CloseIcon boxSize={2.5} /> : <RepeatIcon />}
+          size="sm"
           variant="ghost"
           onClick={isLoading ? onStop : onReload}
         />
         {showOriginCue ? (
           <Box
-            w="28px"
-            h="28px"
+            w="32px"
+            h="36px"
             display="flex"
             alignItems="center"
             justifyContent="center"
@@ -207,23 +213,22 @@ export function Omnibox({
             <OriginCue scheme={scheme} />
           </Box>
         ) : null}
-        <InputGroup size="sm" flex={1}>
-          <InputLeftElement h="32px" pointerEvents="none">
+        <InputGroup size="md" flex={1}>
+          <InputLeftElement h="40px" pointerEvents="none">
             {isLoading ? (
-              <Spinner size="xs" color="browsy.icon" thickness="1.5px" />
+              <Spinner size="sm" color="browsy.icon" thickness="1.5px" />
             ) : (
-              <SearchIcon color="browsy.icon" boxSize={3.5} />
+              <SearchIcon color="browsy.icon" boxSize={4} />
             )}
           </InputLeftElement>
           <Input
             ref={inputRef}
             value={displayedValue}
-            h="32px"
-            fontSize="sm"
-            borderRadius="md"
+            h="40px"
+            fontSize="md"
+            borderRadius="lg"
             onChange={(e) => {
               setValue(e.target.value)
-              setShowSuggestions(true)
               setActiveIndex(-1)
               setCompletionSuppressedFor(null)
             }}
@@ -254,18 +259,18 @@ export function Omnibox({
                 setActiveIndex((i) => (i + 1) % suggestions.length)
               }
             }}
-            placeholder="Search, URL, or command"
+            placeholder="Search, URL, tab, or /command"
             bg="browsy.input"
             border="1px solid"
             borderColor="browsy.inputBorder"
             _focus={{ borderColor: 'browsy.focusBorder', boxShadow: 'none' }}
           />
           {value && (
-            <InputRightElement h="32px">
+            <InputRightElement h="40px">
               <IconButton
                 aria-label="Clear"
-                icon={<CloseIcon boxSize={2} />}
-                size="xs"
+                icon={<CloseIcon boxSize={2.5} />}
+                size="sm"
                 variant="ghost"
                 onClick={() => {
                   setValue('')
@@ -277,65 +282,141 @@ export function Omnibox({
             </InputRightElement>
           )}
         </InputGroup>
+        <IconButton
+          aria-label="New tab"
+          icon={<Text fontSize="lg" lineHeight={1}>+</Text>}
+          size="sm"
+          variant="ghost"
+          onClick={() => {
+            onNewTab()
+          }}
+        />
       </HStack>
 
       {suggestions.length > 0 && (
-        <VStack align="stretch" spacing={0} mt={1.5} role="listbox">
-          {suggestions.map((suggestion, index) => {
-            const selected = index === activeIndex
-            return (
-              <HStack
-                key={suggestion.id}
-                role="option"
-                aria-selected={selected}
-                px={2}
-                py={1.5}
-                borderRadius="md"
-                cursor="pointer"
-                bg={selected ? 'browsy.active' : 'transparent'}
-                _hover={{ bg: selected ? 'browsy.active' : 'browsy.hover' }}
-                onMouseEnter={() => setActiveIndex(index)}
-                onMouseDown={(e) => {
-                  e.preventDefault()
-                  choose(suggestion)
-                }}
-                spacing={2}
-              >
-                {suggestion.kind === 'command' || !suggestion.url ? (
-                  <Box
-                    w="20px"
-                    h="20px"
-                    borderRadius="sm"
-                    bg="browsy.glyph"
-                    display="flex"
-                    alignItems="center"
-                    justifyContent="center"
-                    fontSize="10px"
-                    fontWeight="600"
-                    color="browsy.muted"
-                    flexShrink={0}
-                  >
-                    {suggestion.glyph}
+        <Box
+          borderTop="1px solid"
+          borderColor="browsy.border"
+          maxH="min(52vh, 420px)"
+          overflowY="auto"
+          css={{
+            '&::-webkit-scrollbar': { width: '6px' },
+            '&::-webkit-scrollbar-thumb': {
+              background: 'var(--chakra-colors-browsy-border)',
+              borderRadius: '3px'
+            }
+          }}
+        >
+          {showingTabsInventory && (
+            <Text px={4} pt={3} pb={1} fontSize="xs" fontWeight="600" color="browsy.muted" letterSpacing="wide">
+              OPEN TABS
+            </Text>
+          )}
+          <VStack align="stretch" spacing={0} px={2} py={1.5} role="listbox" aria-label="Suggestions">
+            {suggestions.map((suggestion, index) => {
+              const selected = index === activeIndex
+              const isTabRow = suggestion.kind === 'tab'
+              return (
+                <HStack
+                  key={suggestion.id}
+                  role="option"
+                  aria-selected={selected}
+                  px={2}
+                  py={2}
+                  borderRadius="md"
+                  cursor="pointer"
+                  bg={selected ? 'browsy.active' : suggestion.isActiveTab ? 'browsy.hover' : 'transparent'}
+                  _hover={{ bg: selected ? 'browsy.active' : 'browsy.hover' }}
+                  onMouseEnter={() => setActiveIndex(index)}
+                  onMouseDown={(e) => {
+                    e.preventDefault()
+                    choose(suggestion)
+                  }}
+                  spacing={2.5}
+                  sx={
+                    isTabRow
+                      ? {
+                          '& .tab-close': { opacity: selected || suggestion.isActiveTab ? 0.7 : 0 },
+                          '&:hover .tab-close': { opacity: 1 }
+                        }
+                      : undefined
+                  }
+                >
+                  {suggestion.kind === 'command' || !suggestion.url ? (
+                    <Box
+                      w="22px"
+                      h="22px"
+                      borderRadius="sm"
+                      bg="browsy.glyph"
+                      display="flex"
+                      alignItems="center"
+                      justifyContent="center"
+                      fontSize="10px"
+                      fontWeight="600"
+                      color="browsy.muted"
+                      flexShrink={0}
+                    >
+                      {suggestion.glyph}
+                    </Box>
+                  ) : (
+                    <Favicon url={suggestion.url} favicon={suggestion.favicon} size={22} />
+                  )}
+                  <Box flex={1} minW={0}>
+                    <Text fontSize="sm" noOfLines={1} fontWeight={suggestion.isActiveTab ? '600' : '500'}>
+                      {suggestion.title}
+                      {suggestion.isActiveTab ? (
+                        <Text as="span" color="browsy.muted" fontWeight="400">
+                          {' '}
+                          · current
+                        </Text>
+                      ) : null}
+                    </Text>
+                    <Text fontSize="xs" color="browsy.muted" noOfLines={1}>
+                      {suggestion.subtitle}
+                    </Text>
                   </Box>
-                ) : (
-                  <Favicon url={suggestion.url} favicon={suggestion.favicon} size={20} />
-                )}
-                <Box flex={1} minW={0}>
-                  <Text fontSize="sm" noOfLines={1} fontWeight="500">
-                    {suggestion.title}
-                  </Text>
-                  <Text fontSize="xs" color="browsy.muted" noOfLines={1}>
-                    {suggestion.subtitle}
-                  </Text>
-                </Box>
-                <Text fontSize="xs" color="browsy.muted" flexShrink={0}>
-                  {kindLabel(suggestion.kind)}
-                </Text>
-              </HStack>
-            )
-          })}
-        </VStack>
+                  {isTabRow && suggestion.tabId ? (
+                    <CloseButton
+                      className="tab-close"
+                      size="sm"
+                      flexShrink={0}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        e.preventDefault()
+                        onCloseTab(suggestion.tabId!)
+                      }}
+                      onMouseDown={(e) => {
+                        e.stopPropagation()
+                        e.preventDefault()
+                      }}
+                    />
+                  ) : (
+                    <Text fontSize="xs" color="browsy.muted" flexShrink={0}>
+                      {kindLabel(suggestion.kind)}
+                    </Text>
+                  )}
+                </HStack>
+              )
+            })}
+          </VStack>
+        </Box>
       )}
+
+      <HStack
+        px={4}
+        py={2}
+        borderTop="1px solid"
+        borderColor="browsy.border"
+        justify="space-between"
+        bg="browsy.input"
+      >
+        <Text fontSize="xs" color="browsy.muted">
+          ↑↓ select · Enter open · Esc dismiss
+        </Text>
+        <Text fontSize="xs" color="browsy.muted">
+          Cmd←/→ tabs
+        </Text>
+      </HStack>
     </Box>
   )
 }

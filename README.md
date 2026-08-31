@@ -5,7 +5,8 @@ A minimal, keyboard-first Electron browser built for learning and portfolio use.
 ## Features
 
 - Full-page browsing with hidden chrome by default
-- Compact floating navigation chrome over full-bleed pages (`WebContentsView`)
+- Spotlight-style launcher (`Ctrl/Cmd+L`) — search, URL, commands, and open-tabs inventory
+- Fullscreen tab carousel for switching tabs (`Cmd+←/→`)
 - Omnibox suggestions and command palette (`/` shortcuts)
 - Multiple windows and tabs
 - Custom homepage with recent sites
@@ -44,11 +45,11 @@ npm start
 
 | Shortcut | Action |
 |----------|--------|
-| `Ctrl/Cmd+L` | Navigation chrome (tabs and omnibox) |
+| `Ctrl/Cmd+L` | Spotlight launcher (search, URL, tabs, commands) |
 | `Ctrl/Cmd+T` | New tab |
 | `Ctrl/Cmd+W` | Close tab |
-| `Cmd+Right Arrow` | Next tab |
-| `Cmd+Left Arrow` | Previous tab |
+| `Cmd+Right Arrow` | Tab switcher (carousel) |
+| `Cmd+Left Arrow` | Tab switcher (carousel) |
 | `Ctrl/Cmd+D` | Bookmark page |
 | `Ctrl/Cmd+N` | New window |
 | `Ctrl/Cmd+R` | Reload |
@@ -58,7 +59,7 @@ npm start
 | `Ctrl/Cmd+,` | Settings |
 | `Ctrl/Cmd+/` | Shortcut list |
 | `F12` / `Ctrl/Cmd+Shift+I` | DevTools |
-| `Esc` | Hide chrome |
+| `Esc` | Dismiss launcher or tab switcher |
 
 ## Security notes
 
@@ -140,7 +141,7 @@ Connect with Playwright, Puppeteer, or any CDP client. Treat CDP as full browser
 
 - **Main process** — windows, tabs, `WebContentsView` layout, downloads, pop-ups, API server
 - **Preload** — typed `contextBridge` IPC
-- **Chrome view** — React + Chakra UI overlay (`WebContentsView` on top)
+- **Chrome view** — React + Chakra UI overlay (Spotlight launcher + tab carousel)
 - **Tab views** — full-bleed `WebContentsView` per tab underneath chrome
 
 ## License

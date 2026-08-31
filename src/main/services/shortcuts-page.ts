@@ -6,11 +6,11 @@ import {
 } from '../../shared/types'
 
 const SHORTCUTS = [
-  ['Ctrl/Cmd + L', 'Open address bar'],
+  ['Ctrl/Cmd + L', 'Open launcher (Spotlight)'],
   ['Ctrl/Cmd + T', 'New tab'],
   ['Ctrl/Cmd + W', 'Close tab'],
-  ['Cmd + Right Arrow', 'Next tab, or move tab switcher'],
-  ['Cmd + Left Arrow', 'Previous tab, or move tab switcher'],
+  ['Cmd + Right Arrow', 'Tab switcher (carousel)'],
+  ['Cmd + Left Arrow', 'Tab switcher (carousel)'],
   ['Ctrl/Cmd + D', 'Bookmark page'],
   ['Ctrl/Cmd + B', 'Bookmarks page'],
   ['Ctrl/Cmd + ,', 'Settings'],
@@ -19,8 +19,8 @@ const SHORTCUTS = [
   ['Ctrl/Cmd + ]', 'Forward'],
   ['Ctrl/Cmd + N', 'New window'],
   ['Ctrl/Cmd + /', 'This shortcut list'],
-  ['Enter', 'Select centered tab in switcher'],
-  ['Esc', 'Dismiss switcher or hide chrome']
+  ['Enter', 'Open selection in launcher or switcher'],
+  ['Esc', 'Dismiss launcher or switcher']
 ] as const
 
 function pageStyles(): string {
@@ -31,7 +31,7 @@ function pageStyles(): string {
       background: ${APP_SURFACE_DARK};
       color: #f4f4f5;
       min-height: 100vh;
-      padding: 120px 32px 48px;
+      padding: 48px 32px 48px;
     }
     @media (prefers-color-scheme: light) {
       body { background: ${APP_SURFACE_LIGHT}; color: #18181b; }

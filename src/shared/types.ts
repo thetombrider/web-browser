@@ -18,7 +18,7 @@ export const CHROME_PANEL_HEIGHT = 280
 export const CHROME_DRAG_HEIGHT = 32
 export const CHROME_PEEK_HEIGHT = 6
 /** Top padding on browsy:// internal pages (below the chrome strip). */
-export const HOME_PAGE_TOP_PADDING = 16
+export const HOME_PAGE_TOP_PADDING = 48
 
 export type ChromePanel = 'navigation' | 'bookmarks' | null
 

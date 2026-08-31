@@ -1,4 +1,4 @@
-/** Internal browsy pages that keep the navigation chrome visible. */
+/** Internal browsy pages that open the spotlight launcher when a tab is created. */
 export function showsNavigationChrome(url: string): boolean {
   return url.startsWith('browsy://home') || url.startsWith('browsy://settings') || url.startsWith('browsy://shortcuts')
 }

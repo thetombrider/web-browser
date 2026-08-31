@@ -341,16 +341,8 @@ export class TabManager {
   }
 
   private syncChromeWithActiveTab(): void {
-    const active = this.getActiveTab()
-    if (!active || active.view.webContents.isDestroyed()) return
-
-    const url = active.view.webContents.getURL()
-    const isInternal = showsNavigationChrome(url)
-    if (isInternal && (!this.chromeVisible || this.chromePanel !== 'navigation')) {
-      this.showChrome('navigation')
-    } else if (!isInternal && this.chromePanel === 'navigation' && this.chromeVisible) {
-      this.hideChrome()
-    }
+    // Spotlight chrome is ephemeral (Cmd+L / new tab). Native pages no longer
+    // pin a persistent navigation strip, so URL changes do not force chrome.
   }
 
   private toTabState(tab: Tab): TabState {
