@@ -52,15 +52,11 @@ export function TabCarousel({ tabs, carousel, thumbnails }: TabCarouselProps) {
               top="50%"
               left="50%"
               ml={{ base: '-36vw', sm: '-150px', md: '-180px' }}
-              mt={{ base: '-22.5vw', sm: '-93.75px', md: '-112.5px' }}
+              mt={{ base: '-30vw', sm: '-125px', md: '-145px' }}
               w={{ base: '72vw', sm: '300px', md: '360px' }}
-              aspectRatio={16 / 10}
-              borderRadius="xl"
-              border="2px solid"
-              borderColor={focused ? 'browsy.accent' : 'browsy.border'}
-              bg="browsy.card"
-              boxShadow={focused ? 'browsyCardFocused' : 'browsyCard'}
-              overflow="hidden"
+              display="flex"
+              flexDirection="column"
+              alignItems="center"
               animate={{
                 x: offset * 390,
                 scale: focused ? 1 : 0.86,
@@ -71,17 +67,29 @@ export function TabCarousel({ tabs, carousel, thumbnails }: TabCarouselProps) {
               role="option"
               aria-selected={focused}
             >
-              <Box h="100%" bg="browsy.preview">
-                {thumbnails[tab.id] ? (
-                  <Image src={thumbnails[tab.id]} alt="" w="100%" h="100%" objectFit="cover" />
-                ) : (
-                  <Box h="100%" bgGradient="linear(to-br, browsy.previewGradientStart, browsy.previewGradientEnd)" />
-                )}
+              <Box
+                h={{ base: '45vw', sm: '187.5px', md: '225px' }}
+                w="100%"
+                flexShrink={0}
+                borderRadius="xl"
+                border="2px solid"
+                borderColor={focused ? 'browsy.accent' : 'browsy.border'}
+                bg="browsy.card"
+                boxShadow={focused ? 'browsyCardFocused' : 'browsyCard'}
+                overflow="hidden"
+              >
+                <Box h="100%" bg="browsy.preview">
+                  {thumbnails[tab.id] ? (
+                    <Image src={thumbnails[tab.id]} alt="" w="100%" h="100%" objectFit="cover" />
+                  ) : (
+                    <Box h="100%" bgGradient="linear(to-br, browsy.previewGradientStart, browsy.previewGradientEnd)" />
+                  )}
+                </Box>
               </Box>
-              <Box position="absolute" left={0} right={0} bottom={0} px={4} py={3} bg="browsy.overlay" color="browsy.overlayText">
-                <Box display="flex" alignItems="center" gap={2} minW={0}>
+              <Box w="100%" px={4} pt={3} textAlign="center" minW={0}>
+                <Box display="flex" justifyContent="center" alignItems="center" gap={2} minW={0}>
                   <Favicon url={tab.url} favicon={tab.favicon} isLoading={tab.isLoading} size={18} />
-                  <Text fontSize="sm" fontWeight="600" noOfLines={1}>{tab.title}</Text>
+                  <Text fontSize="sm" fontWeight="600" color="browsy.overlayText" noOfLines={1}>{tab.title}</Text>
                 </Box>
                 <Text fontSize="xs" color="browsy.overlayMuted" noOfLines={1} mt={1}>{hostname(tab.url)}</Text>
               </Box>

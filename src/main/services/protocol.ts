@@ -280,11 +280,12 @@ function baseStyles(): string {
       .clip-list > .clip-item:nth-child(4) { display: flex; }
     }
     .empty { color: #71717a; font-size: 0.9rem; max-width: 420px; line-height: 1.5; padding: 0 12px; text-align: center; }
-    .error-wrap { max-width: 520px; padding-top: 24px; }
+    body.error-page { display: flex; align-items: center; justify-content: center; text-align: center; }
+    .error-wrap { width: 100%; max-width: 520px; padding-top: 24px; }
     .error-title { font-size: 1.35rem; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 8px; }
     .error-msg { margin-bottom: 12px; line-height: 1.5; color: #a1a1aa; }
     .error-code { font-size: 0.75rem; color: #71717a; margin-bottom: 24px; font-family: "IBM Plex Mono", Menlo, Consolas, monospace; }
-    .actions { display: flex; gap: 10px; }
+    .actions { display: flex; justify-content: center; gap: 10px; }
     .btn {
       display: inline-block;
       padding: 8px 14px;
@@ -305,6 +306,7 @@ function baseStyles(): string {
       opacity: 0.7;
     }
     .btn-ghost:hover { opacity: 1; }
+    .btn.selected, .btn-ghost.selected { outline: 1px solid rgba(255,255,255,0.5); outline-offset: 2px; opacity: 1; }
     .settings-section {
       width: 100%;
       max-width: 360px;
@@ -789,7 +791,7 @@ export function renderErrorPage(url: string, errorCode: number, errorDescription
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <style>${baseStyles()}</style>
 </head>
-<body>
+<body class="error-page">
   <div class="error-wrap">
     <div class="error-title">Can't reach this page</div>
     <p class="error-msg">${escapeHtml(errorDescription)}</p>
@@ -799,6 +801,120 @@ export function renderErrorPage(url: string, errorCode: number, errorDescription
       <a class="btn-ghost" href="browsy://home">Home</a>
     </div>
   </div>
+  <script>
+    (function () {
+      var actions = Array.from(document.querySelectorAll('.actions a'));
+      var selectedIndex = -1;
+
+      function setSelected(index) {
+        actions.forEach(function (action) {
+          action.classList.remove('selected');
+          action.removeAttribute('aria-current');
+        });
+        selectedIndex = index;
+        var selected = actions[selectedIndex];
+        if (!selected) return;
+        selected.classList.add('selected');
+        selected.setAttribute('aria-current', 'true');
+      }
+
+      document.addEventListener('keydown', function (event) {
+        if (event.key === 'ArrowLeft' || event.key === 'ArrowUp' || event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+          event.preventDefault();
+          var forward = event.key === 'ArrowRight' || event.key === 'ArrowDown';
+          var next = forward
+            ? (selectedIndex + 1) % actions.length
+            : (selectedIndex <= 0 ? actions.length - 1 : selectedIndex - 1);
+          setSelected(next);
+        } else if (event.key === 'Enter' || event.key === 'NumpadEnter') {
+          if (selectedIndex < 0) return;
+          var selected = actions[selectedIndex];
+          if (!selected) return;
+          event.preventDefault();
+          selected.click();
+        }
+      });
+    })();
+  </script>
+</body>
+</html>`
+}
+
+function renderNotFoundPage(url: string): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>404 — Browsy</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    ${baseStyles()}
+    .not-found-wrap { width: 100%; max-width: 560px; padding: 24px; }
+    .not-found-code { color: #3b82f6; font-family: "IBM Plex Mono", Menlo, Consolas, monospace; font-size: 5rem; font-weight: 500; letter-spacing: -0.08em; line-height: 1; margin-bottom: 20px; }
+    .not-found-title { font-size: 1.5rem; font-weight: 600; letter-spacing: -0.03em; margin-bottom: 8px; }
+    .not-found-message { color: #a1a1aa; line-height: 1.5; margin-bottom: 8px; }
+    .not-found-url { color: #71717a; font-family: "IBM Plex Mono", Menlo, Consolas, monospace; font-size: 0.75rem; margin-bottom: 28px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  </style>
+</head>
+<body class="error-page">
+  <div class="not-found-wrap">
+    <div class="not-found-code" aria-hidden="true">404</div>
+    <div class="not-found-title">This page isn't here</div>
+    <p class="not-found-message">Sure you are looking in the right place?</p>
+    <p class="not-found-url">${escapeHtml(url)}</p>
+    <div class="actions">
+      <a class="btn" href="browsy://home">Home</a>
+      <a class="btn-ghost" href="browsy://home" data-back>Go back</a>
+    </div>
+  </div>
+  <script>
+    (function () {
+      var actions = Array.from(document.querySelectorAll('.actions a'));
+      var selectedIndex = -1;
+      var back = document.querySelector('[data-back]');
+
+      if (back) {
+        back.addEventListener('click', function (event) {
+          if (window.history.length > 1) {
+            event.preventDefault();
+            window.history.back();
+          }
+        });
+      }
+
+      function setSelected(index) {
+        actions.forEach(function (action) {
+          action.classList.remove('selected');
+          action.removeAttribute('aria-current');
+        });
+        selectedIndex = index;
+        var selected = actions[selectedIndex];
+        if (!selected) return;
+        selected.classList.add('selected');
+        selected.setAttribute('aria-current', 'true');
+      }
+
+      document.addEventListener('keydown', function (event) {
+        if (event.key === 'ArrowLeft' || event.key === 'ArrowUp' || event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+          event.preventDefault();
+          var forward = event.key === 'ArrowRight' || event.key === 'ArrowDown';
+          var next = forward
+            ? (selectedIndex + 1) % actions.length
+            : (selectedIndex <= 0 ? actions.length - 1 : selectedIndex - 1);
+          setSelected(next);
+        } else if (event.key === 'Enter' || event.key === 'NumpadEnter') {
+          if (selectedIndex < 0) return;
+          var selected = actions[selectedIndex];
+          if (!selected) return;
+          event.preventDefault();
+          selected.click();
+        }
+      });
+    })();
+  </script>
 </body>
 </html>`
 }

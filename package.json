@@ -6,9 +6,25 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
+    "dist": "npm run build && electron-builder --mac dmg",
+    "dmg": "bash scripts/build-dmg.sh",
     "start": "electron-vite preview",
     "mcp": "tsx src/mcp/bridge.ts",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json"
+  },
+  "build": {
+    "appId": "com.browsy.app",
+    "productName": "Browsy",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "target": ["dmg"]
+    }
   },
   "keywords": [
     "electron",
@@ -35,6 +51,7 @@
     "@types/react-dom": "^18.2.25",
     "@vitejs/plugin-react": "^4.2.1",
     "electron": "^33.4.11",
+    "electron-builder": "^26.15.3",
     "electron-vite": "^2.1.0",
     "tsx": "^4.7.2",
     "typescript": "^5.4.5",

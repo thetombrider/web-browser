@@ -40,6 +40,16 @@ npm run build
 npm start
 ```
 
+## Build an installable DMG
+
+On macOS, run:
+
+```bash
+npm run dmg
+```
+
+The DMG is written to `release/` and can be opened to drag Browsy into Applications. The build targets the current Mac architecture. Override it with `BROWSY_ARCH=arm64` or `BROWSY_ARCH=x64` when needed. Local builds are unsigned, so macOS may require opening the app manually in System Settings.
+
 ## Keyboard shortcuts
 
 | Shortcut | Action |
