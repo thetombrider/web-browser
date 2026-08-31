@@ -105,15 +105,24 @@ export class WindowManager {
       show: false,
       title: 'Browsy',
       backgroundColor: '#111114',
-      ...(isMac
-        ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 12, y: 12 } }
-        : { frame: false }),
+      // Full-bleed page content; hide the native macOS traffic lights so they
+      // never sit on top of web pages or the chrome overlay. Window move still
+      // works via the custom drag strip; close/minimize/zoom via system shortcuts.
+      ...(isMac ? { titleBarStyle: 'hidden' as const } : { frame: false }),
       webPreferences: {
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: true
       }
     })
+
+    if (isMac) {
+      win.setWindowButtonVisibility(false)
+      // macOS can restore the traffic lights after exiting fullscreen.
+      win.on('leave-full-screen', () => {
+        if (!win.isDestroyed()) win.setWindowButtonVisibility(false)
+      })
+    }
 
     // Window shell is unused for UI — chrome lives in its own WebContentsView.
     await win.loadURL('data:text/html,<html><body style="margin:0;background:#111114"></body></html>')
