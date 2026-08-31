@@ -91,6 +91,13 @@ function baseStyles(): string {
       letter-spacing: -0.03em;
       margin-bottom: 28px;
     }
+    .greeting {
+      font-size: 1.75rem;
+      font-weight: 600;
+      letter-spacing: -0.03em;
+      text-align: center;
+      margin: 8px 0 36px;
+    }
     .muted { color: #a1a1aa; margin-bottom: 28px; font-size: 0.9rem; }
     .home-layout {
       display: grid;
@@ -398,6 +405,13 @@ function renderHomeRightColumn(): string {
     </section>`
 }
 
+function greetingForHour(hour: number): string {
+  if (hour >= 5 && hour < 12) return 'Good morning'
+  if (hour >= 12 && hour < 17) return 'Good afternoon'
+  if (hour >= 17 && hour < 21) return 'Good evening'
+  return 'Good night'
+}
+
 export function renderHomePage(): string {
   const settings = getSettings()
   const recent = (settings.homepage === 'blank' ? [] : getRecentSites(RECENT_SITES_COUNT)).filter((site) =>
@@ -407,6 +421,7 @@ export function renderHomePage(): string {
     recent.length === 0
       ? '<p class="empty">Type a URL or search above to get started.</p>'
       : `<div class="list">${recent.map((site) => renderHomeSiteRow(site.url, site.title)).join('')}</div>`
+  const greeting = greetingForHour(new Date().getHours())
 
   const navCards = `
   <div class="home-cards">
@@ -431,7 +446,7 @@ export function renderHomePage(): string {
   <style>${baseStyles()}</style>
 </head>
 <body>
-  <div class="brand">Browsy</div>
+  <div class="greeting" id="greeting" aria-live="polite">${escapeHtml(greeting)}</div>
   <div class="home-layout">
     <section class="home-col" aria-label="Recent">
       <div class="col-label">${recent.length === 0 ? 'Home' : 'Recent'}</div>
@@ -448,6 +463,20 @@ export function renderHomePage(): string {
 function homeClientScript(): string {
   return `
     (function () {
+      var greetingEl = document.getElementById('greeting');
+      function greetingForHour(hour) {
+        if (hour >= 5 && hour < 12) return 'Good morning';
+        if (hour >= 12 && hour < 17) return 'Good afternoon';
+        if (hour >= 17 && hour < 21) return 'Good evening';
+        return 'Good night';
+      }
+      function updateGreeting() {
+        if (!greetingEl) return;
+        greetingEl.textContent = greetingForHour(new Date().getHours());
+      }
+      updateGreeting();
+      setInterval(updateGreeting, 60000);
+
       var rows = Array.from(document.querySelectorAll('.site, .home-card'));
       if (!rows.length) return;
       var selectedIndex = -1;
