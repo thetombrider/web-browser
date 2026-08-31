@@ -609,10 +609,9 @@ export class WindowManager {
     const entry = this.getFocusedEntry()
     if (!entry) return
     const url = resolveNavigationInput(input, getSettings().searchEngine)
-    await entry.tabs.navigate(url)
-    // Spotlight is ephemeral — always dismiss after navigation.
     entry.tabs.hideChrome()
     this.layoutWindow(entry.window.id)
+    void entry.tabs.navigate(url).catch(() => undefined)
   }
 
   goBackFocused(): void {
@@ -731,13 +730,13 @@ export class WindowManager {
       return entry ? this.buildState(entry.tabs) : this.getFocusedState()
     })
 
-    ipcMain.handle(IPC.NAVIGATE, async (event, input: string) => {
+    ipcMain.handle(IPC.NAVIGATE, (event, input: string) => {
       const entry = this.getEntryFromEvent(event)
       if (!entry) return
       const url = resolveNavigationInput(input, getSettings().searchEngine)
-      await entry.tabs.navigate(url)
       entry.tabs.hideChrome()
       this.layoutWindow(entry.window.id)
+      void entry.tabs.navigate(url).catch(() => undefined)
     })
 
     ipcMain.handle(IPC.GO_BACK, (event) => {
