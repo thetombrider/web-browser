@@ -83,19 +83,23 @@ export function Omnibox({
   const [completionSuppressedFor, setCompletionSuppressedFor] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Spotlight always shows inventory / matches while open.
-  const suggestions = buildSuggestions(value, tabs, bookmarks, history, activeTabId)
-  const queryEmpty = value.trim().length === 0
-  const showingTabsInventory = queryEmpty && suggestions.some((s) => s.kind === 'tab')
-
-  const completionMatch =
-    activeIndex === -1 && completionSuppressedFor !== value ? findCompletion(suggestions, value) : null
-  const completion = completionMatch?.value ?? null
-  const displayedValue = completion ?? value
-
   const liveDisplay = displayValueForUrl(initialValue)
   const scheme = getUrlScheme(initialValue)
   const showingLiveUrl = value === liveDisplay && liveDisplay.length > 0
+  // While the field still mirrors the live URL (just opened / not edited), show
+  // the open-tabs inventory instead of searching for that URL string.
+  const suggestionQuery = showingLiveUrl ? '' : value
+  const suggestions = buildSuggestions(suggestionQuery, tabs, bookmarks, history, activeTabId)
+  const queryEmpty = suggestionQuery.trim().length === 0
+  const showingTabsInventory = queryEmpty && suggestions.some((s) => s.kind === 'tab')
+
+  const completionMatch =
+    activeIndex === -1 && completionSuppressedFor !== value && !showingLiveUrl
+      ? findCompletion(suggestions, value)
+      : null
+  const completion = completionMatch?.value ?? null
+  const displayedValue = completion ?? value
+
   const showOriginCue =
     showingLiveUrl && !isLoading && (scheme === 'https' || scheme === 'http' || scheme === 'browsy')
 
