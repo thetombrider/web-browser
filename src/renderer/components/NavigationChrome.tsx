@@ -11,18 +11,11 @@ interface NavigationChromeProps {
   activeTabId: string | null
   initialValue: string
   focusToken: number
-  canGoBack: boolean
-  canGoForward: boolean
   isLoading: boolean
   onSwitchTab: (id: string) => void
   onCloseTab: (id: string) => void
-  onNewTab: () => void
   onSubmit: (value: string) => void
   onClose: () => void
-  onBack: () => void
-  onForward: () => void
-  onReload: () => void
-  onStop: () => void
   onCommand: (action: CommandAction) => void
 }
 
@@ -32,18 +25,11 @@ export function NavigationChrome({
   activeTabId,
   initialValue,
   focusToken,
-  canGoBack,
-  canGoForward,
   isLoading,
   onSwitchTab,
   onCloseTab,
-  onNewTab,
   onSubmit,
   onClose,
-  onBack,
-  onForward,
-  onReload,
-  onStop,
   onCommand
 }: NavigationChromeProps) {
   return (
@@ -84,20 +70,13 @@ export function NavigationChrome({
         <Omnibox
           initialValue={initialValue}
           focusToken={focusToken}
-          canGoBack={canGoBack}
-          canGoForward={canGoForward}
           isLoading={isLoading}
           tabs={tabs}
           activeTabId={activeTabId}
           onSubmit={onSubmit}
           onClose={onClose}
-          onBack={onBack}
-          onForward={onForward}
-          onReload={onReload}
-          onStop={onStop}
           onSwitchTab={onSwitchTab}
           onCloseTab={onCloseTab}
-          onNewTab={onNewTab}
           onCommand={onCommand}
         />
       </MotionBox>

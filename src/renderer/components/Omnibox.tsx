@@ -12,13 +12,7 @@ import {
   Spinner,
   VStack
 } from '@chakra-ui/react'
-import {
-  ArrowBackIcon,
-  ArrowForwardIcon,
-  CloseIcon,
-  RepeatIcon,
-  SearchIcon
-} from '@chakra-ui/icons'
+import { CloseIcon, SearchIcon } from '@chakra-ui/icons'
 import type { Bookmark, HistoryEntry, TabState } from '@shared/types'
 import { browsyPageLabel } from '@shared/internal-pages'
 import {
@@ -36,20 +30,13 @@ import { Favicon } from './Favicon'
 interface OmniboxProps {
   initialValue: string
   focusToken: number
-  canGoBack: boolean
-  canGoForward: boolean
   isLoading: boolean
   tabs: TabState[]
   activeTabId: string | null
   onSubmit: (value: string) => void
   onClose: () => void
-  onBack: () => void
-  onForward: () => void
-  onReload: () => void
-  onStop: () => void
   onSwitchTab: (id: string) => void
   onCloseTab: (id: string) => void
-  onNewTab: () => void
   onCommand: (action: CommandAction) => void
 }
 
@@ -60,20 +47,13 @@ function displayValueForUrl(url: string): string {
 export function Omnibox({
   initialValue,
   focusToken,
-  canGoBack,
-  canGoForward,
   isLoading,
   tabs,
   activeTabId,
   onSubmit,
   onClose,
-  onBack,
-  onForward,
-  onReload,
-  onStop,
   onSwitchTab,
   onCloseTab,
-  onNewTab,
   onCommand
 }: OmniboxProps) {
   const [value, setValue] = useState(displayValueForUrl(initialValue))
@@ -177,50 +157,13 @@ export function Omnibox({
 
   return (
     <Box>
-      <HStack spacing={1} px={3} pt={3} pb={2} align="center">
-        <IconButton
-          aria-label="Back"
-          icon={<ArrowBackIcon />}
-          size="sm"
-          variant="ghost"
-          isDisabled={!canGoBack}
-          onClick={onBack}
-        />
-        <IconButton
-          aria-label="Forward"
-          icon={<ArrowForwardIcon />}
-          size="sm"
-          variant="ghost"
-          isDisabled={!canGoForward}
-          onClick={onForward}
-        />
-        <IconButton
-          aria-label={isLoading ? 'Stop' : 'Reload'}
-          icon={isLoading ? <CloseIcon boxSize={2.5} /> : <RepeatIcon />}
-          size="sm"
-          variant="ghost"
-          onClick={isLoading ? onStop : onReload}
-        />
-        {showOriginCue ? (
-          <Box
-            w="32px"
-            h="36px"
-            display="flex"
-            alignItems="center"
-            justifyContent="center"
-            flexShrink={0}
-            borderRadius="md"
-            bg="browsy.input"
-            border="1px solid"
-            borderColor="browsy.inputBorder"
-          >
-            <OriginCue scheme={scheme} />
-          </Box>
-        ) : null}
-        <InputGroup size="md" flex={1}>
-          <InputLeftElement h="40px" pointerEvents="none">
+      <Box px={3} pt={3} pb={2}>
+        <InputGroup size="md">
+          <InputLeftElement h="44px" pointerEvents="none">
             {isLoading ? (
               <Spinner size="sm" color="browsy.icon" thickness="1.5px" />
+            ) : showOriginCue ? (
+              <OriginCue scheme={scheme} />
             ) : (
               <SearchIcon color="browsy.icon" boxSize={4} />
             )}
@@ -228,7 +171,7 @@ export function Omnibox({
           <Input
             ref={inputRef}
             value={displayedValue}
-            h="40px"
+            h="44px"
             fontSize="md"
             borderRadius="lg"
             onChange={(e) => {
@@ -270,7 +213,7 @@ export function Omnibox({
             _focus={{ borderColor: 'browsy.focusBorder', boxShadow: 'none' }}
           />
           {value && (
-            <InputRightElement h="40px">
+            <InputRightElement h="44px">
               <IconButton
                 aria-label="Clear"
                 icon={<CloseIcon boxSize={2.5} />}
@@ -286,16 +229,7 @@ export function Omnibox({
             </InputRightElement>
           )}
         </InputGroup>
-        <IconButton
-          aria-label="New tab"
-          icon={<Text fontSize="lg" lineHeight={1}>+</Text>}
-          size="sm"
-          variant="ghost"
-          onClick={() => {
-            onNewTab()
-          }}
-        />
-      </HStack>
+      </Box>
 
       {suggestions.length > 0 && (
         <Box
