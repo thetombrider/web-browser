@@ -1,8 +1,8 @@
 import { protocol } from 'electron'
-import { getRecentSites, getSettings, setSettings } from './store'
+import { getBookmarks, getRecentSites, getSettings, setSettings } from './store'
 import { renderBookmarksPage } from './bookmarks-page'
 import { renderShortcutsPage } from './shortcuts-page'
-import { isAllowedNavigationUrl, sanitizeNavigationUrl } from '../../shared/utils'
+import { faviconUrlForPage, isAllowedNavigationUrl, sanitizeNavigationUrl } from '../../shared/utils'
 import {
   APP_SURFACE_DARK,
   APP_SURFACE_ELEVATED_DARK,
@@ -16,6 +16,15 @@ import {
   type SearchEngine,
   type Settings
 } from '../../shared/types'
+
+const HOME_BOOKMARKS_COUNT = 8
+const HOME_TIP_SHORTCUTS = [
+  ['Ctrl/Cmd + L', 'Address bar'],
+  ['Ctrl/Cmd + T', 'New tab'],
+  ['Ctrl/Cmd + D', 'Bookmark page'],
+  ['Ctrl/Cmd + B', 'Bookmarks'],
+  ['Ctrl/Cmd + /', 'All shortcuts']
+] as const
 
 function escapeHtml(value: string): string {
   return value
@@ -44,6 +53,18 @@ function letterForUrl(url: string): string {
   }
 }
 
+function renderSiteGlyph(url: string): string {
+  const letter = escapeHtml(letterForUrl(url))
+  const favicon = faviconUrlForPage(url)
+  if (!favicon) {
+    return `<div class="glyph" aria-hidden="true">${letter}</div>`
+  }
+  return `<div class="glyph" aria-hidden="true">
+    <span class="glyph-letter">${letter}</span>
+    <img class="favicon" src="${escapeHtml(favicon)}" alt="" width="16" height="16" loading="lazy" decoding="async" onerror="this.remove()" />
+  </div>`
+}
+
 function baseStyles(): string {
   return `
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -59,20 +80,40 @@ function baseStyles(): string {
       .muted { color: #71717a; }
       .site:hover, .site.selected, .home-card:hover, .home-card.selected { background: ${APP_SURFACE_ELEVATED_LIGHT}; }
       .glyph { background: rgba(0,0,0,0.06); color: #52525b; }
+      .tip-row:hover { background: ${APP_SURFACE_ELEVATED_LIGHT}; }
+      .tip-row kbd { background: rgba(0,0,0,0.06); }
       .btn { background: #2563eb; }
     }
     .brand {
       font-size: 1.75rem;
       font-weight: 600;
       letter-spacing: -0.03em;
-      margin-bottom: 4px;
+      margin-bottom: 28px;
     }
     .muted { color: #a1a1aa; margin-bottom: 28px; font-size: 0.9rem; }
+    .home-layout {
+      display: grid;
+      grid-template-columns: minmax(260px, 520px) minmax(240px, 380px);
+      gap: 48px 56px;
+      align-items: start;
+      max-width: 1000px;
+    }
+    @media (max-width: 820px) {
+      .home-layout { grid-template-columns: 1fr; gap: 36px; }
+    }
+    .home-col { min-width: 0; }
+    .col-label {
+      font-size: 0.7rem;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #71717a;
+      margin-bottom: 10px;
+    }
     .list {
       display: flex;
       flex-direction: column;
       gap: 2px;
-      max-width: 520px;
     }
     .site {
       display: flex;
@@ -90,7 +131,6 @@ function baseStyles(): string {
       display: flex;
       flex-direction: column;
       gap: 2px;
-      max-width: 520px;
       margin-top: 24px;
     }
     .home-card {
@@ -122,6 +162,7 @@ function baseStyles(): string {
     .card-title { font-weight: 500; font-size: 0.925rem; }
     .card-sub { font-size: 0.75rem; color: #71717a; }
     .glyph {
+      position: relative;
       width: 28px;
       height: 28px;
       border-radius: 6px;
@@ -133,6 +174,16 @@ function baseStyles(): string {
       font-size: 0.75rem;
       font-weight: 600;
       flex-shrink: 0;
+      overflow: hidden;
+    }
+    .glyph-letter { line-height: 1; }
+    .favicon {
+      position: absolute;
+      inset: 0;
+      margin: auto;
+      width: 16px;
+      height: 16px;
+      object-fit: contain;
     }
     .site-meta { min-width: 0; }
     .site-title {
@@ -149,7 +200,36 @@ function baseStyles(): string {
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    .empty { color: #71717a; font-size: 0.9rem; max-width: 420px; line-height: 1.5; }
+    .col-footer {
+      display: inline-block;
+      margin-top: 12px;
+      padding: 0 12px;
+      font-size: 0.8rem;
+      color: #71717a;
+      text-decoration: none;
+    }
+    .col-footer:hover { color: inherit; }
+    .tip-list { display: flex; flex-direction: column; gap: 2px; }
+    .tip-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 0.875rem;
+    }
+    .tip-row:hover { background: ${APP_SURFACE_ELEVATED_DARK}; }
+    .tip-row kbd {
+      background: rgba(255,255,255,0.08);
+      border-radius: 6px;
+      color: #a1a1aa;
+      font-family: "IBM Plex Mono", Menlo, Consolas, monospace;
+      font-size: 0.72rem;
+      padding: 4px 7px;
+      white-space: nowrap;
+    }
+    .empty { color: #71717a; font-size: 0.9rem; max-width: 420px; line-height: 1.5; padding: 0 12px; }
     .error-wrap { max-width: 520px; padding-top: 24px; }
     .error-title { font-size: 1.35rem; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 8px; }
     .error-msg { margin-bottom: 12px; line-height: 1.5; color: #a1a1aa; }
@@ -243,6 +323,48 @@ function baseStyles(): string {
   `
 }
 
+function renderHomeSiteRow(url: string, title: string): string {
+  return `
+        <a class="site" href="${escapeHtml(url)}">
+          ${renderSiteGlyph(url)}
+          <div class="site-meta">
+            <div class="site-title">${escapeHtml(getSiteName(title, url))}</div>
+            <div class="site-url">${escapeHtml(url)}</div>
+          </div>
+        </a>`
+}
+
+function renderHomeRightColumn(): string {
+  const bookmarks = getBookmarks()
+    .filter((bookmark) => isAllowedNavigationUrl(bookmark.url))
+    .slice(0, HOME_BOOKMARKS_COUNT)
+
+  if (bookmarks.length > 0) {
+    const rows = bookmarks.map((bookmark) => renderHomeSiteRow(bookmark.url, bookmark.title)).join('')
+    return `
+    <section class="home-col" aria-label="Bookmarks">
+      <div class="col-label">Bookmarks</div>
+      <div class="list">${rows}</div>
+      <a class="col-footer" href="browsy://bookmarks">View all bookmarks</a>
+    </section>`
+  }
+
+  const tips = HOME_TIP_SHORTCUTS.map(
+    ([keys, label]) => `
+        <div class="tip-row">
+          <span>${escapeHtml(label)}</span>
+          <kbd>${escapeHtml(keys)}</kbd>
+        </div>`
+  ).join('')
+
+  return `
+    <section class="home-col" aria-label="Shortcuts">
+      <div class="col-label">Shortcuts</div>
+      <div class="tip-list">${tips}</div>
+      <a class="col-footer" href="browsy://shortcuts">Full shortcut list</a>
+    </section>`
+}
+
 export function renderHomePage(): string {
   const settings = getSettings()
   const recent = (settings.homepage === 'blank' ? [] : getRecentSites(RECENT_SITES_COUNT)).filter((site) =>
@@ -251,35 +373,9 @@ export function renderHomePage(): string {
   const sitesHtml =
     recent.length === 0
       ? '<p class="empty">Type a URL or search above to get started.</p>'
-      : `<div class="list">${recent
-          .map(
-            (site) => `
-        <a class="site" href="${escapeHtml(site.url)}">
-          <div class="glyph">${escapeHtml(letterForUrl(site.url))}</div>
-          <div class="site-meta">
-            <div class="site-title">${escapeHtml(getSiteName(site.title, site.url))}</div>
-            <div class="site-url">${escapeHtml(site.url)}</div>
-          </div>
-        </a>`
-          )
-          .join('')}</div>`
+      : `<div class="list">${recent.map((site) => renderHomeSiteRow(site.url, site.title)).join('')}</div>`
 
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Browsy</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <style>${baseStyles()}</style>
-</head>
-<body>
-  <div class="brand">Browsy</div>
-  <p class="muted">${recent.length === 0 ? 'A quieter place to browse' : 'Recent'}</p>
-  ${sitesHtml}
-  ${recent.length === 0 ? '' : `
+  const navCards = `
   <div class="home-cards">
     <a class="home-card" href="browsy://shortcuts" data-nav>
       <div class="card-glyph">⌘</div>
@@ -302,7 +398,29 @@ export function renderHomePage(): string {
         <div class="card-sub">Preferences</div>
       </div>
     </a>
-  </div>`}
+  </div>`
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Browsy</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>${baseStyles()}</style>
+</head>
+<body>
+  <div class="brand">Browsy</div>
+  <div class="home-layout">
+    <section class="home-col" aria-label="Recent">
+      <div class="col-label">${recent.length === 0 ? 'Home' : 'Recent'}</div>
+      ${sitesHtml}
+      ${navCards}
+    </section>
+    ${renderHomeRightColumn()}
+  </div>
   <script>${homeClientScript()}</script>
 </body>
 </html>`
