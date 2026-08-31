@@ -79,7 +79,7 @@ function baseStyles(): string {
     @media (prefers-color-scheme: light) {
       body { background: ${APP_SURFACE_LIGHT}; color: #18181b; }
       .muted { color: #71717a; }
-      .site:hover, .site.selected, .home-card:hover, .home-card.selected { background: ${APP_SURFACE_ELEVATED_LIGHT}; }
+      .site:hover, .site.selected, .home-card:hover, .home-card.selected, .home-card.kb-selected { background: ${APP_SURFACE_ELEVATED_LIGHT}; }
       .glyph { background: rgba(0,0,0,0.06); color: #52525b; }
       .tip-row:hover { background: ${APP_SURFACE_ELEVATED_LIGHT}; }
       .tip-row kbd { background: rgba(0,0,0,0.06); }
@@ -169,7 +169,7 @@ function baseStyles(): string {
       transition: background 0.12s ease;
     }
     .home-card:hover { background: ${APP_SURFACE_ELEVATED_DARK}; }
-    .home-card.selected { background: ${APP_SURFACE_ELEVATED_DARK}; outline: 1px solid rgba(255,255,255,0.16); }
+    .home-card.selected, .home-card.kb-selected { background: ${APP_SURFACE_ELEVATED_DARK}; outline: 1px solid rgba(255,255,255,0.16); }
     .card-glyph {
       width: 28px;
       height: 28px;
@@ -305,51 +305,81 @@ function baseStyles(): string {
       opacity: 0.7;
     }
     .btn-ghost:hover { opacity: 1; }
-    .settings-wrap { max-width: 520px; }
-    .section { margin-bottom: 28px; }
-    .section-label {
-      font-size: 0.7rem;
-      font-weight: 500;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      color: #71717a;
-      margin-bottom: 10px;
+    .settings-section {
+      width: 100%;
+      max-width: 360px;
+      margin-bottom: 28px;
+    }
+    .settings-section:last-child { margin-bottom: 0; }
+    .settings-section .home-cards { margin-top: 0; }
+    .settings-home {
+      width: 100%;
+      max-width: 360px;
+      margin-top: 8px;
+      padding: 6px 12px;
+      text-align: left;
+      box-sizing: border-box;
     }
     .options {
       display: flex;
-      flex-wrap: wrap;
-      gap: 4px;
+      flex-direction: column;
+      gap: 2px;
+      width: 100%;
     }
     .option {
-      display: inline-block;
-      padding: 8px 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      padding: 10px 12px;
       border-radius: 8px;
       text-decoration: none;
       color: inherit;
-      font-size: 0.875rem;
-      transition: background 0.12s ease, opacity 0.12s ease;
-      opacity: 0.75;
+      font-size: 0.925rem;
+      transition: background 0.12s ease;
     }
-    .option:hover { background: ${APP_SURFACE_ELEVATED_DARK}; opacity: 1; }
+    .option:hover { background: ${APP_SURFACE_ELEVATED_DARK}; }
     .option.selected {
       background: ${APP_SURFACE_ELEVATED_DARK};
       font-weight: 500;
-      opacity: 1;
+      outline: 1px solid rgba(255,255,255,0.16);
+    }
+    .option.kb-selected {
+      background: ${APP_SURFACE_ELEVATED_DARK};
+      outline: 1px solid rgba(255,255,255,0.16);
+    }
+    .option-check {
+      margin-left: auto;
+      color: #71717a;
+      font-size: 0.8rem;
+      font-weight: 500;
+      flex-shrink: 0;
     }
     @media (prefers-color-scheme: light) {
-      .option:hover { background: ${APP_SURFACE_ELEVATED_LIGHT}; }
-      .option.selected { background: ${APP_SURFACE_ELEVATED_LIGHT}; }
+      .option:hover, .option.selected, .option.kb-selected { background: ${APP_SURFACE_ELEVATED_LIGHT}; }
+      .option.selected, .option.kb-selected { outline: 1px solid rgba(0,0,0,0.08); }
     }
     .dev-toggle {
-      display: inline-block;
-      margin-top: 8px;
-      font-size: 0.8rem;
-      color: #71717a;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 0.925rem;
+      color: inherit;
       text-decoration: none;
+      transition: background 0.12s ease;
     }
-    .dev-toggle:hover { color: inherit; }
+    .dev-toggle:hover, .dev-toggle.kb-selected { background: ${APP_SURFACE_ELEVATED_DARK}; }
+    .dev-toggle.kb-selected { outline: 1px solid rgba(255,255,255,0.16); }
+    .dev-toggle-sub { margin-left: auto; font-size: 0.75rem; color: #71717a; }
+    @media (prefers-color-scheme: light) {
+      .dev-toggle:hover, .dev-toggle.kb-selected { background: ${APP_SURFACE_ELEVATED_LIGHT}; }
+      .dev-toggle.kb-selected { outline: 1px solid rgba(0,0,0,0.08); }
+    }
     .dev-panel {
-      margin-top: 12px;
+      margin-top: 8px;
       padding: 14px 16px;
       border-radius: 8px;
       background: ${APP_SURFACE_ELEVATED_DARK};
@@ -368,8 +398,18 @@ function baseStyles(): string {
       font-size: 0.85rem;
       color: #71717a;
       text-decoration: none;
+      border-radius: 8px;
+      transition: background 0.12s ease, color 0.12s ease;
     }
     .footer-link:hover { color: inherit; }
+    .footer-link.kb-selected {
+      color: inherit;
+      background: ${APP_SURFACE_ELEVATED_DARK};
+      outline: 1px solid rgba(255,255,255,0.16);
+    }
+    @media (prefers-color-scheme: light) {
+      .footer-link.kb-selected { background: ${APP_SURFACE_ELEVATED_LIGHT}; outline: 1px solid rgba(0,0,0,0.08); }
+    }
   `
 }
 
@@ -565,11 +605,63 @@ function renderOption(
   showDev: boolean
 ): string {
   const selected = current === value
+  const check = selected ? '<span class="option-check" aria-hidden="true">✓</span>' : ''
   if (selected) {
-    return `<span class="option selected">${escapeHtml(label)}</span>`
+    return `<span class="option selected" aria-current="true">${escapeHtml(label)}${check}</span>`
   }
   const href = escapeHtml(settingsPageUrl({ [param]: value }, showDev))
   return `<a class="option" href="${href}">${escapeHtml(label)}</a>`
+}
+
+function renderSettingsSection(label: string, optionsHtml: string): string {
+  return `
+      <div class="settings-section">
+        <div class="col-label">${escapeHtml(label)}</div>
+        <div class="options">${optionsHtml}</div>
+      </div>`
+}
+
+function settingsClientScript(): string {
+  return `
+    (function () {
+      var rows = Array.from(document.querySelectorAll('a.option, a.dev-toggle, a.home-card, a.footer-link'));
+      if (!rows.length) return;
+      var selectedIndex = -1;
+
+      function setSelected(index) {
+        rows.forEach(function (row) {
+          row.classList.remove('kb-selected');
+          row.removeAttribute('aria-current');
+        });
+        if (index < 0) {
+          selectedIndex = -1;
+          return null;
+        }
+        selectedIndex = index;
+        var selected = rows[selectedIndex];
+        selected.classList.add('kb-selected');
+        selected.setAttribute('aria-current', 'true');
+        selected.scrollIntoView({ block: 'nearest' });
+        return selected;
+      }
+
+      document.addEventListener('keydown', function (event) {
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+          event.preventDefault();
+          var next = event.key === 'ArrowDown'
+            ? (selectedIndex + 1) % rows.length
+            : (selectedIndex <= 0 ? rows.length - 1 : selectedIndex - 1);
+          setSelected(next);
+        } else if (event.key === 'Enter' || event.key === 'NumpadEnter') {
+          if (selectedIndex < 0) return;
+          var selected = rows[selectedIndex];
+          if (!selected) return;
+          event.preventDefault();
+          selected.click();
+        }
+      });
+    })();
+  `
 }
 
 function applySettingsFromQuery(url: URL): void {
@@ -591,6 +683,64 @@ export function renderSettingsPage(showDev = false): string {
   const settings = getSettings()
   const devToggleHref = escapeHtml(settingsPageUrl({}, !showDev))
   const devToggleLabel = showDev ? 'Hide developer' : 'Developer'
+  const devToggleSub = showDev ? 'Visible' : 'Hidden'
+
+  const newTabOptions = [
+    renderOption('homepage', 'recent', 'Recent sites', settings.homepage, showDev),
+    renderOption('homepage', 'blank', 'Blank', settings.homepage, showDev)
+  ].join('')
+
+  const searchOptions = [
+    renderOption('searchEngine', 'google', 'Google', settings.searchEngine, showDev),
+    renderOption('searchEngine', 'duckduckgo', 'DuckDuckGo', settings.searchEngine, showDev),
+    renderOption('searchEngine', 'bing', 'Bing', settings.searchEngine, showDev)
+  ].join('')
+
+  const startupOptions = [
+    renderOption('restoreSession', 'always', 'Restore previous tabs', settings.restoreSession, showDev),
+    renderOption('restoreSession', 'never', 'Start fresh', settings.restoreSession, showDev)
+  ].join('')
+
+  const moreCards = `
+      <div class="settings-section">
+        <div class="col-label">More</div>
+        <div class="home-cards">
+          <a class="home-card" href="browsy://bookmarks" data-nav>
+            <div class="card-glyph">★</div>
+            <div class="card-meta">
+              <div class="card-title">Bookmarks</div>
+              <div class="card-sub">Saved pages</div>
+            </div>
+          </a>
+          <a class="home-card" href="browsy://shortcuts" data-nav>
+            <div class="card-glyph">⌘</div>
+            <div class="card-meta">
+              <div class="card-title">Shortcuts</div>
+              <div class="card-sub">Keyboard reference</div>
+            </div>
+          </a>
+        </div>
+      </div>`
+
+  const developerSection = `
+      <div class="settings-section">
+        <div class="col-label">Developer</div>
+        <a class="dev-toggle" href="${devToggleHref}">
+          <span>${devToggleLabel}</span>
+          <span class="dev-toggle-sub">${devToggleSub}</span>
+        </a>
+        ${
+          showDev
+            ? `<div class="dev-panel">
+          <p>Agent API · http://127.0.0.1:${BROWSY_API_PORT} (off by default; token required)</p>
+          <p>Enable API · BROWSY_ENABLE_API=1 or BROWSY_API_TOKEN</p>
+          <p>CDP · localhost:${BROWSY_CDP_PORT} (off by default)</p>
+          <p>Enable CDP · BROWSY_ENABLE_CDP=1 or BROWSY_CDP_PORT</p>
+          <p>MCP · BROWSY_API_TOKEN=… npm run mcp</p>
+        </div>`
+            : ''
+        }
+      </div>`
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -604,52 +754,20 @@ export function renderSettingsPage(showDev = false): string {
   <style>${baseStyles()}</style>
 </head>
 <body>
-  <div class="settings-wrap">
-    <div class="brand">Settings</div>
-    <p class="muted">Preferences</p>
-
-    <div class="section">
-      <div class="section-label">New tab</div>
-      <div class="options">
-        ${renderOption('homepage', 'recent', 'Recent sites', settings.homepage, showDev)}
-        ${renderOption('homepage', 'blank', 'Blank', settings.homepage, showDev)}
-      </div>
-    </div>
-
-    <div class="section">
-      <div class="section-label">Search engine</div>
-      <div class="options">
-        ${renderOption('searchEngine', 'google', 'Google', settings.searchEngine, showDev)}
-        ${renderOption('searchEngine', 'duckduckgo', 'DuckDuckGo', settings.searchEngine, showDev)}
-        ${renderOption('searchEngine', 'bing', 'Bing', settings.searchEngine, showDev)}
-      </div>
-    </div>
-
-    <div class="section">
-      <div class="section-label">On startup</div>
-      <div class="options">
-        ${renderOption('restoreSession', 'always', 'Restore previous tabs', settings.restoreSession, showDev)}
-        ${renderOption('restoreSession', 'never', 'Start fresh', settings.restoreSession, showDev)}
-      </div>
-    </div>
-
-    <div class="section">
-      <a class="dev-toggle" href="${devToggleHref}">${devToggleLabel}</a>
-      ${
-        showDev
-          ? `<div class="dev-panel">
-        <p>Agent API · http://127.0.0.1:${BROWSY_API_PORT} (off by default; token required)</p>
-        <p>Enable API · BROWSY_ENABLE_API=1 or BROWSY_API_TOKEN</p>
-        <p>CDP · localhost:${BROWSY_CDP_PORT} (off by default)</p>
-        <p>Enable CDP · BROWSY_ENABLE_CDP=1 or BROWSY_CDP_PORT</p>
-        <p>MCP · BROWSY_API_TOKEN=… npm run mcp</p>
-      </div>`
-          : ''
-      }
-    </div>
-
-    <a class="footer-link" href="browsy://home">← Home</a>
+  <div class="greeting">Settings</div>
+  <div class="home-layout">
+    <section class="home-col" aria-label="Browsing">
+      ${renderSettingsSection('New tab', newTabOptions)}
+      ${renderSettingsSection('Search engine', searchOptions)}
+      <a class="footer-link settings-home" href="browsy://home">← Home</a>
+    </section>
+    <section class="home-col" aria-label="Session">
+      ${renderSettingsSection('On startup', startupOptions)}
+      ${moreCards}
+      ${developerSection}
+    </section>
   </div>
+  <script>${settingsClientScript()}</script>
 </body>
 </html>`
 }
