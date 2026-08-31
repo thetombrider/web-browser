@@ -122,7 +122,7 @@ export default function App() {
 
   return (
     <>
-      {/* Drag region stays available above spotlight / peek */}
+      {/* Keep the transparent drag region available for moving the window. */}
       {!state.carousel && (
         <Box
           position="fixed"
@@ -133,10 +133,7 @@ export default function App() {
           pointerEvents="none"
           zIndex={1200}
         >
-          <DragRegion
-            peek={!state.chromeVisible}
-            onPeekClick={() => window.browsy.showChrome('navigation')}
-          />
+          <DragRegion />
         </Box>
       )}
 

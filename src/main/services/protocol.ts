@@ -15,7 +15,8 @@ import {
   RECENT_SITES_COUNT,
   type RestoreSession,
   type SearchEngine,
-  type Settings
+  type Settings,
+  type ThemeMode
 } from '../../shared/types'
 
 /** Max items per stacked panel when bookmarks + shortcuts share the right column. */
@@ -27,6 +28,16 @@ const HOME_TIP_SHORTCUTS = [
   ['Ctrl/Cmd + B', 'Bookmarks'],
   [getShortcutsPageShortcut(process.platform).label, 'All shortcuts']
 ] as const
+
+function lightThemeStart(theme: ThemeMode): string {
+  if (theme === 'light') return ''
+  if (theme === 'dark') return '@media not all {'
+  return '@media (prefers-color-scheme: light) {'
+}
+
+function lightThemeEnd(theme: ThemeMode): string {
+  return theme === 'light' ? '' : '}'
+}
 
 function escapeHtml(value: string): string {
   return value
@@ -67,7 +78,7 @@ function renderSiteGlyph(url: string): string {
   </div>`
 }
 
-function baseStyles(): string {
+function baseStyles(theme: ThemeMode): string {
   return `
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -76,15 +87,6 @@ function baseStyles(): string {
       color: #f4f4f5;
       min-height: 100vh;
       padding: ${HOME_PAGE_TOP_PADDING}px 32px 48px;
-    }
-    @media (prefers-color-scheme: light) {
-      body { background: ${APP_SURFACE_LIGHT}; color: #18181b; }
-      .muted { color: #71717a; }
-      .site:hover, .site.selected, .home-card:hover, .home-card.selected, .home-card.kb-selected { background: ${APP_SURFACE_ELEVATED_LIGHT}; }
-      .glyph { background: rgba(0,0,0,0.06); color: #52525b; }
-      .tip-row:hover { background: ${APP_SURFACE_ELEVATED_LIGHT}; }
-      .tip-row kbd { background: rgba(0,0,0,0.06); }
-      .btn { background: #2563eb; }
     }
     .brand {
       font-size: 1.75rem;
@@ -361,10 +363,10 @@ function baseStyles(): string {
       font-weight: 500;
       flex-shrink: 0;
     }
-    @media (prefers-color-scheme: light) {
+    ${lightThemeStart(theme)}
       .option:hover, .option.selected, .option.kb-selected { background: ${APP_SURFACE_ELEVATED_LIGHT}; }
       .option.selected, .option.kb-selected { outline: 1px solid rgba(0,0,0,0.08); }
-    }
+    ${lightThemeEnd(theme)}
     .dev-toggle {
       display: flex;
       align-items: center;
@@ -380,10 +382,10 @@ function baseStyles(): string {
     .dev-toggle:hover, .dev-toggle.kb-selected { background: ${APP_SURFACE_ELEVATED_DARK}; }
     .dev-toggle.kb-selected { outline: 1px solid rgba(255,255,255,0.16); }
     .dev-toggle-sub { margin-left: auto; font-size: 0.75rem; color: #71717a; }
-    @media (prefers-color-scheme: light) {
+    ${lightThemeStart(theme)}
       .dev-toggle:hover, .dev-toggle.kb-selected { background: ${APP_SURFACE_ELEVATED_LIGHT}; }
       .dev-toggle.kb-selected { outline: 1px solid rgba(0,0,0,0.08); }
-    }
+    ${lightThemeEnd(theme)}
     .dev-panel {
       margin-top: 8px;
       padding: 14px 16px;
@@ -393,9 +395,9 @@ function baseStyles(): string {
       line-height: 1.65;
       color: #a1a1aa;
     }
-    @media (prefers-color-scheme: light) {
+    ${lightThemeStart(theme)}
       .dev-panel { background: ${APP_SURFACE_ELEVATED_LIGHT}; color: #52525b; }
-    }
+    ${lightThemeEnd(theme)}
     .dev-panel p { margin-bottom: 4px; }
     .dev-panel p:last-child { margin-bottom: 0; }
     .footer-link {
@@ -413,9 +415,19 @@ function baseStyles(): string {
       background: ${APP_SURFACE_ELEVATED_DARK};
       outline: 1px solid rgba(255,255,255,0.16);
     }
-    @media (prefers-color-scheme: light) {
+    ${lightThemeStart(theme)}
       .footer-link.kb-selected { background: ${APP_SURFACE_ELEVATED_LIGHT}; outline: 1px solid rgba(0,0,0,0.08); }
-    }
+    ${lightThemeEnd(theme)}
+    ${lightThemeStart(theme)}
+      body { background: ${APP_SURFACE_LIGHT}; color: #18181b; }
+      .muted { color: #71717a; }
+      .site:hover, .site.selected, .home-card:hover, .home-card.selected, .home-card.kb-selected { background: ${APP_SURFACE_ELEVATED_LIGHT}; }
+      .site.selected, .home-card.selected, .home-card.kb-selected { outline: 1px solid rgba(0,0,0,0.08); }
+      .glyph { background: rgba(0,0,0,0.06); color: #52525b; }
+      .tip-row:hover { background: ${APP_SURFACE_ELEVATED_LIGHT}; }
+      .tip-row kbd { background: rgba(0,0,0,0.06); }
+      .btn { background: #2563eb; }
+    ${lightThemeEnd(theme)}
   `
 }
 
@@ -519,7 +531,7 @@ export function renderHomePage(): string {
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <style>${baseStyles()}</style>
+   <style>${baseStyles(settings.theme)}</style>
 </head>
 <body>
   <div class="greeting" id="greeting" aria-live="polite">${escapeHtml(greeting)}</div>
@@ -670,7 +682,7 @@ function settingsClientScript(): string {
   `
 }
 
-function applySettingsFromQuery(url: URL): void {
+function applySettingsFromQuery(url: URL): boolean {
   const patch: Partial<Settings> = {}
   const homepage = url.searchParams.get('homepage')
   if (homepage === 'recent' || homepage === 'blank') patch.homepage = homepage
@@ -682,7 +694,11 @@ function applySettingsFromQuery(url: URL): void {
   if (restoreSession === 'always' || restoreSession === 'never') {
     patch.restoreSession = restoreSession as RestoreSession
   }
-  if (Object.keys(patch).length > 0) setSettings(patch)
+  const theme = url.searchParams.get('theme')
+  if (theme === 'light' || theme === 'dark' || theme === 'system') patch.theme = theme
+  if (Object.keys(patch).length === 0) return false
+  setSettings(patch)
+  return true
 }
 
 export function renderSettingsPage(showDev = false): string {
@@ -705,6 +721,12 @@ export function renderSettingsPage(showDev = false): string {
   const startupOptions = [
     renderOption('restoreSession', 'always', 'Restore previous tabs', settings.restoreSession, showDev),
     renderOption('restoreSession', 'never', 'Start fresh', settings.restoreSession, showDev)
+  ].join('')
+
+  const themeOptions = [
+    renderOption('theme', 'light', 'Light', settings.theme, showDev),
+    renderOption('theme', 'dark', 'Dark', settings.theme, showDev),
+    renderOption('theme', 'system', 'System', settings.theme, showDev)
   ].join('')
 
   const moreCards = `
@@ -757,12 +779,13 @@ export function renderSettingsPage(showDev = false): string {
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <style>${baseStyles()}</style>
+   <style>${baseStyles(settings.theme)}</style>
 </head>
 <body>
   <div class="greeting">Settings</div>
   <div class="home-layout">
     <section class="home-col" aria-label="Browsing">
+      ${renderSettingsSection('Theme', themeOptions)}
       ${renderSettingsSection('New tab', newTabOptions)}
       ${renderSettingsSection('Search engine', searchOptions)}
     </section>
@@ -790,7 +813,7 @@ export function renderErrorPage(url: string, errorCode: number, errorDescription
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <style>${baseStyles()}</style>
+   <style>${baseStyles(getSettings().theme)}</style>
 </head>
 <body class="error-page">
   <div class="error-wrap">
@@ -852,7 +875,7 @@ function renderNotFoundPage(url: string): string {
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <style>
-    ${baseStyles()}
+     ${baseStyles(getSettings().theme)}
     .not-found-wrap { width: 100%; max-width: 560px; padding: 24px; }
     .not-found-code { color: #3b82f6; font-family: "IBM Plex Mono", Menlo, Consolas, monospace; font-size: 5rem; font-weight: 500; letter-spacing: -0.08em; line-height: 1; margin-bottom: 20px; }
     .not-found-title { font-size: 1.5rem; font-weight: 600; letter-spacing: -0.03em; margin-bottom: 8px; }
@@ -920,7 +943,7 @@ function renderNotFoundPage(url: string): string {
 </html>`
 }
 
-export function setupProtocolHandler(): void {
+export function setupProtocolHandler(onSettingsChanged?: () => void): void {
   protocol.handle('browsy', async (request) => {
     const url = new URL(request.url)
 
@@ -937,7 +960,7 @@ export function setupProtocolHandler(): void {
     }
 
     if (url.hostname === 'settings' || url.pathname === '/settings') {
-      applySettingsFromQuery(url)
+      if (applySettingsFromQuery(url)) onSettingsChanged?.()
       const showDev = url.searchParams.get('dev') === '1'
       return new Response(renderSettingsPage(showDev), {
         headers: { 'Content-Type': 'text/html; charset=utf-8' }

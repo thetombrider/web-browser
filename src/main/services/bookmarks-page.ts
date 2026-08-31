@@ -1,12 +1,23 @@
-import { getBookmarks } from './store'
+import { getBookmarks, getSettings } from './store'
 import { isAllowedNavigationUrl } from '../../shared/utils'
 import type { Bookmark } from '../../shared/types'
 import {
   APP_SURFACE_DARK,
   APP_SURFACE_ELEVATED_DARK,
   APP_SURFACE_ELEVATED_LIGHT,
-  APP_SURFACE_LIGHT
+  APP_SURFACE_LIGHT,
+  type ThemeMode
 } from '../../shared/types'
+
+function lightThemeStart(theme: ThemeMode): string {
+  if (theme === 'light') return ''
+  if (theme === 'dark') return '@media not all {'
+  return '@media (prefers-color-scheme: light) {'
+}
+
+function lightThemeEnd(theme: ThemeMode): string {
+  return theme === 'light' ? '' : '}'
+}
 
 function escapeHtml(value: string): string {
   return value
@@ -73,7 +84,7 @@ export function groupBookmarksByDomain(bookmarks: Bookmark[]): BookmarkGroup[] {
   return groups
 }
 
-function pageStyles(): string {
+function pageStyles(theme: ThemeMode): string {
   return `
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -82,19 +93,6 @@ function pageStyles(): string {
       color: #f4f4f5;
       min-height: 100vh;
       padding: 48px 32px 64px;
-    }
-    @media (prefers-color-scheme: light) {
-      body { background: ${APP_SURFACE_LIGHT}; color: #18181b; }
-      .muted, .hint, .count, .path, .empty { color: #71717a; }
-      .filter {
-        background: ${APP_SURFACE_ELEVATED_LIGHT};
-        border-color: rgba(0,0,0,0.08);
-        color: #18181b;
-      }
-      .filter:focus { border-color: rgba(0,0,0,0.22); }
-      .domain-head:hover, .row:hover, .row.selected { background: ${APP_SURFACE_ELEVATED_LIGHT}; }
-      .glyph { background: rgba(0,0,0,0.06); color: #52525b; }
-      .chevron { color: #a1a1aa; }
     }
     .wrap { max-width: 640px; margin: 0 auto; }
     .brand {
@@ -228,6 +226,20 @@ function pageStyles(): string {
       text-decoration: none;
     }
     .footer-link:hover { color: inherit; }
+    ${lightThemeStart(theme)}
+      body { background: ${APP_SURFACE_LIGHT}; color: #18181b; }
+      .muted, .hint, .count, .path, .empty { color: #71717a; }
+      .filter {
+        background: ${APP_SURFACE_ELEVATED_LIGHT};
+        border-color: rgba(0,0,0,0.08);
+        color: #18181b;
+      }
+      .filter:focus { border-color: rgba(0,0,0,0.22); }
+      .domain-head:hover, .row:hover, .row.selected { background: ${APP_SURFACE_ELEVATED_LIGHT}; }
+      .row.selected { outline: 1px solid rgba(0,0,0,0.08); }
+      .glyph { background: rgba(0,0,0,0.06); color: #52525b; }
+      .chevron { color: #a1a1aa; }
+    ${lightThemeEnd(theme)}
   `
 }
 
@@ -340,6 +352,7 @@ function clientScript(): string {
 }
 
 export function renderBookmarksPage(bookmarksOverride?: Bookmark[]): string {
+  const theme = getSettings().theme
   const bookmarks = (bookmarksOverride ?? getBookmarks()).filter((b) => isAllowedNavigationUrl(b.url))
   const groups = groupBookmarksByDomain(bookmarks)
 
@@ -389,7 +402,7 @@ export function renderBookmarksPage(bookmarksOverride?: Bookmark[]): string {
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <style>${pageStyles()}</style>
+   <style>${pageStyles(theme)}</style>
 </head>
 <body>
   <div class="wrap">

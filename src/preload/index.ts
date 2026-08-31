@@ -6,6 +6,7 @@ import {
   type BrowserState,
   type ChromePanel,
   type PopupRequest,
+  type Settings,
   type ThumbnailFailedPayload,
   type ThumbnailReadyPayload,
   type ToastPayload
@@ -39,6 +40,11 @@ const api: BrowsyAPI = {
   getRecentSites: () => ipcRenderer.invoke(IPC.GET_RECENT_SITES),
   getSettings: () => ipcRenderer.invoke(IPC.GET_SETTINGS),
   setSettings: (settings) => ipcRenderer.invoke(IPC.SET_SETTINGS, settings),
+  onSettingsChanged: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, settings: Settings) => callback(settings)
+    ipcRenderer.on(IPC.SETTINGS_CHANGED, handler)
+    return () => ipcRenderer.removeListener(IPC.SETTINGS_CHANGED, handler)
+  },
   onStateChanged: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, state: BrowserState) => callback(state)
     ipcRenderer.on(IPC.STATE_CHANGED, handler)

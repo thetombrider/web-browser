@@ -16,6 +16,7 @@ const defaults: StoreSchema = {
     homepage: 'recent',
     searchEngine: 'google',
     restoreSession: 'always',
+    theme: 'system',
     hasSeenShortcutTip: false
   }
 }

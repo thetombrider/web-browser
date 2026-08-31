@@ -17,6 +17,10 @@ protocol.registerSchemesAsPrivileged([
   }
 ])
 
+// Restored pages may try to resume media while they load in the background.
+// Require a user gesture so session restore never starts audio on its own.
+app.commandLine.appendSwitch('autoplay-policy', 'user-gesture-required')
+
 function shouldEnableCdp(): boolean {
   return process.env.BROWSY_ENABLE_CDP === '1' || Boolean(process.env.BROWSY_CDP_PORT)
 }

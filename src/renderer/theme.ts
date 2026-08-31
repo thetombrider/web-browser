@@ -8,7 +8,8 @@ import {
 
 const config: ThemeConfig = {
   initialColorMode: 'system',
-  useSystemColorMode: true
+  // Theme selection is persisted in Browsy settings and synced by ThemeSync.
+  useSystemColorMode: false
 }
 
 export const theme = extendTheme({

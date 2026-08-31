@@ -5,6 +5,18 @@ import {
   APP_SURFACE_LIGHT
 } from '../../shared/types'
 import { getShortcutsPageShortcut } from '../../shared/shortcuts'
+import { getSettings } from './store'
+import type { ThemeMode } from '../../shared/types'
+
+function lightThemeStart(theme: ThemeMode): string {
+  if (theme === 'light') return ''
+  if (theme === 'dark') return '@media not all {'
+  return '@media (prefers-color-scheme: light) {'
+}
+
+function lightThemeEnd(theme: ThemeMode): string {
+  return theme === 'light' ? '' : '}'
+}
 
 const SHORTCUTS = [
   ['Ctrl/Cmd + L', 'Open launcher (Spotlight)'],
@@ -16,15 +28,15 @@ const SHORTCUTS = [
   ['Ctrl/Cmd + B', 'Bookmarks page'],
   ['Ctrl/Cmd + ,', 'Settings'],
   ['Ctrl/Cmd + R', 'Reload'],
-  ['Ctrl/Cmd + [', 'Back'],
-  ['Ctrl/Cmd + ]', 'Forward'],
-  ['Ctrl/Cmd + N', 'New window'],
+  ['Ctrl/Cmd + P', 'Previous page'],
+  ['Ctrl/Cmd + N', 'Next page'],
+  ['Ctrl/Cmd + Shift + N', 'New window'],
   ['SHORTCUTS_PAGE_SHORTCUT', 'This shortcut list'],
   ['Enter', 'Open selection in launcher or switcher'],
   ['Esc', 'Dismiss launcher or switcher']
 ] as const
 
-function pageStyles(): string {
+function pageStyles(theme: ThemeMode): string {
   return `
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -33,12 +45,6 @@ function pageStyles(): string {
       color: #f4f4f5;
       min-height: 100vh;
       padding: 48px 32px 48px;
-    }
-    @media (prefers-color-scheme: light) {
-      body { background: ${APP_SURFACE_LIGHT}; color: #18181b; }
-      .muted { color: #71717a; }
-      .shortcut:hover { background: ${APP_SURFACE_ELEVATED_LIGHT}; }
-      kbd { background: rgba(0,0,0,0.06); }
     }
     .wrap { max-width: 620px; margin: 0 auto; }
     .brand {
@@ -77,10 +83,17 @@ function pageStyles(): string {
       text-decoration: none;
     }
     .footer-link:hover { color: inherit; }
+    ${lightThemeStart(theme)}
+      body { background: ${APP_SURFACE_LIGHT}; color: #18181b; }
+      .muted { color: #71717a; }
+      .shortcut:hover { background: ${APP_SURFACE_ELEVATED_LIGHT}; }
+      kbd { background: rgba(0,0,0,0.06); }
+    ${lightThemeEnd(theme)}
   `
 }
 
 export function renderShortcutsPage(): string {
+  const theme = getSettings().theme
   const shortcutsPageShortcut = getShortcutsPageShortcut(process.platform).label
   const rows = SHORTCUTS.map(
     ([keys, label]) => `
@@ -99,7 +112,7 @@ export function renderShortcutsPage(): string {
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <style>${pageStyles()}</style>
+   <style>${pageStyles(theme)}</style>
 </head>
 <body>
   <main class="wrap">

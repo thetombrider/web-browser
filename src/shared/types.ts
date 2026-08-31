@@ -16,7 +16,6 @@ export const APP_SURFACE_ELEVATED_DARK = '#1a1a1f'
 export const CHROME_NAV_HEIGHT = 100
 export const CHROME_PANEL_HEIGHT = 280
 export const CHROME_DRAG_HEIGHT = 32
-export const CHROME_PEEK_HEIGHT = 6
 /** Top padding on browsy:// internal pages (below the chrome strip). */
 export const HOME_PAGE_TOP_PADDING = 48
 
@@ -24,6 +23,7 @@ export type ChromePanel = 'navigation' | 'bookmarks' | null
 
 export type SearchEngine = 'google' | 'duckduckgo' | 'bing'
 export type RestoreSession = 'always' | 'never'
+export type ThemeMode = 'light' | 'dark' | 'system'
 
 export interface TabState {
   id: string
@@ -85,6 +85,7 @@ export interface Settings {
   homepage: 'recent' | 'blank'
   searchEngine: SearchEngine
   restoreSession: RestoreSession
+  theme: ThemeMode
   hasSeenShortcutTip: boolean
 }
 
@@ -128,6 +129,7 @@ export const IPC = {
   GET_RECENT_SITES: 'browser:get-recent-sites',
   GET_SETTINGS: 'browser:get-settings',
   SET_SETTINGS: 'browser:set-settings',
+  SETTINGS_CHANGED: 'browser:settings-changed',
   POPUP_REQUEST: 'browser:popup-request',
   POPUP_RESPONSE: 'browser:popup-response',
   THUMBNAIL_READY: 'browser:thumbnail-ready',
@@ -176,6 +178,7 @@ export interface BrowsyAPI {
   getRecentSites: () => Promise<HistoryEntry[]>
   getSettings: () => Promise<Settings>
   setSettings: (settings: Partial<Settings>) => Promise<Settings>
+  onSettingsChanged: (callback: (settings: Settings) => void) => () => void
   onStateChanged: (callback: (state: BrowserState) => void) => () => void
   onPopupRequest: (callback: (request: PopupRequest) => void) => () => void
   onThumbnailReady: (callback: (payload: ThumbnailReadyPayload) => void) => () => void

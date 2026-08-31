@@ -78,7 +78,7 @@ export class WindowManager {
   }
 
   async initialize(): Promise<void> {
-    setupProtocolHandler()
+    setupProtocolHandler(() => this.broadcastSettings())
     this.registerIpc()
     this.apiServer?.start()
 
@@ -581,6 +581,9 @@ export class WindowManager {
       else if (key === 'd') action = 'bookmark-page'
       else if (key === ',') action = 'settings'
       else if (key === '/' || key === '?' || code === 'Slash') action = 'shortcuts'
+      else if (key === 'p') action = 'back'
+      else if (key === 'n' && !input.shift) action = 'forward'
+      else if (key === 'n' && input.shift) action = 'new-window'
       else if (input.meta && (key === 'arrowright' || code === 'ArrowRight')) action = 'next-tab'
       else if (input.meta && (key === 'arrowleft' || code === 'ArrowLeft')) action = 'prev-tab'
 
@@ -677,6 +680,15 @@ export class WindowManager {
     if (!entry || entry.chromeView.webContents.isDestroyed()) return
     const state = this.buildState(entry.tabs)
     entry.chromeView.webContents.send(IPC.STATE_CHANGED, state)
+  }
+
+  private broadcastSettings(): void {
+    const settings = getSettings()
+    for (const entry of this.windows.values()) {
+      if (!entry.chromeView.webContents.isDestroyed()) {
+        entry.chromeView.webContents.send(IPC.SETTINGS_CHANGED, settings)
+      }
+    }
   }
 
   private getEntryFromEvent(event: IpcMainEvent | IpcMainInvokeEvent): BrowserWindowEntry | null {
@@ -873,7 +885,9 @@ export class WindowManager {
     ipcMain.handle(IPC.SET_SETTINGS, (_event, settings) => {
       const patch = parseSettingsPatch(settings)
       if (!patch) return getSettings()
-      return setSettings(patch)
+      const next = setSettings(patch)
+      this.broadcastSettings()
+      return next
     })
 
     ipcMain.handle(IPC.POPUP_RESPONSE, (event, id: string, allow: boolean) => {

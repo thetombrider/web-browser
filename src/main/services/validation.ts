@@ -5,12 +5,14 @@ import type { Settings } from '../../shared/types'
 const searchEngineSchema = z.enum(['google', 'duckduckgo', 'bing'])
 const homepageSchema = z.enum(['recent', 'blank'])
 const restoreSessionSchema = z.enum(['always', 'never'])
+const themeSchema = z.enum(['light', 'dark', 'system'])
 
 export const settingsPatchSchema = z
   .object({
     homepage: homepageSchema,
     searchEngine: searchEngineSchema,
     restoreSession: restoreSessionSchema,
+    theme: themeSchema,
     hasSeenShortcutTip: z.boolean()
   })
   .partial()
