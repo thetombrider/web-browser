@@ -176,7 +176,7 @@ export function Omnibox({
   return (
     <Box>
       <Box px={3} pt={3} pb={0}>
-        <HStack spacing={2} role="listbox" aria-label="Quick actions" mb={2.5}>
+        <HStack spacing={1} role="listbox" aria-label="Quick actions" mb={1.5}>
           {SPOTLIGHT_QUICK_ACTIONS.map((action, index) => {
             const selected = index === activeIndex
             return (
@@ -188,12 +188,10 @@ export function Omnibox({
                 minW={0}
                 px={2.5}
                 py={2}
-                borderRadius="lg"
-                border="1px solid"
-                borderColor={selected ? 'browsy.focusBorder' : 'browsy.border'}
-                bg={selected ? 'browsy.active' : 'browsy.input'}
+                borderRadius="md"
+                bg={selected ? 'browsy.active' : 'transparent'}
                 cursor="pointer"
-                transition="background 0.12s ease, border-color 0.12s ease"
+                transition="background 0.12s ease"
                 _hover={{ bg: selected ? 'browsy.active' : 'browsy.hover' }}
                 onMouseEnter={() => setActiveIndex(index)}
                 onMouseDown={(e) => {
@@ -201,30 +199,25 @@ export function Omnibox({
                   choose(action)
                 }}
               >
-                <HStack spacing={2} align="center">
-                  <Box
-                    w="22px"
-                    h="22px"
-                    borderRadius="sm"
-                    bg="browsy.glyph"
-                    display="flex"
-                    alignItems="center"
-                    justifyContent="center"
-                    fontSize="11px"
+                <HStack spacing={2} align="center" justify="center">
+                  <Text
+                    fontSize="xs"
                     fontWeight="600"
-                    color="browsy.muted"
+                    color={selected ? 'browsy.ink' : 'browsy.muted'}
+                    lineHeight={1}
                     flexShrink={0}
                   >
                     {action.glyph}
-                  </Box>
-                  <Box minW={0}>
-                    <Text fontSize="sm" fontWeight="600" noOfLines={1}>
-                      {action.title}
-                    </Text>
-                    <Text fontSize="xs" color="browsy.muted" noOfLines={1}>
-                      {action.subtitle}
-                    </Text>
-                  </Box>
+                  </Text>
+                  <Text
+                    fontSize="sm"
+                    fontWeight={selected ? '600' : '500'}
+                    color={selected ? 'browsy.ink' : 'browsy.ink'}
+                    opacity={selected ? 1 : 0.72}
+                    noOfLines={1}
+                  >
+                    {action.title}
+                  </Text>
                 </HStack>
               </Box>
             )
