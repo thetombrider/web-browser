@@ -1,8 +1,8 @@
 import { protocol } from 'electron'
-import { getRecentSites, getSettings, setSettings } from './store'
+import { getBookmarks, getRecentSites, getSettings, setSettings } from './store'
 import { renderBookmarksPage } from './bookmarks-page'
 import { renderShortcutsPage } from './shortcuts-page'
-import { isAllowedNavigationUrl, sanitizeNavigationUrl } from '../../shared/utils'
+import { faviconUrlForPage, isAllowedNavigationUrl, sanitizeNavigationUrl } from '../../shared/utils'
 import {
   APP_SURFACE_DARK,
   APP_SURFACE_ELEVATED_DARK,
@@ -16,6 +16,16 @@ import {
   type SearchEngine,
   type Settings
 } from '../../shared/types'
+
+/** Max items per stacked panel when bookmarks + shortcuts share the right column. */
+const HOME_PANEL_COUNT_MAX = 4
+const HOME_TIP_SHORTCUTS = [
+  ['Ctrl/Cmd + L', 'Address bar'],
+  ['Ctrl/Cmd + T', 'New tab'],
+  ['Ctrl/Cmd + D', 'Bookmark page'],
+  ['Ctrl/Cmd + B', 'Bookmarks'],
+  ['Ctrl/Cmd + /', 'All shortcuts']
+] as const
 
 function escapeHtml(value: string): string {
   return value
@@ -44,6 +54,18 @@ function letterForUrl(url: string): string {
   }
 }
 
+function renderSiteGlyph(url: string): string {
+  const letter = escapeHtml(letterForUrl(url))
+  const favicon = faviconUrlForPage(url)
+  if (!favicon) {
+    return `<div class="glyph" aria-hidden="true">${letter}</div>`
+  }
+  return `<div class="glyph" aria-hidden="true">
+    <span class="glyph-letter">${letter}</span>
+    <img class="favicon" src="${escapeHtml(favicon)}" alt="" width="16" height="16" loading="lazy" decoding="async" onerror="this.remove()" />
+  </div>`
+}
+
 function baseStyles(): string {
   return `
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -59,20 +81,64 @@ function baseStyles(): string {
       .muted { color: #71717a; }
       .site:hover, .site.selected, .home-card:hover, .home-card.selected { background: ${APP_SURFACE_ELEVATED_LIGHT}; }
       .glyph { background: rgba(0,0,0,0.06); color: #52525b; }
+      .tip-row:hover { background: ${APP_SURFACE_ELEVATED_LIGHT}; }
+      .tip-row kbd { background: rgba(0,0,0,0.06); }
       .btn { background: #2563eb; }
     }
     .brand {
       font-size: 1.75rem;
       font-weight: 600;
       letter-spacing: -0.03em;
-      margin-bottom: 4px;
+      margin-bottom: 28px;
+    }
+    .greeting {
+      font-size: 1.75rem;
+      font-weight: 600;
+      letter-spacing: -0.03em;
+      text-align: center;
+      margin: 8px 0 36px;
     }
     .muted { color: #a1a1aa; margin-bottom: 28px; font-size: 0.9rem; }
+    .home-layout {
+      display: grid;
+      grid-template-columns: minmax(260px, 1fr) minmax(240px, 1fr);
+      gap: 48px 56px;
+      align-items: start;
+      max-width: 920px;
+      margin: 0 auto;
+    }
+    @media (max-width: 820px) {
+      .home-layout { grid-template-columns: 1fr; gap: 36px; }
+    }
+    .home-col {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .home-col > .list,
+    .home-col > .home-cards,
+    .home-col > .empty,
+    .home-col > .right-stack,
+    .home-col > .right-panel,
+    .home-col > .col-label {
+      width: 100%;
+      max-width: 360px;
+    }
+    .col-label {
+      font-size: 0.7rem;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #71717a;
+      margin-bottom: 10px;
+      text-align: left;
+      padding: 0 12px;
+    }
     .list {
       display: flex;
       flex-direction: column;
       gap: 2px;
-      max-width: 520px;
     }
     .site {
       display: flex;
@@ -90,7 +156,6 @@ function baseStyles(): string {
       display: flex;
       flex-direction: column;
       gap: 2px;
-      max-width: 520px;
       margin-top: 24px;
     }
     .home-card {
@@ -122,6 +187,7 @@ function baseStyles(): string {
     .card-title { font-weight: 500; font-size: 0.925rem; }
     .card-sub { font-size: 0.75rem; color: #71717a; }
     .glyph {
+      position: relative;
       width: 28px;
       height: 28px;
       border-radius: 6px;
@@ -133,6 +199,16 @@ function baseStyles(): string {
       font-size: 0.75rem;
       font-weight: 600;
       flex-shrink: 0;
+      overflow: hidden;
+    }
+    .glyph-letter { line-height: 1; }
+    .favicon {
+      position: absolute;
+      inset: 0;
+      margin: auto;
+      width: 16px;
+      height: 16px;
+      object-fit: contain;
     }
     .site-meta { min-width: 0; }
     .site-title {
@@ -149,7 +225,61 @@ function baseStyles(): string {
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    .empty { color: #71717a; font-size: 0.9rem; max-width: 420px; line-height: 1.5; }
+    .right-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+      min-width: 0;
+      align-items: center;
+    }
+    .right-panel {
+      min-width: 0;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .right-panel > .list,
+    .right-panel > .tip-list,
+    .right-panel > .col-label {
+      width: 100%;
+    }
+    .col-footer {
+      display: inline-block;
+      margin-top: 10px;
+      padding: 0 12px;
+      font-size: 0.8rem;
+      color: #71717a;
+      text-decoration: none;
+      text-align: center;
+    }
+    .col-footer:hover { color: inherit; }
+    .tip-list { display: flex; flex-direction: column; gap: 2px; }
+    .tip-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 0.875rem;
+    }
+    .tip-row:hover { background: ${APP_SURFACE_ELEVATED_DARK}; }
+    .tip-row kbd {
+      background: rgba(255,255,255,0.08);
+      border-radius: 6px;
+      color: #a1a1aa;
+      font-family: "IBM Plex Mono", Menlo, Consolas, monospace;
+      font-size: 0.72rem;
+      padding: 4px 7px;
+      white-space: nowrap;
+    }
+    /* Stacked panels: show 3 by default, 4th when the viewport is tall enough. */
+    .clip-list > .clip-item:nth-child(n+4) { display: none; }
+    @media (min-height: 760px) {
+      .clip-list > .clip-item:nth-child(4) { display: flex; }
+    }
+    .empty { color: #71717a; font-size: 0.9rem; max-width: 420px; line-height: 1.5; padding: 0 12px; text-align: center; }
     .error-wrap { max-width: 520px; padding-top: 24px; }
     .error-title { font-size: 1.35rem; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 8px; }
     .error-msg { margin-bottom: 12px; line-height: 1.5; color: #a1a1aa; }
@@ -243,6 +373,75 @@ function baseStyles(): string {
   `
 }
 
+function renderHomeSiteRow(url: string, title: string, clip = false): string {
+  const clipClass = clip ? ' clip-item' : ''
+  return `
+        <a class="site${clipClass}" href="${escapeHtml(url)}">
+          ${renderSiteGlyph(url)}
+          <div class="site-meta">
+            <div class="site-title">${escapeHtml(getSiteName(title, url))}</div>
+            <div class="site-url">${escapeHtml(url)}</div>
+          </div>
+        </a>`
+}
+
+function renderShortcutsPanel(count: number, clip: boolean): string {
+  const tips = HOME_TIP_SHORTCUTS.slice(0, count)
+    .map(
+      ([keys, label]) => `
+        <div class="tip-row${clip ? ' clip-item' : ''}">
+          <span>${escapeHtml(label)}</span>
+          <kbd>${escapeHtml(keys)}</kbd>
+        </div>`
+    )
+    .join('')
+
+  return `
+      <div class="right-panel" aria-label="Shortcuts">
+        <div class="col-label">Shortcuts</div>
+        <div class="tip-list${clip ? ' clip-list' : ''}">${tips}</div>
+        <a class="col-footer" href="browsy://shortcuts">View all shortcuts</a>
+      </div>`
+}
+
+function renderBookmarksPanel(bookmarks: { url: string; title: string }[], clip: boolean): string {
+  const rows = bookmarks.map((bookmark) => renderHomeSiteRow(bookmark.url, bookmark.title, clip)).join('')
+  return `
+      <div class="right-panel" aria-label="Bookmarks">
+        <div class="col-label">Bookmarks</div>
+        <div class="list${clip ? ' clip-list' : ''}">${rows}</div>
+        <a class="col-footer" href="browsy://bookmarks">View all bookmarks</a>
+      </div>`
+}
+
+function renderHomeRightColumn(): string {
+  const bookmarks = getBookmarks()
+    .filter((bookmark) => isAllowedNavigationUrl(bookmark.url))
+    .slice(0, HOME_PANEL_COUNT_MAX)
+
+  if (bookmarks.length === 0) {
+    return `
+    <section class="home-col">
+      ${renderShortcutsPanel(HOME_TIP_SHORTCUTS.length, false)}
+    </section>`
+  }
+
+  return `
+    <section class="home-col">
+      <div class="right-stack">
+        ${renderBookmarksPanel(bookmarks, true)}
+        ${renderShortcutsPanel(HOME_PANEL_COUNT_MAX, true)}
+      </div>
+    </section>`
+}
+
+function greetingForHour(hour: number): string {
+  if (hour >= 5 && hour < 12) return 'Good morning'
+  if (hour >= 12 && hour < 17) return 'Good afternoon'
+  if (hour >= 17 && hour < 21) return 'Good evening'
+  return 'Good night'
+}
+
 export function renderHomePage(): string {
   const settings = getSettings()
   const recent = (settings.homepage === 'blank' ? [] : getRecentSites(RECENT_SITES_COUNT)).filter((site) =>
@@ -251,18 +450,19 @@ export function renderHomePage(): string {
   const sitesHtml =
     recent.length === 0
       ? '<p class="empty">Type a URL or search above to get started.</p>'
-      : `<div class="list">${recent
-          .map(
-            (site) => `
-        <a class="site" href="${escapeHtml(site.url)}">
-          <div class="glyph">${escapeHtml(letterForUrl(site.url))}</div>
-          <div class="site-meta">
-            <div class="site-title">${escapeHtml(getSiteName(site.title, site.url))}</div>
-            <div class="site-url">${escapeHtml(site.url)}</div>
-          </div>
-        </a>`
-          )
-          .join('')}</div>`
+      : `<div class="list">${recent.map((site) => renderHomeSiteRow(site.url, site.title)).join('')}</div>`
+  const greeting = greetingForHour(new Date().getHours())
+
+  const navCards = `
+  <div class="home-cards">
+    <a class="home-card" href="browsy://settings" data-nav>
+      <div class="card-glyph">⚙</div>
+      <div class="card-meta">
+        <div class="card-title">Settings</div>
+        <div class="card-sub">Preferences</div>
+      </div>
+    </a>
+  </div>`
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -276,33 +476,15 @@ export function renderHomePage(): string {
   <style>${baseStyles()}</style>
 </head>
 <body>
-  <div class="brand">Browsy</div>
-  <p class="muted">${recent.length === 0 ? 'A quieter place to browse' : 'Recent'}</p>
-  ${sitesHtml}
-  ${recent.length === 0 ? '' : `
-  <div class="home-cards">
-    <a class="home-card" href="browsy://shortcuts" data-nav>
-      <div class="card-glyph">⌘</div>
-      <div class="card-meta">
-        <div class="card-title">Shortcuts</div>
-        <div class="card-sub">Keyboard reference</div>
-      </div>
-    </a>
-    <a class="home-card" href="browsy://bookmarks" data-nav>
-      <div class="card-glyph">★</div>
-      <div class="card-meta">
-        <div class="card-title">Bookmarks</div>
-        <div class="card-sub">Saved pages</div>
-      </div>
-    </a>
-    <a class="home-card" href="browsy://settings" data-nav>
-      <div class="card-glyph">⚙</div>
-      <div class="card-meta">
-        <div class="card-title">Settings</div>
-        <div class="card-sub">Preferences</div>
-      </div>
-    </a>
-  </div>`}
+  <div class="greeting" id="greeting" aria-live="polite">${escapeHtml(greeting)}</div>
+  <div class="home-layout">
+    <section class="home-col" aria-label="Recent">
+      <div class="col-label">${recent.length === 0 ? 'Home' : 'Recent'}</div>
+      ${sitesHtml}
+      ${navCards}
+    </section>
+    ${renderHomeRightColumn()}
+  </div>
   <script>${homeClientScript()}</script>
 </body>
 </html>`
@@ -311,6 +493,20 @@ export function renderHomePage(): string {
 function homeClientScript(): string {
   return `
     (function () {
+      var greetingEl = document.getElementById('greeting');
+      function greetingForHour(hour) {
+        if (hour >= 5 && hour < 12) return 'Good morning';
+        if (hour >= 12 && hour < 17) return 'Good afternoon';
+        if (hour >= 17 && hour < 21) return 'Good evening';
+        return 'Good night';
+      }
+      function updateGreeting() {
+        if (!greetingEl) return;
+        greetingEl.textContent = greetingForHour(new Date().getHours());
+      }
+      updateGreeting();
+      setInterval(updateGreeting, 60000);
+
       var rows = Array.from(document.querySelectorAll('.site, .home-card'));
       if (!rows.length) return;
       var selectedIndex = -1;
