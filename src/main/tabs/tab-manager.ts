@@ -1,7 +1,7 @@
 import {
+  BrowserWindow,
   WebContentsView,
   dialog,
-  type BrowserWindow,
   type DownloadItem,
   type Event,
   type HandlerDetails
@@ -21,7 +21,15 @@ export interface Tab {
 
 export type TabUpdateCallback = () => void
 export type PopupCallback = (id: string, url: string) => void
+export type PopupClosedCallback = (id: string) => void
 export type ShortcutCallback = (action: string) => void
+
+interface PendingPopup {
+  url: string
+  popup: BrowserWindow | null
+  ready: boolean
+  decision: boolean | null
+}
 export type LayoutCallback = () => void
 export type CarouselOpenCallback = () => boolean
 
@@ -31,12 +39,14 @@ export class TabManager {
   private chromeVisible = false
   private chromePanel: ChromePanel = null
   private chromeFocusToken = 0
-  private pendingPopups = new Map<string, (allow: boolean) => void>()
+  private pendingPopups = new Map<string, PendingPopup>()
+  private destroying = false
 
   constructor(
     private window: BrowserWindow,
     private onUpdate: TabUpdateCallback,
     private onPopup: PopupCallback,
+    private onPopupClosed: PopupClosedCallback,
     private onShortcut: ShortcutCallback,
     private onLayout: LayoutCallback,
     private isCarouselOpen: CarouselOpenCallback
@@ -45,14 +55,17 @@ export class TabManager {
   }
 
   getTabs(): Tab[] {
+    this.pruneDestroyedTabs()
     return this.tabs
   }
 
   getActiveTab(): Tab | null {
-    return this.tabs.find((t) => t.id === this.activeTabId) ?? null
+    this.pruneDestroyedTabs()
+    return this.tabs.find((t) => t?.id === this.activeTabId) ?? null
   }
 
   getActiveTabId(): string | null {
+    this.pruneDestroyedTabs()
     return this.activeTabId
   }
 
@@ -83,16 +96,16 @@ export class TabManager {
     this.chromePanel = null
     this.onLayout()
     this.onUpdate()
-    const active = this.getActiveTab()
-    if (active && !active.view.webContents.isDestroyed()) {
-      active.view.webContents.focus()
+    const activeWc = this.getActiveTab()?.view?.webContents
+    if (activeWc && !activeWc.isDestroyed()) {
+      activeWc.focus()
     }
   }
 
   /** Tab still on the default new-tab page (not navigated away). */
   private isNewTabPage(tab: Tab): boolean {
-    const wc = tab.view.webContents
-    if (wc.isDestroyed()) return false
+    const wc = tab?.view?.webContents
+    if (!wc || wc.isDestroyed()) return false
     const url = wc.getURL()
     return !url || url === 'browsy://home' || url.startsWith('browsy://home')
   }
@@ -162,7 +175,10 @@ export class TabManager {
     this.onLayout()
     // Keep the user's current chrome state when moving between tabs.
     if (this.chromeVisible) this.chromeFocusToken += 1
-    else if (!tab.view.webContents.isDestroyed()) tab.view.webContents.focus()
+    else {
+      const wc = tab?.view?.webContents
+      if (wc && !wc.isDestroyed()) wc.focus()
+    }
     this.onUpdate()
   }
 
@@ -213,7 +229,8 @@ export class TabManager {
     if (!active) return Promise.resolve()
     const safeUrl = sanitizeNavigationUrl(input)
     if (!safeUrl) return Promise.resolve()
-    return active.view.webContents.loadURL(safeUrl)
+    const wc = active.view?.webContents
+    return wc && !wc.isDestroyed() ? wc.loadURL(safeUrl) : Promise.resolve()
   }
 
   goBack(): void {
@@ -255,7 +272,11 @@ export class TabManager {
   }
 
   getTabStates(): TabState[] {
-    return this.tabs.map((tab) => this.toTabState(tab))
+    this.pruneDestroyedTabs()
+    return this.tabs.flatMap((tab) => {
+      const state = this.toTabState(tab)
+      return state ? [state] : []
+    })
   }
 
   async captureThumbnail(tabId: string): Promise<string | null> {
@@ -278,18 +299,41 @@ export class TabManager {
   }
 
   getSessionTabs(): { url: string; active: boolean }[] {
-    return this.tabs.map((tab) => ({
-      url: sanitizeNavigationUrl(tab.view.webContents.getURL()) ?? 'browsy://home',
-      active: tab.id === this.activeTabId
-    }))
+    this.pruneDestroyedTabs()
+    return this.tabs.flatMap((tab) => {
+      const wc = tab?.view?.webContents
+      if (!wc || wc.isDestroyed()) return []
+      return [
+        {
+          url: sanitizeNavigationUrl(wc.getURL()) ?? 'browsy://home',
+          active: tab.id === this.activeTabId
+        }
+      ]
+    })
   }
 
   respondToPopup(id: string, allow: boolean): void {
-    const resolver = this.pendingPopups.get(id)
-    if (resolver) {
-      resolver(allow)
+    const pending = this.pendingPopups.get(id)
+    if (!pending) return
+
+    pending.decision = allow
+    if (!allow) {
       this.pendingPopups.delete(id)
+      this.onPopupClosed(id)
+      if (pending.popup && !pending.popup.isDestroyed()) pending.popup.close()
+      return
     }
+    this.maybeShowPopup(id, pending)
+  }
+
+  private maybeShowPopup(id: string, pending: PendingPopup): void {
+    if (!pending.ready || pending.decision !== true || !pending.popup) return
+    if (pending.popup.isDestroyed()) {
+      this.pendingPopups.delete(id)
+      return
+    }
+    pending.popup.show()
+    pending.popup.focus()
   }
 
   /** Page layer sits below the chrome strip; overlay chrome still paints on top for suggestions. */
@@ -317,6 +361,11 @@ export class TabManager {
   }
 
   destroy(): void {
+    this.destroying = true
+    for (const pending of this.pendingPopups.values()) {
+      if (pending.popup && !pending.popup.isDestroyed()) pending.popup.close()
+    }
+    this.pendingPopups.clear()
     for (const tab of this.tabs) {
       this.detachTabView(tab)
     }
@@ -324,8 +373,23 @@ export class TabManager {
     this.activeTabId = null
   }
 
+  private removeDestroyedTab(tab: Tab): void {
+    const index = this.tabs.indexOf(tab)
+    if (index === -1) return
+
+    this.tabs.splice(index, 1)
+    if (this.activeTabId === tab.id) {
+      const next = this.tabs[Math.min(index, this.tabs.length - 1)]
+      this.activeTabId = next?.id ?? null
+      if (next) this.switchTab(next.id)
+      else if (!this.destroying) void this.createTab()
+    }
+    if (!this.destroying) this.onUpdate()
+  }
+
   private detachTabView(tab: Tab): void {
-    const wc = tab.view.webContents
+    const wc = tab?.view?.webContents
+    if (!wc) return
     if (!wc.isDestroyed() && tab.devToolsOpen) {
       wc.closeDevTools()
     }
@@ -345,21 +409,40 @@ export class TabManager {
     // pin a persistent navigation strip, so URL changes do not force chrome.
   }
 
-  private toTabState(tab: Tab): TabState {
-    const wc = tab.view.webContents
+  private pruneDestroyedTabs(): void {
+    const destroyed = this.tabs.filter((tab) => {
+      const wc = tab?.view?.webContents
+      return !wc || wc.isDestroyed()
+    })
+    if (destroyed.length === 0) return
+
+    this.tabs = this.tabs.filter((tab) => !destroyed.includes(tab))
+    if (this.activeTabId && !this.tabs.some((tab) => tab.id === this.activeTabId)) {
+      this.activeTabId = this.tabs[0]?.id ?? null
+    }
+  }
+
+  private toTabState(tab: Tab | undefined): TabState | null {
+    const wc = tab?.view?.webContents
+    if (!tab || !wc || wc.isDestroyed()) return null
+
     return {
       id: tab.id,
-      title: wc.isDestroyed() ? 'New Tab' : wc.getTitle() || 'New Tab',
-      url: wc.isDestroyed() ? 'browsy://home' : wc.getURL() || 'browsy://home',
+      title: wc.getTitle() || 'New Tab',
+      url: wc.getURL() || 'browsy://home',
       favicon: tab.favicon,
-      isLoading: !wc.isDestroyed() && wc.isLoading(),
-      canGoBack: !wc.isDestroyed() && wc.navigationHistory.canGoBack(),
-      canGoForward: !wc.isDestroyed() && wc.navigationHistory.canGoForward()
+      isLoading: wc.isLoading(),
+      canGoBack: wc.navigationHistory.canGoBack(),
+      canGoForward: wc.navigationHistory.canGoForward()
     }
   }
 
   private attachWebContentsHandlers(tab: Tab): void {
     const wc = tab.view.webContents
+
+    wc.on('destroyed', () => {
+      this.removeDestroyedTab(tab)
+    })
 
     // Deny powerful permissions for untrusted web content.
     wc.session.setPermissionRequestHandler((_wc, _permission, callback) => {
@@ -379,13 +462,72 @@ export class TabManager {
         return { action: 'deny' }
       }
       const id = generateId()
+      this.pendingPopups.set(id, { url: target, popup: null, ready: false, decision: null })
       this.onPopup(id, target)
-      this.pendingPopups.set(id, (allow) => {
-        if (allow) {
-          void this.createTab(target, true)
+
+      const bounds = this.window.getBounds()
+      const width = Math.min(900, Math.max(480, bounds.width - 120))
+      const height = Math.min(760, Math.max(560, bounds.height - 80))
+      const popupX = bounds.x + Math.round((bounds.width - width) / 2)
+      const popupY = bounds.y + Math.round((bounds.height - height) / 2)
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          show: false,
+          width,
+          height,
+          x: popupX,
+          y: popupY,
+          title: 'Browsy'
         }
+      }
+    })
+
+    wc.on('did-create-window', (popup, details) => {
+      const pendingId = [...this.pendingPopups.entries()].find(([, pending]) => pending.popup === null && pending.url === details.url)?.[0]
+      if (!pendingId) {
+        popup.close()
+        return
+      }
+
+      const pending = this.pendingPopups.get(pendingId)
+      if (!pending) {
+        popup.close()
+        return
+      }
+      pending.popup = popup
+      popup.once('ready-to-show', () => {
+        pending.ready = true
+        this.maybeShowPopup(pendingId, pending)
       })
-      return { action: 'deny' }
+      popup.webContents.on('will-navigate', (event, url) => {
+        if (!isAllowedNavigationUrl(url)) event.preventDefault()
+      })
+      popup.on('closed', () => {
+        const current = this.pendingPopups.get(pendingId)
+        if (current?.popup !== popup) return
+        this.pendingPopups.delete(pendingId)
+        this.onPopupClosed(pendingId)
+        if (this.destroying || this.window.isDestroyed()) return
+        setImmediate(() => {
+          if (this.destroying || this.window.isDestroyed()) return
+          this.window.show()
+          this.window.moveTop()
+          this.onLayout()
+          const activeWc = this.getActiveTab()?.view?.webContents
+          if (activeWc && !activeWc.isDestroyed()) {
+            activeWc.focus()
+          }
+          this.window.focus()
+          this.onUpdate()
+        })
+      })
+      if (pending.decision === false) {
+        popup.close()
+      } else if (pending.decision === true) {
+        popup.show()
+        popup.focus()
+      }
     })
 
     wc.on('will-navigate', (event, url) => {

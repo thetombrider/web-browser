@@ -59,6 +59,7 @@ interface BrowserWindowEntry {
   windowDrag: { startScreenX: number; startScreenY: number; startWindowX: number; startWindowY: number } | null
   carousel: CarouselState | null
   carouselTabIds: string[]
+  popupOpen: boolean
 }
 
 function isFiniteNumber(value: unknown): value is number {
@@ -142,7 +143,19 @@ export class WindowManager {
       win,
       () => this.broadcastState(win.id),
       (id, url) => {
+        const entry = this.windows.get(win.id)
+        if (entry) {
+          entry.popupOpen = true
+          this.layoutWindow(win.id)
+        }
         chromeView.webContents.send(IPC.POPUP_REQUEST, { id, url })
+      },
+      (id) => {
+        const entry = this.windows.get(win.id)
+        if (entry) {
+          entry.popupOpen = false
+          this.layoutWindow(win.id)
+        }
       },
       (action) => this.handleShortcut(win.id, action),
       () => this.layoutWindow(win.id),
@@ -159,7 +172,8 @@ export class WindowManager {
       toastExpandTimer: null,
       windowDrag: null,
       carousel: null,
-      carouselTabIds: []
+      carouselTabIds: [],
+      popupOpen: false
     })
 
     win.on('ready-to-show', () => win.show())
@@ -235,7 +249,7 @@ export class WindowManager {
     // Spotlight floats over full-bleed pages — never inset content for it.
     entry.tabs.layoutTabViews(0)
 
-    if (entry.carousel || spotlightOpen) {
+    if (entry.carousel || spotlightOpen || entry.popupOpen) {
       entry.chromeView.setBounds({ x: 0, y: 0, width: bounds.width, height: bounds.height })
       entry.window.contentView.addChildView(entry.chromeView)
       entry.chromeView.webContents.focus()
@@ -671,7 +685,8 @@ export class WindowManager {
     for (const entry of this.windows.values()) {
       if (entry.chromeView.webContents.id === wc.id) return entry
       for (const tab of entry.tabs.getTabs()) {
-        if (!tab.view.webContents.isDestroyed() && tab.view.webContents.id === wc.id) {
+        const tabWc = tab?.view?.webContents
+        if (tabWc && !tabWc.isDestroyed() && tabWc.id === wc.id) {
           return entry
         }
       }
