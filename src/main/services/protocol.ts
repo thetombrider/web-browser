@@ -17,7 +17,8 @@ import {
   type Settings
 } from '../../shared/types'
 
-const HOME_BOOKMARKS_COUNT = 8
+/** Max items per stacked panel when bookmarks + shortcuts share the right column. */
+const HOME_PANEL_COUNT_MAX = 4
 const HOME_TIP_SHORTCUTS = [
   ['Ctrl/Cmd + L', 'Address bar'],
   ['Ctrl/Cmd + T', 'New tab'],
@@ -200,9 +201,16 @@ function baseStyles(): string {
       overflow: hidden;
       text-overflow: ellipsis;
     }
+    .right-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+      min-width: 0;
+    }
+    .right-panel { min-width: 0; }
     .col-footer {
       display: inline-block;
-      margin-top: 12px;
+      margin-top: 10px;
       padding: 0 12px;
       font-size: 0.8rem;
       color: #71717a;
@@ -228,6 +236,11 @@ function baseStyles(): string {
       font-size: 0.72rem;
       padding: 4px 7px;
       white-space: nowrap;
+    }
+    /* Stacked panels: show 3 by default, 4th when the viewport is tall enough. */
+    .clip-list > .clip-item:nth-child(n+4) { display: none; }
+    @media (min-height: 760px) {
+      .clip-list > .clip-item:nth-child(4) { display: flex; }
     }
     .empty { color: #71717a; font-size: 0.9rem; max-width: 420px; line-height: 1.5; padding: 0 12px; }
     .error-wrap { max-width: 520px; padding-top: 24px; }
@@ -323,9 +336,10 @@ function baseStyles(): string {
   `
 }
 
-function renderHomeSiteRow(url: string, title: string): string {
+function renderHomeSiteRow(url: string, title: string, clip = false): string {
+  const clipClass = clip ? ' clip-item' : ''
   return `
-        <a class="site" href="${escapeHtml(url)}">
+        <a class="site${clipClass}" href="${escapeHtml(url)}">
           ${renderSiteGlyph(url)}
           <div class="site-meta">
             <div class="site-title">${escapeHtml(getSiteName(title, url))}</div>
@@ -334,34 +348,53 @@ function renderHomeSiteRow(url: string, title: string): string {
         </a>`
 }
 
-function renderHomeRightColumn(): string {
-  const bookmarks = getBookmarks()
-    .filter((bookmark) => isAllowedNavigationUrl(bookmark.url))
-    .slice(0, HOME_BOOKMARKS_COUNT)
-
-  if (bookmarks.length > 0) {
-    const rows = bookmarks.map((bookmark) => renderHomeSiteRow(bookmark.url, bookmark.title)).join('')
-    return `
-    <section class="home-col" aria-label="Bookmarks">
-      <div class="col-label">Bookmarks</div>
-      <div class="list">${rows}</div>
-      <a class="col-footer" href="browsy://bookmarks">View all bookmarks</a>
-    </section>`
-  }
-
-  const tips = HOME_TIP_SHORTCUTS.map(
-    ([keys, label]) => `
-        <div class="tip-row">
+function renderShortcutsPanel(count: number, clip: boolean): string {
+  const tips = HOME_TIP_SHORTCUTS.slice(0, count)
+    .map(
+      ([keys, label]) => `
+        <div class="tip-row${clip ? ' clip-item' : ''}">
           <span>${escapeHtml(label)}</span>
           <kbd>${escapeHtml(keys)}</kbd>
         </div>`
-  ).join('')
+    )
+    .join('')
 
   return `
-    <section class="home-col" aria-label="Shortcuts">
-      <div class="col-label">Shortcuts</div>
-      <div class="tip-list">${tips}</div>
-      <a class="col-footer" href="browsy://shortcuts">Full shortcut list</a>
+      <div class="right-panel" aria-label="Shortcuts">
+        <div class="col-label">Shortcuts</div>
+        <div class="tip-list${clip ? ' clip-list' : ''}">${tips}</div>
+        <a class="col-footer" href="browsy://shortcuts">View all shortcuts</a>
+      </div>`
+}
+
+function renderBookmarksPanel(bookmarks: { url: string; title: string }[], clip: boolean): string {
+  const rows = bookmarks.map((bookmark) => renderHomeSiteRow(bookmark.url, bookmark.title, clip)).join('')
+  return `
+      <div class="right-panel" aria-label="Bookmarks">
+        <div class="col-label">Bookmarks</div>
+        <div class="list${clip ? ' clip-list' : ''}">${rows}</div>
+        <a class="col-footer" href="browsy://bookmarks">View all bookmarks</a>
+      </div>`
+}
+
+function renderHomeRightColumn(): string {
+  const bookmarks = getBookmarks()
+    .filter((bookmark) => isAllowedNavigationUrl(bookmark.url))
+    .slice(0, HOME_PANEL_COUNT_MAX)
+
+  if (bookmarks.length === 0) {
+    return `
+    <section class="home-col">
+      ${renderShortcutsPanel(HOME_TIP_SHORTCUTS.length, false)}
+    </section>`
+  }
+
+  return `
+    <section class="home-col">
+      <div class="right-stack">
+        ${renderBookmarksPanel(bookmarks, true)}
+        ${renderShortcutsPanel(HOME_PANEL_COUNT_MAX, true)}
+      </div>
     </section>`
 }
 
@@ -377,20 +410,6 @@ export function renderHomePage(): string {
 
   const navCards = `
   <div class="home-cards">
-    <a class="home-card" href="browsy://shortcuts" data-nav>
-      <div class="card-glyph">⌘</div>
-      <div class="card-meta">
-        <div class="card-title">Shortcuts</div>
-        <div class="card-sub">Keyboard reference</div>
-      </div>
-    </a>
-    <a class="home-card" href="browsy://bookmarks" data-nav>
-      <div class="card-glyph">★</div>
-      <div class="card-meta">
-        <div class="card-title">Bookmarks</div>
-        <div class="card-sub">Saved pages</div>
-      </div>
-    </a>
     <a class="home-card" href="browsy://settings" data-nav>
       <div class="card-glyph">⚙</div>
       <div class="card-meta">
