@@ -212,7 +212,7 @@ export function Omnibox({
                   <Text
                     fontSize="sm"
                     fontWeight={selected ? '600' : '500'}
-                    color={selected ? 'browsy.ink' : 'browsy.ink'}
+                    color="browsy.ink"
                     opacity={selected ? 1 : 0.72}
                     noOfLines={1}
                   >
