@@ -4,6 +4,7 @@ import {
   APP_SURFACE_ELEVATED_LIGHT,
   APP_SURFACE_LIGHT
 } from '../../shared/types'
+import { getShortcutsPageShortcut } from '../../shared/shortcuts'
 
 const SHORTCUTS = [
   ['Ctrl/Cmd + L', 'Open launcher (Spotlight)'],
@@ -18,7 +19,7 @@ const SHORTCUTS = [
   ['Ctrl/Cmd + [', 'Back'],
   ['Ctrl/Cmd + ]', 'Forward'],
   ['Ctrl/Cmd + N', 'New window'],
-  ['Ctrl/Cmd + /', 'This shortcut list'],
+  ['SHORTCUTS_PAGE_SHORTCUT', 'This shortcut list'],
   ['Enter', 'Open selection in launcher or switcher'],
   ['Esc', 'Dismiss launcher or switcher']
 ] as const
@@ -80,11 +81,12 @@ function pageStyles(): string {
 }
 
 export function renderShortcutsPage(): string {
+  const shortcutsPageShortcut = getShortcutsPageShortcut(process.platform).label
   const rows = SHORTCUTS.map(
     ([keys, label]) => `
       <div class="shortcut">
         <span class="label">${label}</span>
-        <kbd>${keys}</kbd>
+        <kbd>${keys === 'SHORTCUTS_PAGE_SHORTCUT' ? shortcutsPageShortcut : keys}</kbd>
       </div>`
   ).join('')
 

@@ -2,6 +2,7 @@ import { protocol } from 'electron'
 import { getBookmarks, getRecentSites, getSettings, setSettings } from './store'
 import { renderBookmarksPage } from './bookmarks-page'
 import { renderShortcutsPage } from './shortcuts-page'
+import { getShortcutsPageShortcut } from '../../shared/shortcuts'
 import { faviconUrlForPage, isAllowedNavigationUrl, sanitizeNavigationUrl } from '../../shared/utils'
 import {
   APP_SURFACE_DARK,
@@ -24,7 +25,7 @@ const HOME_TIP_SHORTCUTS = [
   ['Ctrl/Cmd + T', 'New tab'],
   ['Ctrl/Cmd + D', 'Bookmark page'],
   ['Ctrl/Cmd + B', 'Bookmarks'],
-  ['Ctrl/Cmd + /', 'All shortcuts']
+  [getShortcutsPageShortcut(process.platform).label, 'All shortcuts']
 ] as const
 
 function escapeHtml(value: string): string {

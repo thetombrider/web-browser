@@ -180,7 +180,7 @@ export default function App() {
           <Text fontSize="sm">
             Press <Text as="span" fontWeight="700">Ctrl+L</Text> for launcher ·{' '}
             <Text as="span" fontWeight="700">Cmd←/→</Text> for tabs ·{' '}
-            <Text as="span" fontWeight="700">Ctrl+/</Text> shortcuts
+            <Text as="span" fontWeight="700">Ctrl/Cmd+S</Text> shortcuts
           </Text>
         </Box>
       )}

@@ -67,7 +67,7 @@ The DMG is written to `release/` and can be opened to drag Browsy into Applicati
 | `Ctrl/Cmd+]` | Forward |
 | `Ctrl/Cmd+B` | Bookmarks page (`browsy://bookmarks`) |
 | `Ctrl/Cmd+,` | Settings |
-| `Ctrl/Cmd+/` | Shortcut list |
+| `Ctrl/Cmd+S` | Shortcut list |
 | `F12` / `Ctrl/Cmd+Shift+I` | DevTools |
 | `Esc` | Dismiss launcher or tab switcher |
 

@@ -3,7 +3,9 @@
     "allow": [
       "Shell(git merge --no-ff origin/cursor/reduce-new-tab-top-spacing-a203 -m \"Merge branch 'cursor/reduce-new-tab-top-spacing-a203' into main\" 2>&1; echo \"---EXIT:$?---\")",
       "Shell(git stash pop 2>&1; echo \"---EXIT:$?---\")",
-      "Shell(git push origin main 2>&1; echo \"---EXIT:$?---\")"
+      "Shell(git push origin main 2>&1; echo \"---EXIT:$?---\")",
+      "Shell(test:*)",
+      "Shell(node -e const p=require('./package.json'); if (p.dependencies && p.dependencies['electron-trackpad-utils']) process.exit(1); console.log('gesture changes removed'))"
     ],
     "deny": [],
     "defaultMode": "default"

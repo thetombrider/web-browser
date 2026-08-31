@@ -7,3 +7,5 @@
 - Wants a "back to home" footer link in the bottom left of every browsy-native page (shortcuts and settings already have it; bookmarks was asked to match), so users can always return home from an internal page. Confidence: 0.7
 - Wants the omnibox to follow standard browser (Chrome-style) UX conventions: the first suggestion should forward-fill into the input with the completion tail selected, update live as suggestions recompute, and Enter should accept the full suggestion and navigate to it (not commit the partial typed text). Confidence: 0.8
 - Values live, real-time UI feedback: explicitly praised suggestions updating as he types and wants derived UI (like forward-fill) to stay in sync with input as it changes. Confidence: 0.5
+- Prefers pragmatic scope control: when a change causes regressions or takes too long, revert the broader work promptly rather than continuing to debug it, while preserving a specifically named useful change. Confidence: 0.9
+- For trackpad/wheel navigation, prefers the gesture behavior to be limited to the carousel overlay itself rather than intercepting gestures from the active webpage. Confidence: 0.9
