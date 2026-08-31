@@ -57,7 +57,8 @@ export const theme = extendTheme({
   },
   shadows: {
     browsyCardFocused: '0 18px 55px rgba(0,0,0,0.42)',
-    browsyCard: '0 10px 30px rgba(0,0,0,0.26)'
+    browsyCard: '0 10px 30px rgba(0,0,0,0.26)',
+    browsySpotlight: '0 24px 80px rgba(0,0,0,0.35), 0 8px 24px rgba(0,0,0,0.18)'
   },
   styles: {
     global: {

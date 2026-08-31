@@ -63,7 +63,7 @@ export function DragRegion({ onPeekClick, peek = false }: DragRegionProps) {
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           pointerEvents="auto"
           cursor="pointer"
-          title="Show navigation"
+          title="Open launcher"
           _hover={{ bg: 'browsy.peekHover' }}
         />
       </Box>

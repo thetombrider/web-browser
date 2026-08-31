@@ -23,7 +23,6 @@ import {
   setSettings
 } from '../services/store'
 import { resolveNavigationInput, generateId, sanitizeNavigationUrl } from '../../shared/utils'
-import { showsNavigationChrome } from '../../shared/internal-pages'
 import {
   parseBookmarkTitle,
   parseBookmarkUrl,
@@ -232,10 +231,11 @@ export class WindowManager {
 
     const bounds = entry.window.getContentBounds()
     const chromeVisible = entry.tabs.isChromeVisible()
-    const navigationInset = chromeVisible && entry.tabs.getChromePanel() === 'navigation' ? entry.pageInset : 0
-    entry.tabs.layoutTabViews(navigationInset)
+    const spotlightOpen = chromeVisible && entry.tabs.getChromePanel() === 'navigation'
+    // Spotlight floats over full-bleed pages — never inset content for it.
+    entry.tabs.layoutTabViews(0)
 
-    if (entry.carousel) {
+    if (entry.carousel || spotlightOpen) {
       entry.chromeView.setBounds({ x: 0, y: 0, width: bounds.width, height: bounds.height })
       entry.window.contentView.addChildView(entry.chromeView)
       entry.chromeView.webContents.focus()
@@ -269,21 +269,18 @@ export class WindowManager {
   private setChromeHeight(windowId: number, height: number): void {
     const entry = this.windows.get(windowId)
     if (!entry) return
-    // Never shrink below the panel defaults while a chrome panel is open —
-    // early ResizeObserver reads against a peek-sized viewport can undershoot.
-    const floor = entry.tabs.isChromeVisible()
-      ? entry.tabs.getChromePanel() === 'navigation'
-        ? CHROME_NAV_HEIGHT
-        : CHROME_PANEL_HEIGHT
-      : CHROME_DRAG_HEIGHT
+    // Spotlight / carousel use the full window; only peek/toast need a height floor.
+    const spotlightOpen =
+      entry.tabs.isChromeVisible() && entry.tabs.getChromePanel() === 'navigation'
+    if (spotlightOpen || entry.carousel) {
+      entry.chromeHeight = Math.max(CHROME_DRAG_HEIGHT, Math.round(height))
+      this.layoutWindow(windowId)
+      return
+    }
+    const floor = entry.tabs.isChromeVisible() ? CHROME_PANEL_HEIGHT : CHROME_DRAG_HEIGHT
     const next = Math.max(floor, Math.round(height))
     if (next === entry.chromeHeight) return
     entry.chromeHeight = next
-    // Track the resting chrome height (suggestion dropdown excluded) so the page
-    // clears the chrome strip without jumping when suggestions expand over it.
-    if (next <= CHROME_NAV_HEIGHT + CHROME_DRAG_HEIGHT) {
-      entry.pageInset = next
-    }
     this.layoutWindow(windowId)
   }
 
@@ -293,7 +290,6 @@ export class WindowManager {
       return
     }
     entry.chromeHeight = height
-    if (panel === 'navigation') entry.pageInset = height
     entry.tabs.showChrome(panel)
   }
 
@@ -397,7 +393,8 @@ export class WindowManager {
       return
     }
 
-    if (entry.tabs.isChromeVisible() || entry.tabs.getTabs().length < 2) {
+    // Carousel is the sole tab switcher (≥2 tabs). Spotlight dismisses first.
+    if (entry.tabs.getTabs().length < 2) {
       if (direction === 1) entry.tabs.nextTab()
       else entry.tabs.prevTab()
       this.layoutWindow(windowId)
@@ -405,10 +402,14 @@ export class WindowManager {
       return
     }
 
+    if (entry.tabs.isChromeVisible()) {
+      entry.tabs.hideChrome()
+    }
+
     const tabIds = entry.tabs.getTabs().map((tab) => tab.id)
     const activeIndex = tabIds.indexOf(entry.tabs.getActiveTabId() ?? '')
     entry.carouselTabIds = tabIds
-    entry.carousel = { selectedTabId: tabIds[activeIndex], direction }
+    entry.carousel = { selectedTabId: tabIds[activeIndex >= 0 ? activeIndex : 0], direction }
     this.layoutWindow(windowId)
     this.broadcastState(windowId)
     void this.captureCarouselThumbnails(windowId, tabIds)
@@ -595,8 +596,8 @@ export class WindowManager {
     if (!entry) return
     const url = resolveNavigationInput(input, getSettings().searchEngine)
     await entry.tabs.navigate(url)
-    if (showsNavigationChrome(url)) entry.tabs.showChrome('navigation')
-    else entry.tabs.hideChrome()
+    // Spotlight is ephemeral — always dismiss after navigation.
+    entry.tabs.hideChrome()
     this.layoutWindow(entry.window.id)
   }
 
@@ -720,8 +721,7 @@ export class WindowManager {
       if (!entry) return
       const url = resolveNavigationInput(input, getSettings().searchEngine)
       await entry.tabs.navigate(url)
-      if (showsNavigationChrome(url)) entry.tabs.showChrome('navigation')
-      else entry.tabs.hideChrome()
+      entry.tabs.hideChrome()
       this.layoutWindow(entry.window.id)
     })
 
@@ -790,8 +790,7 @@ export class WindowManager {
       const entry = this.getEntryFromEvent(event)
       if (!entry) return
       if (panel === 'navigation') {
-        entry.chromeHeight = CHROME_NAV_HEIGHT
-        entry.pageInset = CHROME_NAV_HEIGHT
+        entry.chromeHeight = Math.max(entry.chromeHeight, CHROME_NAV_HEIGHT)
       } else {
         entry.chromeHeight = CHROME_PANEL_HEIGHT
       }

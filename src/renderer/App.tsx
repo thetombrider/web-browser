@@ -55,12 +55,12 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    if (popup) {
+    if (popup || state.carousel || (state.chromeVisible && state.chromePanel === 'navigation')) {
       void window.browsy.setChromeHeight(window.innerHeight)
     } else if (!state.chromeVisible) {
       void window.browsy.setChromeHeight(CHROME_DRAG_HEIGHT)
     }
-  }, [popup, state.chromeVisible])
+  }, [popup, state.chromeVisible, state.chromePanel, state.carousel])
 
   useEffect(() => {
     if (!state.chromeVisible || state.chromePanel !== 'navigation') return
@@ -122,42 +122,44 @@ export default function App() {
 
   return (
     <>
+      {/* Drag region stays available above spotlight / peek */}
+      {!state.carousel && (
+        <Box
+          position="fixed"
+          top={0}
+          left={0}
+          right={0}
+          height="32px"
+          pointerEvents="none"
+          zIndex={1200}
+        >
+          <DragRegion
+            peek={!state.chromeVisible}
+            onPeekClick={() => window.browsy.showChrome('navigation')}
+          />
+        </Box>
+      )}
+
       {state.carousel ? (
         <TabCarousel tabs={state.tabs} carousel={state.carousel} thumbnails={thumbnails} />
-      ) : state.chromeVisible ? (
-        <Box position="fixed" inset={0} pointerEvents="none" zIndex={1000}>
-          <DragRegion />
-          <Box pointerEvents="auto">
-            <AnimatePresence mode="wait">
-              {state.chromePanel === 'navigation' && (
-                <NavigationChrome
-                  key="navigation"
-                  tabs={state.tabs}
-                  activeTabId={state.activeTabId}
-                  initialValue={activeTab?.url ?? ''}
-                  focusToken={state.chromeFocusToken}
-                  canGoBack={activeTab?.canGoBack ?? false}
-                  canGoForward={activeTab?.canGoForward ?? false}
-                  isLoading={activeTab?.isLoading ?? false}
-                  onSwitchTab={(id) => window.browsy.switchTab(id)}
-                  onCloseTab={(id) => window.browsy.closeTab(id)}
-                  onNewTab={() => window.browsy.newTab(undefined, true)}
-                  onSubmit={(value) => window.browsy.navigate(value)}
-                  onClose={() => window.browsy.hideChrome()}
-                  onBack={() => window.browsy.goBack()}
-                  onForward={() => window.browsy.goForward()}
-                  onReload={() => window.browsy.reload()}
-                  onStop={() => window.browsy.stop()}
-                  onCommand={runCommand}
-                />
-              )}
-            </AnimatePresence>
-          </Box>
-        </Box>
       ) : (
-        <Box position="fixed" top={0} left={0} right={0} height="32px" pointerEvents="none" zIndex={1000}>
-          <DragRegion peek onPeekClick={() => window.browsy.showChrome('navigation')} />
-        </Box>
+        <AnimatePresence>
+          {state.chromeVisible && state.chromePanel === 'navigation' && (
+            <NavigationChrome
+              key="navigation"
+              tabs={state.tabs}
+              activeTabId={state.activeTabId}
+              initialValue={activeTab?.url ?? ''}
+              focusToken={state.chromeFocusToken}
+              isLoading={activeTab?.isLoading ?? false}
+              onSwitchTab={(id) => window.browsy.switchTab(id)}
+              onCloseTab={(id) => window.browsy.closeTab(id)}
+              onSubmit={(value) => window.browsy.navigate(value)}
+              onClose={() => window.browsy.hideChrome()}
+              onCommand={runCommand}
+            />
+          )}
+        </AnimatePresence>
       )}
 
       {shortcutTip && (
@@ -176,8 +178,9 @@ export default function App() {
           boxShadow="md"
         >
           <Text fontSize="sm">
-            Press <Text as="span" fontWeight="700">Ctrl+L</Text> anytime ·{' '}
-            <Text as="span" fontWeight="700">Ctrl+/</Text> for shortcuts
+            Press <Text as="span" fontWeight="700">Ctrl+L</Text> for launcher ·{' '}
+            <Text as="span" fontWeight="700">Cmd←/→</Text> for tabs ·{' '}
+            <Text as="span" fontWeight="700">Ctrl+/</Text> shortcuts
           </Text>
         </Box>
       )}

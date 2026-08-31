@@ -26,6 +26,8 @@ export interface Suggestion {
   favicon?: string | null
   action?: CommandAction
   glyph: string
+  /** Marks the currently active tab in open-tabs inventory. */
+  isActiveTab?: boolean
 }
 
 interface CommandDef {
@@ -175,6 +177,26 @@ function toCommandSuggestion(command: CommandDef): Suggestion {
   }
 }
 
+function tabSuggestion(tab: TabState, activeTabId: string | null): Suggestion {
+  return {
+    id: `tab-${tab.id}`,
+    kind: 'tab',
+    title: browsyPageLabel(tab.url) ?? (tab.title === 'Browsy' ? 'Home' : tab.title),
+    subtitle: tab.url,
+    url: tab.url,
+    completionValues: [
+      tab.title,
+      tab.url,
+      tab.url.replace(/^https?:\/\/(www\.)?/i, ''),
+      hostnameOf(tab.url)
+    ],
+    tabId: tab.id,
+    favicon: tab.favicon,
+    glyph: letterForUrl(tab.url),
+    isActiveTab: tab.id === activeTabId
+  }
+}
+
 export function completionForSuggestion(suggestion: Suggestion, query: string): string | null {
   const typed = query.trim().toLowerCase()
   if (!typed) return null
@@ -216,21 +238,36 @@ export function commandForExactQuery(query: string): Suggestion | null {
   return hit ? toCommandSuggestion(hit) : null
 }
 
+/**
+ * Build omnibox suggestions.
+ * Empty query → full open-tabs inventory (birds-eye).
+ * Typed query → commands, matching tabs, bookmarks, history.
+ */
 export function buildSuggestions(
   query: string,
   tabs: TabState[],
   bookmarks: Bookmark[],
   history: HistoryEntry[],
-  limit = 8
+  activeTabId: string | null = null,
+  limit = 12
 ): Suggestion[] {
   const q = query.trim().toLowerCase()
   const seenUrls = new Set<string>()
   const results: Suggestion[] = []
 
-  const pushPage = (item: Suggestion) => {
+  const pushExternalPage = (item: Suggestion) => {
     if (!item.url || seenUrls.has(item.url) || item.url.startsWith('browsy://')) return
     seenUrls.add(item.url)
     results.push(item)
+  }
+
+  // Empty launcher: birds-eye of every open tab.
+  if (!q) {
+    for (const tab of tabs) {
+      if (results.length >= limit) break
+      results.push(tabSuggestion(tab, activeTabId))
+    }
+    return results
   }
 
   // Slash mode: commands only
@@ -243,39 +280,22 @@ export function buildSuggestions(
   }
 
   // Plain text: matching commands first so "home" / "settings" always surface
-  if (q) {
-    for (const suggestion of matchingCommands(q)) {
-      if (results.length >= limit) break
-      results.push(suggestion)
-    }
+  for (const suggestion of matchingCommands(q)) {
+    if (results.length >= limit) break
+    results.push(suggestion)
   }
 
   for (const tab of tabs) {
     if (results.length >= limit) break
     if (matchesQuery(q, tab.title, tab.url)) {
-      pushPage({
-        id: `tab-${tab.id}`,
-        kind: 'tab',
-        title: browsyPageLabel(tab.url) ?? (tab.title === 'Browsy' ? 'Home' : tab.title),
-        subtitle: tab.url,
-        url: tab.url,
-        completionValues: [
-          tab.title,
-          tab.url,
-          tab.url.replace(/^https?:\/\/(www\.)?/i, ''),
-          hostnameOf(tab.url)
-        ],
-        tabId: tab.id,
-        favicon: tab.favicon,
-        glyph: letterForUrl(tab.url)
-      })
+      results.push(tabSuggestion(tab, activeTabId))
     }
   }
 
   for (const bookmark of bookmarks) {
     if (results.length >= limit) break
     if (matchesQuery(q, bookmark.title, bookmark.url)) {
-      pushPage({
+      pushExternalPage({
         id: `bookmark-${bookmark.id}`,
         kind: 'bookmark',
         title: bookmark.title,
@@ -295,7 +315,7 @@ export function buildSuggestions(
   for (const entry of history) {
     if (results.length >= limit) break
     if (matchesQuery(q, entry.title, entry.url)) {
-      pushPage({
+      pushExternalPage({
         id: `history-${entry.url}-${entry.visitedAt}`,
         kind: 'history',
         title: entry.title || hostnameOf(entry.url),
@@ -327,3 +347,34 @@ export function kindLabel(kind: SuggestionKind): string {
       return 'Command'
   }
 }
+
+/** Always-visible Spotlight quick cards above the omnibox. */
+export const SPOTLIGHT_QUICK_ACTIONS: Suggestion[] = [
+  {
+    id: 'quick-settings',
+    kind: 'command',
+    title: 'Settings',
+    subtitle: 'Preferences',
+    action: 'settings',
+    glyph: '⚙',
+    completionValues: []
+  },
+  {
+    id: 'quick-bookmarks',
+    kind: 'command',
+    title: 'Bookmarks',
+    subtitle: 'Saved pages',
+    action: 'bookmarks',
+    glyph: '★',
+    completionValues: []
+  },
+  {
+    id: 'quick-shortcuts',
+    kind: 'command',
+    title: 'Shortcuts',
+    subtitle: 'Keyboard',
+    action: 'shortcuts',
+    glyph: '?',
+    completionValues: []
+  }
+]

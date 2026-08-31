@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   Box,
+  CloseButton,
   HStack,
   IconButton,
   Input,
@@ -11,13 +12,7 @@ import {
   Spinner,
   VStack
 } from '@chakra-ui/react'
-import {
-  ArrowBackIcon,
-  ArrowForwardIcon,
-  CloseIcon,
-  RepeatIcon,
-  SearchIcon
-} from '@chakra-ui/icons'
+import { CloseIcon, SearchIcon } from '@chakra-ui/icons'
 import type { Bookmark, HistoryEntry, TabState } from '@shared/types'
 import { browsyPageLabel } from '@shared/internal-pages'
 import {
@@ -25,6 +20,7 @@ import {
   commandForExactQuery,
   findCompletion,
   kindLabel,
+  SPOTLIGHT_QUICK_ACTIONS,
   type CommandAction,
   type Suggestion
 } from '../utils/suggestions'
@@ -35,17 +31,13 @@ import { Favicon } from './Favicon'
 interface OmniboxProps {
   initialValue: string
   focusToken: number
-  canGoBack: boolean
-  canGoForward: boolean
   isLoading: boolean
   tabs: TabState[]
+  activeTabId: string | null
   onSubmit: (value: string) => void
   onClose: () => void
-  onBack: () => void
-  onForward: () => void
-  onReload: () => void
-  onStop: () => void
   onSwitchTab: (id: string) => void
+  onCloseTab: (id: string) => void
   onCommand: (action: CommandAction) => void
 }
 
@@ -56,41 +48,45 @@ function displayValueForUrl(url: string): string {
 export function Omnibox({
   initialValue,
   focusToken,
-  canGoBack,
-  canGoForward,
   isLoading,
   tabs,
+  activeTabId,
   onSubmit,
   onClose,
-  onBack,
-  onForward,
-  onReload,
-  onStop,
   onSwitchTab,
+  onCloseTab,
   onCommand
 }: OmniboxProps) {
   const [value, setValue] = useState(displayValueForUrl(initialValue))
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([])
   const [history, setHistory] = useState<HistoryEntry[]>([])
   const [activeIndex, setActiveIndex] = useState(-1)
-  const [showSuggestions, setShowSuggestions] = useState(false)
   const [completionSuppressedFor, setCompletionSuppressedFor] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const suggestions = showSuggestions
-    ? buildSuggestions(value, tabs, bookmarks, history)
-    : []
+  const liveDisplay = displayValueForUrl(initialValue)
+  const scheme = getUrlScheme(initialValue)
+  const showingLiveUrl = value === liveDisplay && liveDisplay.length > 0
+  // While the field still mirrors the live URL (just opened / not edited), show
+  // the open-tabs inventory instead of searching for that URL string.
+  const suggestionQuery = showingLiveUrl ? '' : value
+  const suggestions = buildSuggestions(suggestionQuery, tabs, bookmarks, history, activeTabId)
+  const queryEmpty = suggestionQuery.trim().length === 0
+  const showingTabsInventory = queryEmpty && suggestions.some((s) => s.kind === 'tab')
+
+  // Unified list: quick cards first, then suggestion rows — one ↑↓/Enter model.
+  const selectable = [...SPOTLIGHT_QUICK_ACTIONS, ...suggestions]
+  const quickCount = SPOTLIGHT_QUICK_ACTIONS.length
 
   const completionMatch =
-    activeIndex === -1 && completionSuppressedFor !== value ? findCompletion(suggestions, value) : null
+    activeIndex === -1 && completionSuppressedFor !== value && !showingLiveUrl
+      ? findCompletion(suggestions, value)
+      : null
   const completion = completionMatch?.value ?? null
   const displayedValue = completion ?? value
 
-  const liveDisplay = displayValueForUrl(initialValue)
-  const scheme = getUrlScheme(initialValue)
-  // Show origin cue only when the field still mirrors the live tab URL (not while typing).
-  const showingLiveUrl = value === liveDisplay && liveDisplay.length > 0
-  const showOriginCue = showingLiveUrl && !isLoading && (scheme === 'https' || scheme === 'http' || scheme === 'browsy')
+  const showOriginCue =
+    showingLiveUrl && !isLoading && (scheme === 'https' || scheme === 'http' || scheme === 'browsy')
 
   useEffect(() => {
     setValue(displayValueForUrl(initialValue))
@@ -102,7 +98,6 @@ export function Omnibox({
 
   useEffect(() => {
     setValue(displayValueForUrl(initialValue))
-    setShowSuggestions(false)
     setActiveIndex(-1)
     setCompletionSuppressedFor(null)
   }, [initialValue])
@@ -116,7 +111,6 @@ export function Omnibox({
     )
   }, [focusToken])
 
-  // Select the autocompleted tail so typing replaces it and Enter accepts it.
   useEffect(() => {
     const el = inputRef.current
     if (!el || !completion) return
@@ -144,10 +138,24 @@ export function Omnibox({
     if (suggestion.url) onSubmit(suggestion.url)
   }
 
+  const activateIndex = (index: number) => {
+    const item = selectable[index]
+    if (item) choose(item)
+  }
+
+  const moveSelection = (delta: number) => {
+    if (!selectable.length) return
+    setActiveIndex((i) => {
+      if (i < 0) return delta > 0 ? 0 : selectable.length - 1
+      return (i + delta + selectable.length) % selectable.length
+    })
+  }
+
   const commit = (raw: string) => {
     const next = raw.trim()
     if (!next) {
-      if (suggestions[0]) choose(suggestions[0])
+      // Empty Enter: act on highlighted row only — don't auto-jump to first tab.
+      if (activeIndex >= 0) activateIndex(activeIndex)
       return
     }
     if (next.startsWith('/')) {
@@ -166,64 +174,74 @@ export function Omnibox({
   }
 
   return (
-    <Box px={3} pt={1.5} pb={2} style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-      <HStack spacing={1.5} align="center">
-        <IconButton
-          aria-label="Back"
-          icon={<ArrowBackIcon />}
-          size="xs"
-          variant="ghost"
-          isDisabled={!canGoBack}
-          onClick={onBack}
-        />
-        <IconButton
-          aria-label="Forward"
-          icon={<ArrowForwardIcon />}
-          size="xs"
-          variant="ghost"
-          isDisabled={!canGoForward}
-          onClick={onForward}
-        />
-        <IconButton
-          aria-label={isLoading ? 'Stop' : 'Reload'}
-          icon={isLoading ? <CloseIcon boxSize={2} /> : <RepeatIcon />}
-          size="xs"
-          variant="ghost"
-          onClick={isLoading ? onStop : onReload}
-        />
-        {showOriginCue ? (
-          <Box
-            w="28px"
-            h="28px"
-            display="flex"
-            alignItems="center"
-            justifyContent="center"
-            flexShrink={0}
-            borderRadius="md"
-            bg="browsy.input"
-            border="1px solid"
-            borderColor="browsy.inputBorder"
-          >
-            <OriginCue scheme={scheme} />
-          </Box>
-        ) : null}
-        <InputGroup size="sm" flex={1}>
-          <InputLeftElement h="32px" pointerEvents="none">
+    <Box>
+      <Box px={3} pt={3} pb={0}>
+        <HStack spacing={1} role="listbox" aria-label="Quick actions" mb={1.5}>
+          {SPOTLIGHT_QUICK_ACTIONS.map((action, index) => {
+            const selected = index === activeIndex
+            return (
+              <Box
+                key={action.id}
+                role="option"
+                aria-selected={selected}
+                flex={1}
+                minW={0}
+                px={2.5}
+                py={2}
+                borderRadius="md"
+                bg={selected ? 'browsy.active' : 'transparent'}
+                cursor="pointer"
+                transition="background 0.12s ease"
+                _hover={{ bg: selected ? 'browsy.active' : 'browsy.hover' }}
+                onMouseEnter={() => setActiveIndex(index)}
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  choose(action)
+                }}
+              >
+                <HStack spacing={2} align="center" justify="center">
+                  <Text
+                    fontSize="xs"
+                    fontWeight="600"
+                    color={selected ? 'browsy.ink' : 'browsy.muted'}
+                    lineHeight={1}
+                    flexShrink={0}
+                  >
+                    {action.glyph}
+                  </Text>
+                  <Text
+                    fontSize="sm"
+                    fontWeight={selected ? '600' : '500'}
+                    color="browsy.ink"
+                    opacity={selected ? 1 : 0.72}
+                    noOfLines={1}
+                  >
+                    {action.title}
+                  </Text>
+                </HStack>
+              </Box>
+            )
+          })}
+        </HStack>
+
+        <InputGroup size="md" pb={2}>
+          <InputLeftElement h="44px" pointerEvents="none">
             {isLoading ? (
-              <Spinner size="xs" color="browsy.icon" thickness="1.5px" />
+              <Spinner size="sm" color="browsy.icon" thickness="1.5px" />
+            ) : showOriginCue ? (
+              <OriginCue scheme={scheme} />
             ) : (
-              <SearchIcon color="browsy.icon" boxSize={3.5} />
+              <SearchIcon color="browsy.icon" boxSize={4} />
             )}
           </InputLeftElement>
           <Input
             ref={inputRef}
             value={displayedValue}
-            h="32px"
-            fontSize="sm"
-            borderRadius="md"
+            h="44px"
+            fontSize="md"
+            borderRadius="lg"
             onChange={(e) => {
               setValue(e.target.value)
-              setShowSuggestions(true)
               setActiveIndex(-1)
               setCompletionSuppressedFor(null)
             }}
@@ -234,38 +252,44 @@ export function Omnibox({
                 inputRef.current?.setSelectionRange(value.length, value.length)
               } else if (e.key === 'ArrowDown') {
                 e.preventDefault()
-                if (!suggestions.length) return
-                setActiveIndex((i) => (i + 1) % suggestions.length)
+                moveSelection(1)
               } else if (e.key === 'ArrowUp') {
                 e.preventDefault()
-                if (!suggestions.length) return
-                setActiveIndex((i) => (i <= 0 ? suggestions.length - 1 : i - 1))
+                moveSelection(-1)
+              } else if (
+                (e.key === 'ArrowLeft' || e.key === 'ArrowRight') &&
+                activeIndex >= 0 &&
+                activeIndex < quickCount
+              ) {
+                e.preventDefault()
+                const delta = e.key === 'ArrowRight' ? 1 : -1
+                setActiveIndex((i) => (i + delta + quickCount) % quickCount)
               } else if (e.key === 'Enter') {
                 e.preventDefault()
-                if (activeIndex >= 0 && suggestions[activeIndex]) {
-                  choose(suggestions[activeIndex])
+                if (activeIndex >= 0 && selectable[activeIndex]) {
+                  activateIndex(activeIndex)
                 } else if (completionMatch) {
                   choose(completionMatch.suggestion)
                 } else {
                   commit(value)
                 }
-              } else if (e.key === 'Tab' && suggestions.length) {
+              } else if (e.key === 'Tab' && selectable.length) {
                 e.preventDefault()
-                setActiveIndex((i) => (i + 1) % suggestions.length)
+                moveSelection(e.shiftKey ? -1 : 1)
               }
             }}
-            placeholder="Search, URL, or command"
+            placeholder="Search, URL, tab, or /command"
             bg="browsy.input"
             border="1px solid"
             borderColor="browsy.inputBorder"
             _focus={{ borderColor: 'browsy.focusBorder', boxShadow: 'none' }}
           />
           {value && (
-            <InputRightElement h="32px">
+            <InputRightElement h="44px">
               <IconButton
                 aria-label="Clear"
-                icon={<CloseIcon boxSize={2} />}
-                size="xs"
+                icon={<CloseIcon boxSize={2.5} />}
+                size="sm"
                 variant="ghost"
                 onClick={() => {
                   setValue('')
@@ -277,65 +301,133 @@ export function Omnibox({
             </InputRightElement>
           )}
         </InputGroup>
-      </HStack>
+      </Box>
 
       {suggestions.length > 0 && (
-        <VStack align="stretch" spacing={0} mt={1.5} role="listbox">
-          {suggestions.map((suggestion, index) => {
-            const selected = index === activeIndex
-            return (
-              <HStack
-                key={suggestion.id}
-                role="option"
-                aria-selected={selected}
-                px={2}
-                py={1.5}
-                borderRadius="md"
-                cursor="pointer"
-                bg={selected ? 'browsy.active' : 'transparent'}
-                _hover={{ bg: selected ? 'browsy.active' : 'browsy.hover' }}
-                onMouseEnter={() => setActiveIndex(index)}
-                onMouseDown={(e) => {
-                  e.preventDefault()
-                  choose(suggestion)
-                }}
-                spacing={2}
-              >
-                {suggestion.kind === 'command' || !suggestion.url ? (
-                  <Box
-                    w="20px"
-                    h="20px"
-                    borderRadius="sm"
-                    bg="browsy.glyph"
-                    display="flex"
-                    alignItems="center"
-                    justifyContent="center"
-                    fontSize="10px"
-                    fontWeight="600"
-                    color="browsy.muted"
-                    flexShrink={0}
-                  >
-                    {suggestion.glyph}
+        <Box
+          borderTop="1px solid"
+          borderColor="browsy.border"
+          maxH="min(52vh, 420px)"
+          overflowY="auto"
+          css={{
+            '&::-webkit-scrollbar': { width: '6px' },
+            '&::-webkit-scrollbar-thumb': {
+              background: 'var(--chakra-colors-browsy-border)',
+              borderRadius: '3px'
+            }
+          }}
+        >
+          {showingTabsInventory && (
+            <Text px={4} pt={3} pb={1} fontSize="xs" fontWeight="600" color="browsy.muted" letterSpacing="wide">
+              OPEN TABS
+            </Text>
+          )}
+          <VStack align="stretch" spacing={0} px={2} py={1.5} role="listbox" aria-label="Suggestions">
+            {suggestions.map((suggestion, index) => {
+              const itemIndex = quickCount + index
+              const selected = itemIndex === activeIndex
+              const isTabRow = suggestion.kind === 'tab'
+              return (
+                <HStack
+                  key={suggestion.id}
+                  role="option"
+                  aria-selected={selected}
+                  px={2}
+                  py={2}
+                  borderRadius="md"
+                  cursor="pointer"
+                  bg={selected ? 'browsy.active' : suggestion.isActiveTab ? 'browsy.hover' : 'transparent'}
+                  _hover={{ bg: selected ? 'browsy.active' : 'browsy.hover' }}
+                  onMouseEnter={() => setActiveIndex(itemIndex)}
+                  onMouseDown={(e) => {
+                    e.preventDefault()
+                    choose(suggestion)
+                  }}
+                  spacing={2.5}
+                  sx={
+                    isTabRow
+                      ? {
+                          '& .tab-close': { opacity: selected || suggestion.isActiveTab ? 0.7 : 0 },
+                          '&:hover .tab-close': { opacity: 1 }
+                        }
+                      : undefined
+                  }
+                >
+                  {suggestion.kind === 'command' || !suggestion.url ? (
+                    <Box
+                      w="22px"
+                      h="22px"
+                      borderRadius="sm"
+                      bg="browsy.glyph"
+                      display="flex"
+                      alignItems="center"
+                      justifyContent="center"
+                      fontSize="10px"
+                      fontWeight="600"
+                      color="browsy.muted"
+                      flexShrink={0}
+                    >
+                      {suggestion.glyph}
+                    </Box>
+                  ) : (
+                    <Favicon url={suggestion.url} favicon={suggestion.favicon} size={22} />
+                  )}
+                  <Box flex={1} minW={0}>
+                    <Text fontSize="sm" noOfLines={1} fontWeight={suggestion.isActiveTab ? '600' : '500'}>
+                      {suggestion.title}
+                      {suggestion.isActiveTab ? (
+                        <Text as="span" color="browsy.muted" fontWeight="400">
+                          {' '}
+                          · current
+                        </Text>
+                      ) : null}
+                    </Text>
+                    <Text fontSize="xs" color="browsy.muted" noOfLines={1}>
+                      {suggestion.subtitle}
+                    </Text>
                   </Box>
-                ) : (
-                  <Favicon url={suggestion.url} favicon={suggestion.favicon} size={20} />
-                )}
-                <Box flex={1} minW={0}>
-                  <Text fontSize="sm" noOfLines={1} fontWeight="500">
-                    {suggestion.title}
-                  </Text>
-                  <Text fontSize="xs" color="browsy.muted" noOfLines={1}>
-                    {suggestion.subtitle}
-                  </Text>
-                </Box>
-                <Text fontSize="xs" color="browsy.muted" flexShrink={0}>
-                  {kindLabel(suggestion.kind)}
-                </Text>
-              </HStack>
-            )
-          })}
-        </VStack>
+                  {isTabRow && suggestion.tabId ? (
+                    <CloseButton
+                      className="tab-close"
+                      size="sm"
+                      flexShrink={0}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        e.preventDefault()
+                        onCloseTab(suggestion.tabId!)
+                      }}
+                      onMouseDown={(e) => {
+                        e.stopPropagation()
+                        e.preventDefault()
+                      }}
+                    />
+                  ) : (
+                    <Text fontSize="xs" color="browsy.muted" flexShrink={0}>
+                      {kindLabel(suggestion.kind)}
+                    </Text>
+                  )}
+                </HStack>
+              )
+            })}
+          </VStack>
+        </Box>
       )}
+
+      <HStack
+        px={4}
+        py={2}
+        borderTop="1px solid"
+        borderColor="browsy.border"
+        justify="space-between"
+        bg="browsy.input"
+      >
+        <Text fontSize="xs" color="browsy.muted">
+          ↑↓←→ select · Enter open · Esc dismiss
+        </Text>
+        <Text fontSize="xs" color="browsy.muted">
+          Cmd←/→ tabs
+        </Text>
+      </HStack>
     </Box>
   )
 }
