@@ -4,13 +4,24 @@ import {
   dialog,
   type DownloadItem,
   type Event,
-  type HandlerDetails
+  type HandlerDetails,
+  type MediaAccessPermissionRequest,
+  type PermissionCheckHandlerHandlerDetails,
+  type WebContents
 } from 'electron'
 import { generateId, isAllowedNavigationUrl, sanitizeNavigationUrl } from '../../shared/utils'
 import { showsNavigationChrome } from '../../shared/internal-pages'
-import type { ChromePanel, TabState } from '../../shared/types'
+import type { ChromePanel, MediaKind, TabState } from '../../shared/types'
 import { APP_SURFACE_DARK } from '../../shared/types'
 import { addHistoryEntry } from '../services/store'
+import {
+  ensureOsMediaAccess,
+  getStoredDecisions,
+  mediaKindFromCheckType,
+  mediaKindsFromTypes,
+  normalizeOrigin,
+  rememberMediaDecision
+} from '../services/media-permissions'
 
 export interface Tab {
   id: string
@@ -22,6 +33,7 @@ export interface Tab {
 export type TabUpdateCallback = () => void
 export type PopupCallback = (id: string, url: string) => void
 export type PopupClosedCallback = (id: string) => void
+export type MediaPermissionCallback = (id: string, origin: string, kinds: MediaKind[]) => void
 export type ShortcutCallback = (action: string) => void
 
 interface PendingPopup {
@@ -30,6 +42,13 @@ interface PendingPopup {
   ready: boolean
   decision: boolean | null
 }
+
+interface PendingMediaPermission {
+  origin: string
+  kinds: MediaKind[]
+  callback: (granted: boolean) => void
+}
+
 export type LayoutCallback = () => void
 export type CarouselOpenCallback = () => boolean
 
@@ -40,6 +59,7 @@ export class TabManager {
   private chromePanel: ChromePanel = null
   private chromeFocusToken = 0
   private pendingPopups = new Map<string, PendingPopup>()
+  private pendingMediaPermissions = new Map<string, PendingMediaPermission>()
   private destroying = false
 
   constructor(
@@ -47,6 +67,8 @@ export class TabManager {
     private onUpdate: TabUpdateCallback,
     private onPopup: PopupCallback,
     private onPopupClosed: PopupClosedCallback,
+    private onMediaPermission: MediaPermissionCallback,
+    private onMediaPermissionClosed: PopupClosedCallback,
     private onShortcut: ShortcutCallback,
     private onLayout: LayoutCallback,
     private isCarouselOpen: CarouselOpenCallback
@@ -326,6 +348,95 @@ export class TabManager {
     this.maybeShowPopup(id, pending)
   }
 
+  ownsWebContents(wc: WebContents): boolean {
+    return this.tabs.some((tab) => {
+      const tabWc = tab?.view?.webContents
+      return Boolean(tabWc && !tabWc.isDestroyed() && tabWc.id === wc.id)
+    })
+  }
+
+  checkMediaPermission(
+    requestingOrigin: string,
+    details: PermissionCheckHandlerHandlerDetails
+  ): boolean {
+    const origin =
+      normalizeOrigin(details.securityOrigin) ??
+      normalizeOrigin(requestingOrigin) ??
+      normalizeOrigin(details.requestingUrl)
+    if (!origin) return false
+
+    const kinds = mediaKindFromCheckType(details.mediaType)
+    const { anyDenied } = getStoredDecisions(origin, kinds)
+    // Allow the check unless the origin was explicitly blocked so getUserMedia
+    // can still reach the request handler and show a prompt when undecided.
+    return !anyDenied
+  }
+
+  handleMediaPermissionRequest(
+    wc: WebContents,
+    details: MediaAccessPermissionRequest,
+    callback: (granted: boolean) => void
+  ): void {
+    const origin =
+      normalizeOrigin(details.securityOrigin) ??
+      normalizeOrigin(details.requestingUrl) ??
+      normalizeOrigin(wc.isDestroyed() ? '' : wc.getURL())
+    if (!origin) {
+      callback(false)
+      return
+    }
+
+    const kinds = mediaKindsFromTypes(details.mediaTypes)
+    const { allAllowed, anyDenied, needsPrompt } = getStoredDecisions(origin, kinds)
+
+    if (anyDenied) {
+      callback(false)
+      return
+    }
+
+    if (allAllowed && !needsPrompt) {
+      void ensureOsMediaAccess(kinds).then((ok) => callback(ok))
+      return
+    }
+
+    const id = generateId()
+    this.pendingMediaPermissions.set(id, { origin, kinds, callback })
+    this.onMediaPermission(id, origin, kinds)
+  }
+
+  respondToMediaPermission(id: string, allow: boolean): void {
+    const pending = this.pendingMediaPermissions.get(id)
+    if (!pending) return
+    this.pendingMediaPermissions.delete(id)
+    this.onMediaPermissionClosed(id)
+
+    if (!allow) {
+      rememberMediaDecision(pending.origin, pending.kinds, 'deny')
+      pending.callback(false)
+      return
+    }
+
+    rememberMediaDecision(pending.origin, pending.kinds, 'allow')
+    void ensureOsMediaAccess(pending.kinds).then((ok) => {
+      if (!ok) {
+        // OS denied device access — keep the site allow so we do not re-prompt
+        // endlessly, but fail this request.
+        pending.callback(false)
+        return
+      }
+      pending.callback(true)
+    })
+  }
+
+  /** Reject in-flight media prompts when the window/tab manager is torn down. */
+  private rejectPendingMediaPermissions(): void {
+    for (const [id, pending] of this.pendingMediaPermissions) {
+      pending.callback(false)
+      this.pendingMediaPermissions.delete(id)
+      this.onMediaPermissionClosed(id)
+    }
+  }
+
   private maybeShowPopup(id: string, pending: PendingPopup): void {
     if (!pending.ready || pending.decision !== true || !pending.popup) return
     if (pending.popup.isDestroyed()) {
@@ -362,6 +473,7 @@ export class TabManager {
 
   destroy(): void {
     this.destroying = true
+    this.rejectPendingMediaPermissions()
     for (const pending of this.pendingPopups.values()) {
       if (pending.popup && !pending.popup.isDestroyed()) pending.popup.close()
     }
@@ -444,11 +556,9 @@ export class TabManager {
       this.removeDestroyedTab(tab)
     })
 
-    // Deny powerful permissions for untrusted web content.
-    wc.session.setPermissionRequestHandler((_wc, _permission, callback) => {
-      callback(false)
-    })
-    wc.session.setPermissionCheckHandler(() => false)
+    // Powerful permissions stay denied by default. Media (mic/camera) is
+    // handled once on the shared session from WindowManager so multi-window
+    // routing stays correct.
 
     wc.setWindowOpenHandler((details: HandlerDetails) => {
       const target = sanitizeNavigationUrl(details.url)
