@@ -749,12 +749,6 @@ export function renderSettingsPage(showDev = false, cacheCleared = false): strin
     renderOption('theme', 'system', 'System', settings.theme, showDev)
   ].join('')
 
-  const cacheOptions = `
-    <a class="option" href="${clearCacheHref}">
-      <span class="option-label">Clear cache</span>
-      <span class="dev-toggle-sub"${cacheCleared ? ' aria-live="polite"' : ''}>${cacheCleared ? 'Cleared' : 'Cached files'}</span>
-    </a>`
-
   const moreCards = `
       <div class="settings-section">
         <div class="col-label">More</div>
@@ -771,6 +765,15 @@ export function renderSettingsPage(showDev = false, cacheCleared = false): strin
             <div class="card-meta">
               <div class="card-title">Shortcuts</div>
               <div class="card-sub">Keyboard reference</div>
+            </div>
+          </a>
+          <a class="home-card" href="${clearCacheHref}">
+            <div class="card-glyph">×</div>
+            <div class="card-meta">
+              <div class="card-title">Clear cache</div>
+              <div class="card-sub"${cacheCleared ? ' aria-live="polite"' : ''}>${
+                cacheCleared ? 'Cache cleared' : 'Cached files and pages'
+              }</div>
             </div>
           </a>
         </div>
@@ -817,7 +820,6 @@ export function renderSettingsPage(showDev = false, cacheCleared = false): strin
     </section>
     <section class="home-col" aria-label="Session">
       ${renderSettingsSection('On startup', startupOptions)}
-      ${renderSettingsSection('Cache', cacheOptions)}
       ${moreCards}
       ${developerSection}
     </section>
