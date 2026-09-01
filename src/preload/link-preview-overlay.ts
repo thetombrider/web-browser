@@ -1,8 +1,6 @@
 /// <reference lib="dom" />
 
 import { ipcRenderer } from 'electron'
-import { IPC, type LinkPreviewPayload } from '../shared/types'
-import { faviconUrlForPage } from '../shared/utils'
 import {
   LINK_PREVIEW_CARD_HEIGHT,
   LINK_PREVIEW_CARD_WIDTH,
@@ -13,6 +11,21 @@ import {
   displayHostname,
   isPreviewableUrl
 } from '../shared/link-preview'
+
+/** Keep channel names inlined so this preload stays a single sandboxed file. */
+const LINK_HOVER = 'browser:link-hover'
+const LINK_LEAVE = 'browser:link-leave'
+const LINK_PREVIEW_READY = 'browser:link-preview-ready'
+
+interface PreviewPayload {
+  url: string
+  title: string
+  hostname: string
+  favicon: string | null
+  dataUrl: string | null
+  theme: 'light' | 'dark'
+  failed?: boolean
+}
 
 const HOST_ATTR = 'data-browsy-link-preview'
 
@@ -29,7 +42,7 @@ export function startLinkPreviewHover(): void {
       hoverTimer = null
     }
     if (currentUrl) {
-      ipcRenderer.send(IPC.LINK_LEAVE)
+      ipcRenderer.send(LINK_LEAVE)
     }
     currentAnchor = null
     currentUrl = null
@@ -97,7 +110,7 @@ export function startLinkPreviewHover(): void {
         icon.hidden = true
         icon.removeAttribute('src')
       }
-      const src = faviconUrlForPage(url, favicon)
+      const src = previewFavicon(url, favicon)
       if (src) {
         icon.hidden = false
         icon.src = src
@@ -108,7 +121,7 @@ export function startLinkPreviewHover(): void {
     }
   }
 
-  const applyPreview = (payload: LinkPreviewPayload): void => {
+  const applyPreview = (payload: PreviewPayload): void => {
     if (!currentUrl || canonicalPreviewUrl(payload.url) !== canonicalPreviewUrl(currentUrl) || !shadow) return
     const root = shadow
     const card = root.querySelector('.card')
@@ -145,7 +158,7 @@ export function startLinkPreviewHover(): void {
       applyMeta(root, url, title, null)
     }
     reposition()
-    ipcRenderer.send(IPC.LINK_HOVER, { url, title })
+    ipcRenderer.send(LINK_HOVER, { url, title })
   }
 
   const onOver = (event: Event): void => {
@@ -175,7 +188,7 @@ export function startLinkPreviewHover(): void {
     hide()
   }
 
-  ipcRenderer.on(IPC.LINK_PREVIEW_READY, (_event, payload: LinkPreviewPayload) => {
+  ipcRenderer.on(LINK_PREVIEW_READY, (_event, payload: PreviewPayload) => {
     if (!payload || typeof payload.url !== 'string') return
     applyPreview(payload)
   })
@@ -189,6 +202,8 @@ export function startLinkPreviewHover(): void {
   window.addEventListener('blur', hide)
   window.addEventListener('pagehide', hide)
   window.addEventListener('beforeunload', hide)
+  document.addEventListener('mouseover', onOver, true)
+  document.addEventListener('mouseout', onOut, true)
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'visible') hide()
   })
@@ -209,8 +224,8 @@ function cardMarkup(): string {
         flex-direction: column;
         font-family: "IBM Plex Sans", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
         color: var(--text);
-        opacity: 0;
-        transform: translateY(8px) scale(0.98);
+        opacity: 1;
+        transform: translateY(6px) scale(0.98);
         animation: pop 0.16s ease-out forwards;
       }
       .card[data-theme="dark"] {
@@ -321,14 +336,14 @@ function cardMarkup(): string {
         max-width: 100%;
       }
       @keyframes pop {
-        to { opacity: 1; transform: translateY(0) scale(1); }
+        to { transform: translateY(0) scale(1); }
       }
       @keyframes shimmer {
         from { transform: translateX(-60%); }
         to { transform: translateX(60%); }
       }
       @media (prefers-reduced-motion: reduce) {
-        .card { animation: none; opacity: 1; transform: none; }
+        .card { animation: none; transform: none; }
         .placeholder::after { animation: none; }
       }
     </style>
@@ -349,6 +364,21 @@ function cardMarkup(): string {
       </div>
     </div>
   `
+}
+
+function previewFavicon(pageUrl: string, pageFavicon: string | null): string | null {
+  if (pageFavicon) {
+    if (pageFavicon.startsWith('data:image/')) return pageFavicon
+    if (pageFavicon.startsWith('https://') || pageFavicon.startsWith('http://')) return pageFavicon
+  }
+  if (!pageUrl || pageUrl.startsWith('browsy://')) return null
+  try {
+    const host = new URL(pageUrl).hostname
+    if (!host) return null
+    return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=32`
+  } catch {
+    return null
+  }
 }
 
 function isSafePreviewImage(value: string): boolean {
@@ -389,7 +419,10 @@ function parseLinkNode(node: EventTarget): { element: Element; url: string; titl
     if (!raw || raw.startsWith('#') || node.hasAttribute('download')) return null
     const url = node.href
     if (!isPreviewableUrl(url)) return null
-    const title = (node.getAttribute('title') || node.textContent || '').replace(/\s+/g, ' ').trim()
+    const titleEl = node.querySelector('.card-title, .site-title, .site-name')
+    const title = (titleEl?.textContent || node.getAttribute('title') || node.textContent || '')
+      .replace(/\s+/g, ' ')
+      .trim()
     return { element: node, url, title }
   }
   if (typeof SVGAElement !== 'undefined' && node instanceof SVGAElement) {

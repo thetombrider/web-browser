@@ -9,7 +9,7 @@ import { faviconUrlForPage, isAllowedNavigationUrl, sanitizeNavigationUrl } from
 import { getSettings } from './store'
 
 const PREVIEW_LOAD_TIMEOUT_MS = 7000
-const PREVIEW_SETTLE_MS = 380
+const PREVIEW_SETTLE_MS = 450
 
 export function resolvePreviewTheme(): 'light' | 'dark' {
   const theme = getSettings().theme
@@ -120,6 +120,8 @@ export class LinkPreviewCapturer {
     try {
       await this.loadPreview(wc, safeUrl)
       if (gen !== this.generation || wc.isDestroyed()) return null
+      await this.waitForPaint(wc)
+      if (gen !== this.generation || wc.isDestroyed()) return null
       await sleep(PREVIEW_SETTLE_MS)
       if (gen !== this.generation || wc.isDestroyed()) return null
 
@@ -216,6 +218,23 @@ export class LinkPreviewCapturer {
       wc.once('did-finish-load', finish)
       wc.on('did-fail-load', onFail)
       void wc.loadURL(url).catch(() => finish())
+    })
+  }
+
+  private async waitForPaint(wc: WebContents): Promise<void> {
+    if (wc.isDestroyed()) return
+    await new Promise<void>((resolve) => {
+      let settled = false
+      const done = (): void => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        wc.removeListener('paint', onPaint)
+        resolve()
+      }
+      const onPaint = (): void => done()
+      const timer = setTimeout(done, 1500)
+      wc.once('paint', onPaint)
     })
   }
 }

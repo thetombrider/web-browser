@@ -1,5 +1,3 @@
-import { isAllowedNavigationUrl } from './utils'
-
 /** Carousel focused card is 360×225; hover preview is ~17% larger. */
 export const LINK_PREVIEW_CARD_WIDTH = 420
 export const LINK_PREVIEW_IMAGE_HEIGHT = 262
@@ -25,9 +23,7 @@ export function canonicalPreviewUrl(url: string): string {
     const parsed = new URL(url)
     parsed.hash = ''
     parsed.hostname = parsed.hostname.toLowerCase()
-    if (parsed.pathname.length > 1 && parsed.pathname.endsWith('/')) {
-      parsed.pathname = parsed.pathname.slice(0, -1)
-    }
+    parsed.pathname = parsed.pathname.replace(/\/+$/, '')
     return parsed.toString()
   } catch {
     return url
@@ -44,7 +40,19 @@ export function displayHostname(url: string): string {
 }
 
 export function isPreviewableUrl(url: string): boolean {
-  return isAllowedNavigationUrl(url)
+  if (!url || typeof url !== 'string') return false
+  try {
+    const parsed = new URL(url.trim())
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:' && parsed.protocol !== 'browsy:') {
+      return false
+    }
+    if ((parsed.protocol === 'http:' || parsed.protocol === 'https:') && (parsed.username || parsed.password)) {
+      return false
+    }
+    return true
+  } catch {
+    return false
+  }
 }
 
 export function computeLinkPreviewPosition(

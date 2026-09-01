@@ -11,6 +11,7 @@ import {
   type WebContents
 } from 'electron'
 import { join } from 'path'
+import { existsSync } from 'fs'
 import { generateId, isAllowedNavigationUrl, sanitizeNavigationUrl } from '../../shared/utils'
 import { canonicalPreviewUrl } from '../../shared/link-preview'
 import { encodePreviewImage } from '../services/link-preview'
@@ -167,9 +168,14 @@ export class TabManager {
   ): Promise<Tab> {
     const safeUrl = sanitizeNavigationUrl(url) ?? 'browsy://home'
 
+    const preloadPath = join(__dirname, '../preload/tab.js')
+    if (!existsSync(preloadPath)) {
+      console.error('[Browsy] Tab preload missing', preloadPath)
+    }
+
     const view = new WebContentsView({
       webPreferences: {
-        preload: join(__dirname, '../preload/tab.js'),
+        preload: preloadPath,
         nodeIntegration: false,
         contextIsolation: true,
         sandbox: true,
@@ -747,6 +753,15 @@ export class TabManager {
 
     wc.on('destroyed', () => {
       this.removeDestroyedTab(tab)
+    })
+
+    wc.on('preload-error', (_event, preloadPath, error) => {
+      console.error('[Browsy] Tab preload failed', preloadPath, error)
+    })
+    wc.on('console-message', (_event, _level, message) => {
+      if (typeof message === 'string' && message.includes('[Browsy]')) {
+        console.log(message)
+      }
     })
 
     // Powerful permissions stay denied by default. Media (mic/camera) and
