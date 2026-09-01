@@ -1,4 +1,5 @@
 import { protocol } from 'electron'
+import { clearSessionCache } from './cache'
 import { getBookmarks, getRecentSites, getSettings, setSettings } from './store'
 import { renderBookmarksPage } from './bookmarks-page'
 import { renderShortcutsPage } from './shortcuts-page'
@@ -646,9 +647,13 @@ function renderSettingsSection(label: string, optionsHtml: string): string {
       </div>`
 }
 
-function settingsClientScript(): string {
+function settingsClientScript(replaceUrl?: string): string {
+  const replaceHistory = replaceUrl
+    ? `try { history.replaceState(null, '', ${JSON.stringify(replaceUrl)}); } catch (e) {}`
+    : ''
   return `
     (function () {
+      ${replaceHistory}
       var rows = Array.from(document.querySelectorAll('a.option, a.dev-toggle, a.home-card, a.footer-link'));
       if (!rows.length) return;
       var selectedIndex = -1;
@@ -708,11 +713,12 @@ function applySettingsFromQuery(url: URL): boolean {
   return true
 }
 
-export function renderSettingsPage(showDev = false): string {
+export function renderSettingsPage(showDev = false, cacheCleared = false): string {
   const settings = getSettings()
   const devToggleHref = escapeHtml(settingsPageUrl({}, !showDev))
   const devToggleLabel = showDev ? 'Hide developer' : 'Developer'
   const devToggleSub = showDev ? 'Visible' : 'Hidden'
+  const clearCacheHref = escapeHtml(settingsPageUrl({ clearCache: '1' }, showDev))
 
   const newTabOptions = [
     renderOption('homepage', 'recent', 'Recent sites', settings.homepage, showDev),
@@ -742,6 +748,12 @@ export function renderSettingsPage(showDev = false): string {
     renderOption('theme', 'dark', 'Dark', settings.theme, showDev),
     renderOption('theme', 'system', 'System', settings.theme, showDev)
   ].join('')
+
+  const cacheOptions = `
+    <a class="option" href="${clearCacheHref}">
+      <span class="option-label">Clear cache</span>
+      ${cacheCleared ? '<span class="dev-toggle-sub" aria-live="polite">Cleared</span>' : ''}
+    </a>`
 
   const moreCards = `
       <div class="settings-section">
@@ -805,12 +817,13 @@ export function renderSettingsPage(showDev = false): string {
     </section>
     <section class="home-col" aria-label="Session">
       ${renderSettingsSection('On startup', startupOptions)}
+      ${renderSettingsSection('Cache', cacheOptions)}
       ${moreCards}
       ${developerSection}
     </section>
   </div>
   <a class="footer-link settings-home" href="browsy://home">← Home</a>
-  <script>${settingsClientScript()}</script>
+  <script>${settingsClientScript(cacheCleared ? settingsPageUrl({}, showDev) : undefined)}</script>
 </body>
 </html>`
 }
@@ -976,7 +989,16 @@ export function setupProtocolHandler(onSettingsChanged?: () => void): void {
     if (url.hostname === 'settings' || url.pathname === '/settings') {
       if (applySettingsFromQuery(url)) onSettingsChanged?.()
       const showDev = url.searchParams.get('dev') === '1'
-      return new Response(renderSettingsPage(showDev), {
+      let cacheCleared = false
+      if (url.searchParams.get('clearCache') === '1') {
+        try {
+          await clearSessionCache()
+          cacheCleared = true
+        } catch {
+          cacheCleared = false
+        }
+      }
+      return new Response(renderSettingsPage(showDev, cacheCleared), {
         headers: { 'Content-Type': 'text/html; charset=utf-8' }
       })
     }
