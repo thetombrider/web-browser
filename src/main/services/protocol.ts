@@ -752,7 +752,7 @@ export function renderSettingsPage(showDev = false, cacheCleared = false): strin
   const cacheOptions = `
     <a class="option" href="${clearCacheHref}">
       <span class="option-label">Clear cache</span>
-      ${cacheCleared ? '<span class="dev-toggle-sub" aria-live="polite">Cleared</span>' : ''}
+      <span class="dev-toggle-sub"${cacheCleared ? ' aria-live="polite"' : ''}>${cacheCleared ? 'Cleared' : 'Cached files'}</span>
     </a>`
 
   const moreCards = `
