@@ -231,7 +231,7 @@ export class WindowManager {
       .map((tab) => sanitizeNavigationUrl(tab.url) ?? 'browsy://home')
       .filter((url) => !url.startsWith('browsy://home'))
 
-    await Promise.allSettled(urls.map((url) => entry.tabs.createTab(url, false)))
+    await Promise.allSettled(urls.map((url) => entry.tabs.createTab(url, false, true)))
 
     if (this.windows.has(windowId)) {
       this.layoutWindow(windowId)

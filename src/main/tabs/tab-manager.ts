@@ -6,6 +6,7 @@ import {
   type Event,
   type HandlerDetails
 } from 'electron'
+import { join } from 'path'
 import { generateId, isAllowedNavigationUrl, sanitizeNavigationUrl } from '../../shared/utils'
 import { showsNavigationChrome } from '../../shared/internal-pages'
 import type { ChromePanel, TabState } from '../../shared/types'
@@ -128,17 +129,21 @@ export class TabManager {
     return await this.createTab(safeUrl)
   }
 
-  async createTab(url = 'browsy://home', activate = true): Promise<Tab> {
+  async createTab(url = 'browsy://home', activate = true, blockMediaUntilActivated = false): Promise<Tab> {
     const safeUrl = sanitizeNavigationUrl(url) ?? 'browsy://home'
 
     const view = new WebContentsView({
       webPreferences: {
+        preload: join(__dirname, '../../preload/tab.js'),
         nodeIntegration: false,
         contextIsolation: true,
         sandbox: true,
         webSecurity: true,
         allowRunningInsecureContent: false,
-        navigateOnDragDrop: false
+        navigateOnDragDrop: false,
+        ...(blockMediaUntilActivated
+          ? { additionalArguments: ['--browsy-block-media-until-activated'] }
+          : {})
       }
     })
     view.setBackgroundColor(APP_SURFACE_DARK)
@@ -172,12 +177,13 @@ export class TabManager {
     if (!tab) return
 
     this.activeTabId = tabId
+    const wc = tab.view.webContents
+    if (!wc.isDestroyed()) wc.send('browsy:allow-media-playback')
     this.onLayout()
     // Keep the user's current chrome state when moving between tabs.
     if (this.chromeVisible) this.chromeFocusToken += 1
     else {
-      const wc = tab?.view?.webContents
-      if (wc && !wc.isDestroyed()) wc.focus()
+      if (!wc.isDestroyed()) wc.focus()
     }
     this.onUpdate()
   }
@@ -563,6 +569,9 @@ export class TabManager {
 
     wc.on('did-finish-load', () => {
       if (wc.isDestroyed()) return
+      if (tab.id === this.activeTabId) {
+        wc.send('browsy:allow-media-playback')
+      }
       const url = wc.getURL()
       const title = wc.getTitle()
       if (url && !url.startsWith('browsy://error') && isAllowedNavigationUrl(url)) {
