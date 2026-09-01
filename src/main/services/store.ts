@@ -25,7 +25,8 @@ const defaults: StoreSchema = {
     searchEngine: 'google',
     restoreSession: 'always',
     theme: 'system',
-    hasSeenShortcutTip: false
+    hasSeenShortcutTip: false,
+    linkPreview: true
   },
   siteMediaPermissions: {}
 }

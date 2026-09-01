@@ -13,7 +13,8 @@ export const settingsPatchSchema = z
     searchEngine: searchEngineSchema,
     restoreSession: restoreSessionSchema,
     theme: themeSchema,
-    hasSeenShortcutTip: z.boolean()
+    hasSeenShortcutTip: z.boolean(),
+    linkPreview: z.boolean()
   })
   .partial()
   .strict()

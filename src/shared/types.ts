@@ -102,6 +102,8 @@ export interface Settings {
   restoreSession: RestoreSession
   theme: ThemeMode
   hasSeenShortcutTip: boolean
+  /** Hover previews of http(s) destinations. Default on. */
+  linkPreview: boolean
 }
 
 export interface ToastPayload {

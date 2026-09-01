@@ -16,6 +16,8 @@ import {
 const LINK_HOVER = 'browser:link-hover'
 const LINK_LEAVE = 'browser:link-leave'
 const LINK_PREVIEW_READY = 'browser:link-preview-ready'
+const GET_SETTINGS = 'browser:get-settings'
+const SETTINGS_CHANGED = 'browser:settings-changed'
 
 interface PreviewPayload {
   url: string
@@ -35,6 +37,21 @@ export function startLinkPreviewHover(): void {
   let currentUrl: string | null = null
   let host: HTMLElement | null = null
   let shadow: ShadowRoot | null = null
+  let enabled = true
+
+  const setEnabled = (next: boolean): void => {
+    enabled = next
+    if (!enabled) hide()
+  }
+
+  void ipcRenderer
+    .invoke(GET_SETTINGS)
+    .then((settings: unknown) => setEnabled(previewsEnabled(settings)))
+    .catch(() => undefined)
+
+  ipcRenderer.on(SETTINGS_CHANGED, (_event, settings: unknown) => {
+    setEnabled(previewsEnabled(settings))
+  })
 
   const hide = (): void => {
     if (hoverTimer) {
@@ -142,6 +159,7 @@ export function startLinkPreviewHover(): void {
   }
 
   const showFor = (anchor: Element, url: string, title: string): void => {
+    if (!enabled) return
     const urlChanged = currentUrl !== url
     currentAnchor = anchor
     currentUrl = url
@@ -162,6 +180,7 @@ export function startLinkPreviewHover(): void {
   }
 
   const onOver = (event: Event): void => {
+    if (!enabled) return
     const found = linkFromEvent(event)
     if (!found) return
     if (found.element === currentAnchor && found.url === currentUrl) return
@@ -452,4 +471,9 @@ function nodeInside(container: Element, target: EventTarget | null): boolean {
     current = current instanceof ShadowRoot ? current.host : null
   }
   return false
+}
+
+function previewsEnabled(settings: unknown): boolean {
+  if (!settings || typeof settings !== 'object' || !('linkPreview' in settings)) return true
+  return (settings as { linkPreview?: unknown }).linkPreview !== false
 }

@@ -794,6 +794,16 @@ export class WindowManager {
       if (!entry.chromeView.webContents.isDestroyed()) {
         entry.chromeView.webContents.send(IPC.SETTINGS_CHANGED, settings)
       }
+      if (!settings.linkPreview) {
+        entry.linkPreviewCapturer?.dispose()
+        entry.linkPreviewCapturer = null
+      }
+      for (const tab of entry.tabs.getTabs()) {
+        const wc = tab.view?.webContents
+        if (wc && !wc.isDestroyed()) {
+          wc.send(IPC.SETTINGS_CHANGED, settings)
+        }
+      }
     }
   }
 
@@ -1038,7 +1048,7 @@ export class WindowManager {
     sender: WebContents,
     payload: unknown
   ): Promise<void> {
-    if (this.overlaysBlockLinkPreview(entry) || sender.isDestroyed()) return
+    if (!getSettings().linkPreview || this.overlaysBlockLinkPreview(entry) || sender.isDestroyed()) return
     const parsed = parseLinkHoverPayload(payload)
     if (!parsed) return
 
@@ -1055,7 +1065,7 @@ export class WindowManager {
 
     if (openTab?.isActive) {
       const snapshot = await entry.tabs.captureActivePreview()
-      if (sender.isDestroyed() || this.overlaysBlockLinkPreview(entry)) return
+      if (sender.isDestroyed() || this.overlaysBlockLinkPreview(entry) || !getSettings().linkPreview) return
       if (snapshot) {
         const next = makeLinkPreviewPayload({
           url: parsed.url,
@@ -1075,7 +1085,7 @@ export class WindowManager {
     }
 
     const captured = await capturer.capture(parsed.url)
-    if (sender.isDestroyed() || this.overlaysBlockLinkPreview(entry)) return
+    if (sender.isDestroyed() || this.overlaysBlockLinkPreview(entry) || !getSettings().linkPreview) return
     if (captured) this.sendLinkPreview(sender, captured)
   }
 
