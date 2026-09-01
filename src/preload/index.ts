@@ -5,6 +5,7 @@ import {
   type BrowsyAPI,
   type BrowserState,
   type ChromePanel,
+  type MediaPermissionRequest,
   type PopupRequest,
   type Settings,
   type ThumbnailFailedPayload,
@@ -55,6 +56,12 @@ const api: BrowsyAPI = {
     ipcRenderer.on(IPC.POPUP_REQUEST, handler)
     return () => ipcRenderer.removeListener(IPC.POPUP_REQUEST, handler)
   },
+  onMediaPermissionRequest: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, request: MediaPermissionRequest) =>
+      callback(request)
+    ipcRenderer.on(IPC.MEDIA_PERMISSION_REQUEST, handler)
+    return () => ipcRenderer.removeListener(IPC.MEDIA_PERMISSION_REQUEST, handler)
+  },
   onThumbnailReady: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, payload: ThumbnailReadyPayload) => callback(payload)
     ipcRenderer.on(IPC.THUMBNAIL_READY, handler)
@@ -70,7 +77,9 @@ const api: BrowsyAPI = {
     ipcRenderer.on(IPC.TOAST, handler)
     return () => ipcRenderer.removeListener(IPC.TOAST, handler)
   },
-  respondToPopup: (id, allow) => ipcRenderer.invoke(IPC.POPUP_RESPONSE, id, allow)
+  respondToPopup: (id, allow) => ipcRenderer.invoke(IPC.POPUP_RESPONSE, id, allow),
+  respondToMediaPermission: (id, allow) =>
+    ipcRenderer.invoke(IPC.MEDIA_PERMISSION_RESPONSE, id, allow)
 }
 
 contextBridge.exposeInMainWorld('browsy', api)

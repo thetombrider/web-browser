@@ -21,6 +21,11 @@ protocol.registerSchemesAsPrivileged([
 // Require a user gesture so session restore never starts audio on its own.
 app.commandLine.appendSwitch('autoplay-policy', 'user-gesture-required')
 
+// Optional fake capture devices for headless / CI testing of getUserMedia flows.
+if (process.env.BROWSY_FAKE_MEDIA === '1') {
+  app.commandLine.appendSwitch('use-fake-device-for-media-stream')
+}
+
 function shouldEnableCdp(): boolean {
   return process.env.BROWSY_ENABLE_CDP === '1' || Boolean(process.env.BROWSY_CDP_PORT)
 }
