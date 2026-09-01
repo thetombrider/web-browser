@@ -1,3 +1,5 @@
+/// <reference lib="dom" />
+
 import { ipcRenderer } from 'electron'
 
 const blockMediaUntilActivated = process.argv.includes('--browsy-block-media-until-activated')
