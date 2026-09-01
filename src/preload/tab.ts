@@ -31,9 +31,12 @@ if (blockMediaUntilActivated) {
     if (!event.isTrusted || !mediaPlaybackBlocked) return
     mediaPlaybackBlocked = false
     ipcRenderer.send('browsy:media-user-activation')
+    document.removeEventListener('pointerdown', allowMediaPlaybackAfterUserGesture, true)
+    document.removeEventListener('keydown', allowMediaPlaybackAfterUserGesture, true)
+    document.removeEventListener('touchstart', allowMediaPlaybackAfterUserGesture, true)
   }
 
-  document.addEventListener('pointerdown', allowMediaPlaybackAfterUserGesture, { capture: true, once: true })
-  document.addEventListener('keydown', allowMediaPlaybackAfterUserGesture, { capture: true, once: true })
-  document.addEventListener('touchstart', allowMediaPlaybackAfterUserGesture, { capture: true, once: true })
+  document.addEventListener('pointerdown', allowMediaPlaybackAfterUserGesture, true)
+  document.addEventListener('keydown', allowMediaPlaybackAfterUserGesture, true)
+  document.addEventListener('touchstart', allowMediaPlaybackAfterUserGesture, true)
 }
