@@ -31,6 +31,7 @@ export interface Tab {
   favicon: string | null
   devToolsOpen: boolean
   thumbnail: string | null
+  mediaPlaybackBlocked: boolean
 }
 
 export type TabUpdateCallback = () => void
@@ -180,11 +181,15 @@ export class TabManager {
       view,
       favicon: null,
       devToolsOpen: false,
-      thumbnail: null
+      thumbnail: null,
+      mediaPlaybackBlocked: blockMediaUntilActivated
     }
 
     this.tabs.push(tab)
     this.attachWebContentsHandlers(tab)
+    if (blockMediaUntilActivated) {
+      tab.view.webContents.setAudioMuted(true)
+    }
 
     if (activate) {
       this.switchTab(tab.id)
@@ -206,7 +211,13 @@ export class TabManager {
 
     this.activeTabId = tabId
     const wc = tab.view.webContents
-    if (!wc.isDestroyed()) wc.send('browsy:allow-media-playback')
+    if (!wc.isDestroyed()) {
+      if (tab.mediaPlaybackBlocked) {
+        tab.mediaPlaybackBlocked = false
+        wc.setAudioMuted(false)
+      }
+      wc.send('browsy:allow-media-playback')
+    }
     this.onLayout()
     // Keep the user's current chrome state when moving between tabs.
     if (this.chromeVisible) this.chromeFocusToken += 1
