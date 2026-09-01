@@ -1,4 +1,5 @@
 import { protocol } from 'electron'
+import { clearSessionCache } from './cache'
 import { getBookmarks, getPinnedBookmarks, getRecentSites, getSettings, setBookmarkPinned, setSettings } from './store'
 import { renderBookmarksPage } from './bookmarks-page'
 import { renderShortcutsPage } from './shortcuts-page'
@@ -759,9 +760,13 @@ function renderSettingsSection(label: string, optionsHtml: string): string {
       </div>`
 }
 
-function settingsClientScript(): string {
+function settingsClientScript(replaceUrl?: string): string {
+  const replaceHistory = replaceUrl
+    ? `try { history.replaceState(null, '', ${JSON.stringify(replaceUrl)}); } catch (e) {}`
+    : ''
   return `
     (function () {
+      ${replaceHistory}
       var rows = Array.from(document.querySelectorAll('a.option, a.dev-toggle, a.home-card, a.footer-link, a.pin-row, a.pin-action'));
       if (!rows.length) return;
       var selectedIndex = -1;
@@ -889,11 +894,16 @@ function applySettingsFromQuery(url: URL): boolean {
   return true
 }
 
-export function renderSettingsPage(showDev = false, pinNotice: string | null = null): string {
+export function renderSettingsPage(
+  showDev = false,
+  cacheCleared = false,
+  pinNotice: string | null = null
+): string {
   const settings = getSettings()
   const devToggleHref = escapeHtml(settingsPageUrl({}, !showDev))
   const devToggleLabel = showDev ? 'Hide developer' : 'Developer'
   const devToggleSub = showDev ? 'Visible' : 'Hidden'
+  const clearCacheHref = escapeHtml(settingsPageUrl({ clearCache: '1' }, showDev))
 
   const newTabOptions = [
     renderOption('homepage', 'recent', 'Recent sites', settings.homepage, showDev),
@@ -940,6 +950,15 @@ export function renderSettingsPage(showDev = false, pinNotice: string | null = n
             <div class="card-meta">
               <div class="card-title">Shortcuts</div>
               <div class="card-sub">Keyboard reference</div>
+            </div>
+          </a>
+          <a class="home-card" href="${clearCacheHref}">
+            <div class="card-glyph">×</div>
+            <div class="card-meta">
+              <div class="card-title">Clear cache</div>
+              <div class="card-sub"${cacheCleared ? ' aria-live="polite"' : ''}>${
+                cacheCleared ? 'Cache cleared' : 'Cached files and pages'
+              }</div>
             </div>
           </a>
         </div>
@@ -992,7 +1011,7 @@ export function renderSettingsPage(showDev = false, pinNotice: string | null = n
     </section>
   </div>
   <a class="footer-link settings-home" href="browsy://home">← Home</a>
-  <script>${settingsClientScript()}</script>
+  <script>${settingsClientScript(cacheCleared ? settingsPageUrl({}, showDev) : undefined)}</script>
 </body>
 </html>`
 }
@@ -1163,7 +1182,16 @@ export function setupProtocolHandler(
       const pinResult = applyPinnedFromQuery(url)
       if (pinResult.changed) onPinsChanged?.()
       const showDev = url.searchParams.get('dev') === '1'
-      return new Response(renderSettingsPage(showDev, pinResult.notice), {
+      let cacheCleared = false
+      if (url.searchParams.get('clearCache') === '1') {
+        try {
+          await clearSessionCache()
+          cacheCleared = true
+        } catch {
+          cacheCleared = false
+        }
+      }
+      return new Response(renderSettingsPage(showDev, cacheCleared, pinResult.notice), {
         headers: { 'Content-Type': 'text/html; charset=utf-8' }
       })
     }
