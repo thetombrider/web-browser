@@ -81,6 +81,7 @@ function isFiniteNumber(value: unknown): value is number {
 export class WindowManager {
   private windows = new Map<number, BrowserWindowEntry>()
   private apiServer: ApiServer | null = null
+  private shortcutDispatching = false
 
   constructor(options?: { apiToken?: string | null }) {
     const token = options?.apiToken ?? null
@@ -253,7 +254,10 @@ export class WindowManager {
       linkPreviewCapturer: null
     })
 
-    win.on('ready-to-show', () => win.show())
+    win.on('ready-to-show', () => {
+      win.show()
+      this.focusShortcutTarget(win.id)
+    })
     win.on('resize', () => this.layoutWindow(win.id))
     win.on('closed', () => {
       const current = this.windows.get(win.id)
@@ -268,7 +272,10 @@ export class WindowManager {
       }
     })
 
-    win.on('focus', () => this.broadcastState(win.id))
+    win.on('focus', () => {
+      this.broadcastState(win.id)
+      this.focusShortcutTarget(win.id)
+    })
 
     const rendererUrl = process.env.ELECTRON_RENDERER_URL
     const chromeUrl =
@@ -288,16 +295,18 @@ export class WindowManager {
       if (!allowed) event.preventDefault()
     })
 
-    // Do not show the launcher at startup.
-    await tabs.createTab('browsy://home', true, false)
+    const restoring = Boolean(session?.tabs?.length)
+    await tabs.createTab('browsy://home', true, !restoring)
 
     this.layoutWindow(win.id)
-    this.registerChromeShortcuts(chromeView, win.id)
+    this.registerShortcuts(chromeView.webContents, win.id)
+    this.registerShortcuts(win.webContents, win.id)
     this.broadcastState(win.id)
     win.show()
+    this.focusShortcutTarget(win.id)
 
-    if (session?.tabs?.length) {
-      void this.restoreSessionTabs(win.id, session.tabs)
+    if (restoring) {
+      void this.restoreSessionTabs(win.id, session!.tabs)
     }
 
     return win
@@ -422,6 +431,18 @@ export class WindowManager {
   }
 
   private handleShortcut(windowId: number, action: string): void {
+    if (this.shortcutDispatching) return
+    this.shortcutDispatching = true
+    try {
+      this.runShortcut(windowId, action)
+    } finally {
+      queueMicrotask(() => {
+        this.shortcutDispatching = false
+      })
+    }
+  }
+
+  private runShortcut(windowId: number, action: string): void {
     const entry = this.windows.get(windowId)
     if (!entry) return
     const { tabs } = entry
@@ -737,8 +758,29 @@ export class WindowManager {
     }
   }
 
-  private registerChromeShortcuts(chromeView: WebContentsView, windowId: number): void {
-    chromeView.webContents.on('before-input-event', (event, input) => {
+  private focusShortcutTarget(windowId: number): void {
+    const entry = this.windows.get(windowId)
+    if (!entry || entry.window.isDestroyed()) return
+    // Startup and Cmd-Tab can leave focus on the unused window shell, which
+    // has no page/chrome UI. Only steal in that case so the omnibox and page
+    // keep focus when they already have it.
+    if (!entry.window.webContents.isFocused()) return
+
+    if (entry.carousel || entry.popupOpen || entry.mediaPermissionOpen || entry.tabs.isChromeVisible()) {
+      if (!entry.chromeView.webContents.isDestroyed()) {
+        entry.chromeView.webContents.focus()
+      }
+      return
+    }
+
+    const page = entry.tabs.getActiveTab()?.view.webContents
+    if (page && !page.isDestroyed()) {
+      page.focus()
+    }
+  }
+
+  private registerShortcuts(wc: WebContents, windowId: number): void {
+    wc.on('before-input-event', (event, input) => {
       if (input.type !== 'keyDown') return
       const entry = this.windows.get(windowId)
       if (entry?.carousel && input.key === 'Escape') {
@@ -758,7 +800,7 @@ export class WindowManager {
       }
       const mod = input.control || input.meta
       if (!mod) return
-      const key = input.key.toLowerCase()
+      const key = (input.key || '').toLowerCase()
       const code = input.code
       let action: string | null = null
       if (key === 'l') action = 'navigation'
