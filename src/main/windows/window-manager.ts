@@ -22,11 +22,13 @@ import {
   getRecentSites,
   getSession,
   getSettings,
+  pinBookmarkByUrl,
   removeBookmark,
   saveSession,
   setSettings
 } from '../services/store'
 import { resolveNavigationInput, generateId, sanitizeNavigationUrl, isAllowedWebPermission } from '../../shared/utils'
+import { isPinnableUrl } from '../../shared/pinned-sites'
 import {
   parseBookmarkTitle,
   parseBookmarkUrl,
@@ -38,6 +40,7 @@ import type {
   BrowserState,
   CarouselState,
   ChromePanel,
+  PinResult,
   SessionWindow,
   ThumbnailFailedPayload,
   ThumbnailReadyPayload,
@@ -84,7 +87,10 @@ export class WindowManager {
 
   async initialize(): Promise<void> {
     configureSessionCache()
-    setupProtocolHandler(() => this.broadcastSettings())
+    setupProtocolHandler(
+      () => this.broadcastSettings(),
+      () => this.notifyPinsChanged(false)
+    )
     this.registerSessionPermissions()
     this.registerIpc()
     this.apiServer?.start()
@@ -472,6 +478,9 @@ export class WindowManager {
       case 'bookmark-page':
         this.bookmarkActivePage(windowId)
         break
+      case 'pin-page':
+        this.pinActivePage(windowId)
+        break
     }
     this.layoutWindow(windowId)
     this.broadcastState(windowId)
@@ -621,6 +630,78 @@ export class WindowManager {
     return payload
   }
 
+  private pinActivePage(windowId: number): PinResult {
+    const entry = this.windows.get(windowId)
+    const empty: PinResult = {
+      pinned: false,
+      alreadyPinned: false,
+      atLimit: false,
+      bookmarked: false,
+      title: '',
+      url: ''
+    }
+    if (!entry) return empty
+
+    const active = entry.tabs.getActiveTab()
+    const wc = active?.view.webContents
+    if (!wc || wc.isDestroyed()) return empty
+
+    const url = wc.getURL()
+    const title = wc.getTitle() || url
+    if (!url || !isPinnableUrl(url)) {
+      this.sendToast(windowId, { id: generateId(), message: 'This page can’t be pinned', tone: 'default' })
+      return empty
+    }
+
+    const bookmarkResult = addBookmark({ id: generateId(), title, url, createdAt: Date.now() })
+    const pinResult = pinBookmarkByUrl(url)
+    const payload: PinResult = {
+      pinned: pinResult.pinned,
+      alreadyPinned: pinResult.alreadyPinned,
+      atLimit: pinResult.atLimit,
+      bookmarked: bookmarkResult.added,
+      title,
+      url
+    }
+
+    let message = 'Pinned'
+    if (pinResult.atLimit) message = 'You can pin up to 5 sites'
+    else if (pinResult.alreadyPinned) message = 'Already pinned'
+
+    this.sendToast(windowId, {
+      id: generateId(),
+      message,
+      tone: pinResult.atLimit ? 'default' : 'success'
+    })
+    this.notifyPinsChanged(true)
+    return payload
+  }
+
+  private broadcastBookmarks(): void {
+    const bookmarks = getBookmarks()
+    for (const win of this.windows.values()) {
+      if (!win.chromeView.webContents.isDestroyed()) {
+        win.chromeView.webContents.send(IPC.BOOKMARKS_CHANGED, bookmarks)
+      }
+    }
+  }
+
+  private reloadHomePages(includeSettings = false): void {
+    for (const win of this.windows.values()) {
+      win.tabs.reloadTabsMatching((tabUrl) => {
+        if (tabUrl.startsWith('browsy://home')) return true
+        if (tabUrl.startsWith('browsy://bookmarks')) return true
+        return includeSettings && tabUrl.startsWith('browsy://settings')
+      })
+    }
+  }
+
+  /** Pinned shortcuts are derived from bookmarks; refresh launcher + home (and settings when needed). */
+  private notifyPinsChanged(includeSettings: boolean): void {
+    this.broadcastBookmarks()
+    this.reloadHomePages(includeSettings)
+  }
+
   private sendToast(windowId: number, toast: ToastPayload): void {
     const entry = this.windows.get(windowId)
     if (!entry || entry.chromeView.webContents.isDestroyed()) return
@@ -673,6 +754,7 @@ export class WindowManager {
       else if (key === 'd') action = 'bookmark-page'
       else if (key === ',') action = 'settings'
       else if (key === '/' || key === '?' || code === 'Slash') action = 'shortcuts'
+      else if (key === 'p' && input.shift) action = 'pin-page'
       else if (key === 'p') action = 'back'
       else if (key === 'n' && !input.shift) action = 'forward'
       else if (key === 'n' && input.shift) action = 'new-window'
@@ -967,8 +1049,24 @@ export class WindowManager {
       return this.bookmarkActivePage(entry.window.id)
     })
 
+    ipcMain.handle(IPC.PIN_PAGE, (event) => {
+      const entry = this.getEntryFromEvent(event)
+      if (!entry) {
+        return {
+          pinned: false,
+          alreadyPinned: false,
+          atLimit: false,
+          bookmarked: false,
+          title: '',
+          url: ''
+        } satisfies PinResult
+      }
+      return this.pinActivePage(entry.window.id)
+    })
+
     ipcMain.handle(IPC.REMOVE_BOOKMARK, (_event, id: string) => {
       removeBookmark(id)
+      this.notifyPinsChanged(true)
     })
 
     ipcMain.handle(IPC.GET_HISTORY, () => getHistory())

@@ -1,11 +1,13 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import {
   IPC,
+  type Bookmark,
   type BookmarkResult,
   type BrowsyAPI,
   type BrowserState,
   type ChromePanel,
   type MediaPermissionRequest,
+  type PinResult,
   type PopupRequest,
   type Settings,
   type ThumbnailFailedPayload,
@@ -36,6 +38,7 @@ const api: BrowsyAPI = {
   getBookmarks: () => ipcRenderer.invoke(IPC.GET_BOOKMARKS),
   addBookmark: (url, title) => ipcRenderer.invoke(IPC.ADD_BOOKMARK, url, title) as Promise<BookmarkResult>,
   bookmarkPage: () => ipcRenderer.invoke(IPC.BOOKMARK_PAGE) as Promise<BookmarkResult>,
+  pinPage: () => ipcRenderer.invoke(IPC.PIN_PAGE) as Promise<PinResult>,
   removeBookmark: (id) => ipcRenderer.invoke(IPC.REMOVE_BOOKMARK, id),
   getHistory: () => ipcRenderer.invoke(IPC.GET_HISTORY),
   getRecentSites: () => ipcRenderer.invoke(IPC.GET_RECENT_SITES),
@@ -45,6 +48,11 @@ const api: BrowsyAPI = {
     const handler = (_event: Electron.IpcRendererEvent, settings: Settings) => callback(settings)
     ipcRenderer.on(IPC.SETTINGS_CHANGED, handler)
     return () => ipcRenderer.removeListener(IPC.SETTINGS_CHANGED, handler)
+  },
+  onBookmarksChanged: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, bookmarks: Bookmark[]) => callback(bookmarks)
+    ipcRenderer.on(IPC.BOOKMARKS_CHANGED, handler)
+    return () => ipcRenderer.removeListener(IPC.BOOKMARKS_CHANGED, handler)
   },
   onStateChanged: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, state: BrowserState) => callback(state)

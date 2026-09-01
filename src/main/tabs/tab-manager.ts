@@ -282,6 +282,18 @@ export class TabManager {
     this.getActiveTab()?.view.webContents.reload()
   }
 
+  reloadTabsMatching(predicate: (url: string) => boolean): void {
+    for (const tab of this.getTabs()) {
+      const wc = tab.view?.webContents
+      if (!wc || wc.isDestroyed()) continue
+      try {
+        if (predicate(wc.getURL())) wc.reload()
+      } catch {
+        // Ignore tabs whose URL cannot be read.
+      }
+    }
+  }
+
   stop(): void {
     this.getActiveTab()?.view.webContents.stop()
   }
@@ -875,6 +887,7 @@ export class TabManager {
       else if (key === 't' && !input.shift) action = 'new-tab'
       else if (key === 'w') action = 'close-tab'
       else if (key === 'r') action = 'reload'
+      else if (key === 'p' && input.shift) action = 'pin-page'
       else if (key === 'p') action = 'back'
       else if (key === 'n' && !input.shift) action = 'forward'
       else if (key === 'n' && input.shift) action = 'new-window'
