@@ -1,11 +1,19 @@
 import Store from 'electron-store'
-import type { Bookmark, HistoryEntry, SessionWindow, Settings } from '../../shared/types'
+import type {
+  Bookmark,
+  HistoryEntry,
+  SessionWindow,
+  Settings,
+  SiteMediaPermissions
+} from '../../shared/types'
 
 interface StoreSchema {
   bookmarks: Bookmark[]
   history: HistoryEntry[]
   session: SessionWindow[]
   settings: Settings
+  /** Per-origin mic/camera decisions for video calls and getUserMedia. */
+  siteMediaPermissions: Record<string, SiteMediaPermissions>
 }
 
 const defaults: StoreSchema = {
@@ -18,7 +26,8 @@ const defaults: StoreSchema = {
     restoreSession: 'always',
     theme: 'system',
     hasSeenShortcutTip: false
-  }
+  },
+  siteMediaPermissions: {}
 }
 
 export const store = new Store<StoreSchema>({
@@ -87,4 +96,17 @@ export function setSettings(settings: Partial<Settings>): Settings {
   const next = { ...current, ...settings }
   store.set('settings', next)
   return next
+}
+
+export function getSiteMediaPermissions(): Record<string, SiteMediaPermissions> {
+  return store.get('siteMediaPermissions') ?? {}
+}
+
+export function setSiteMediaPermissions(
+  origin: string,
+  permissions: SiteMediaPermissions
+): SiteMediaPermissions {
+  const all = { ...getSiteMediaPermissions(), [origin]: permissions }
+  store.set('siteMediaPermissions', all)
+  return permissions
 }

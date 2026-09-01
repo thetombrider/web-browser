@@ -23,7 +23,13 @@
       "package.json"
     ],
     "mac": {
-      "target": ["dmg"]
+      "target": ["dmg"],
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "extendInfo": {
+        "NSCameraUsageDescription": "Browsy needs camera access so websites can use video calls.",
+        "NSMicrophoneUsageDescription": "Browsy needs microphone access so websites can use voice and video calls."
+      }
     }
   },
   "keywords": [
