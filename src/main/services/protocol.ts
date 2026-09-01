@@ -13,6 +13,7 @@ import {
   BROWSY_CDP_PORT,
   HOME_PAGE_TOP_PADDING,
   RECENT_SITES_COUNT,
+  SEARCH_ENGINE_URLS,
   type RestoreSession,
   type SearchEngine,
   type Settings,
@@ -70,12 +71,12 @@ function renderSiteGlyph(url: string): string {
   const letter = escapeHtml(letterForUrl(url))
   const favicon = faviconUrlForPage(url)
   if (!favicon) {
-    return `<div class="glyph" aria-hidden="true">${letter}</div>`
+    return `<span class="glyph" aria-hidden="true">${letter}</span>`
   }
-  return `<div class="glyph" aria-hidden="true">
+  return `<span class="glyph" aria-hidden="true">
     <span class="glyph-letter">${letter}</span>
     <img class="favicon" src="${escapeHtml(favicon)}" alt="" width="16" height="16" loading="lazy" decoding="async" onerror="this.remove()" />
-  </div>`
+  </span>`
 }
 
 function baseStyles(theme: ThemeMode): string {
@@ -363,6 +364,9 @@ function baseStyles(theme: ThemeMode): string {
       font-weight: 500;
       flex-shrink: 0;
     }
+    .option-label {
+      min-width: 0;
+    }
     ${lightThemeStart(theme)}
       .option:hover, .option.selected, .option.kb-selected { background: ${APP_SURFACE_ELEVATED_LIGHT}; }
       .option.selected, .option.kb-selected { outline: 1px solid rgba(0,0,0,0.08); }
@@ -620,15 +624,18 @@ function renderOption(
   value: string,
   label: string,
   current: string,
-  showDev: boolean
+  showDev: boolean,
+  iconUrl?: string
 ): string {
   const selected = current === value
   const check = selected ? '<span class="option-check" aria-hidden="true">✓</span>' : ''
+  const glyph = iconUrl ? renderSiteGlyph(iconUrl) : ''
+  const content = `${glyph}<span class="option-label">${escapeHtml(label)}</span>${check}`
   if (selected) {
-    return `<span class="option selected" aria-current="true">${escapeHtml(label)}${check}</span>`
+    return `<span class="option selected" aria-current="true">${content}</span>`
   }
   const href = escapeHtml(settingsPageUrl({ [param]: value }, showDev))
-  return `<a class="option" href="${href}">${escapeHtml(label)}</a>`
+  return `<a class="option" href="${href}">${content}</a>`
 }
 
 function renderSettingsSection(label: string, optionsHtml: string): string {
@@ -713,9 +720,16 @@ export function renderSettingsPage(showDev = false): string {
   ].join('')
 
   const searchOptions = [
-    renderOption('searchEngine', 'google', 'Google', settings.searchEngine, showDev),
-    renderOption('searchEngine', 'duckduckgo', 'DuckDuckGo', settings.searchEngine, showDev),
-    renderOption('searchEngine', 'bing', 'Bing', settings.searchEngine, showDev)
+    renderOption('searchEngine', 'google', 'Google', settings.searchEngine, showDev, SEARCH_ENGINE_URLS.google),
+    renderOption(
+      'searchEngine',
+      'duckduckgo',
+      'DuckDuckGo',
+      settings.searchEngine,
+      showDev,
+      SEARCH_ENGINE_URLS.duckduckgo
+    ),
+    renderOption('searchEngine', 'bing', 'Bing', settings.searchEngine, showDev, SEARCH_ENGINE_URLS.bing)
   ].join('')
 
   const startupOptions = [
