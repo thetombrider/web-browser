@@ -3,13 +3,17 @@ import {
   WebContentsView,
   ipcMain,
   app,
+  session,
   type IpcMainEvent,
-  type IpcMainInvokeEvent
+  type IpcMainInvokeEvent,
+  type MediaAccessPermissionRequest,
+  type WebContents
 } from 'electron'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
 import { TabManager } from '../tabs/tab-manager'
 import { ApiServer } from '../services/api-server'
+import { configureSessionCache } from '../services/cache'
 import { setupProtocolHandler } from '../services/protocol'
 import {
   addBookmark,
@@ -22,7 +26,7 @@ import {
   saveSession,
   setSettings
 } from '../services/store'
-import { resolveNavigationInput, generateId, sanitizeNavigationUrl } from '../../shared/utils'
+import { resolveNavigationInput, generateId, sanitizeNavigationUrl, isAllowedWebPermission } from '../../shared/utils'
 import {
   parseBookmarkTitle,
   parseBookmarkUrl,
@@ -60,6 +64,7 @@ interface BrowserWindowEntry {
   carousel: CarouselState | null
   carouselTabIds: string[]
   popupOpen: boolean
+  mediaPermissionOpen: boolean
 }
 
 function isFiniteNumber(value: unknown): value is number {
@@ -78,13 +83,15 @@ export class WindowManager {
   }
 
   async initialize(): Promise<void> {
+    configureSessionCache()
     setupProtocolHandler(() => this.broadcastSettings())
+    this.registerSessionPermissions()
     this.registerIpc()
     this.apiServer?.start()
 
-    const session = getSettings().restoreSession === 'always' ? getSession() : []
-    if (session.length > 0) {
-      for (const winSession of session) {
+    const sessionData = getSettings().restoreSession === 'always' ? getSession() : []
+    if (sessionData.length > 0) {
+      for (const winSession of sessionData) {
         await this.createWindow(winSession)
       }
     } else {
@@ -92,6 +99,44 @@ export class WindowManager {
     }
 
     app.on('before-quit', () => this.persistSession())
+  }
+
+  private findEntryByWebContents(wc: WebContents): BrowserWindowEntry | null {
+    for (const entry of this.windows.values()) {
+      if (entry.tabs.ownsWebContents(wc)) return entry
+    }
+    return null
+  }
+
+  private registerSessionPermissions(): void {
+    const ses = session.defaultSession
+
+    ses.setPermissionCheckHandler((wc, permission, requestingOrigin, details) => {
+      // Allow sanitized clipboard writes so in-page copy buttons work.
+      if (isAllowedWebPermission(permission)) return true
+      if (permission !== 'media') return false
+      if (!wc) return false
+      const entry = this.findEntryByWebContents(wc)
+      if (!entry) return false
+      return entry.tabs.checkMediaPermission(requestingOrigin, details)
+    })
+
+    ses.setPermissionRequestHandler((wc, permission, callback, details) => {
+      if (isAllowedWebPermission(permission)) {
+        callback(true)
+        return
+      }
+      if (permission !== 'media') {
+        callback(false)
+        return
+      }
+      const entry = this.findEntryByWebContents(wc)
+      if (!entry) {
+        callback(false)
+        return
+      }
+      entry.tabs.handleMediaPermissionRequest(wc, details as MediaAccessPermissionRequest, callback)
+    })
   }
 
   async createWindow(session?: SessionWindow): Promise<BrowserWindow> {
@@ -157,6 +202,21 @@ export class WindowManager {
           this.layoutWindow(win.id)
         }
       },
+      (id, origin, kinds) => {
+        const entry = this.windows.get(win.id)
+        if (entry) {
+          entry.mediaPermissionOpen = true
+          this.layoutWindow(win.id)
+        }
+        chromeView.webContents.send(IPC.MEDIA_PERMISSION_REQUEST, { id, origin, kinds })
+      },
+      (_id) => {
+        const entry = this.windows.get(win.id)
+        if (entry) {
+          entry.mediaPermissionOpen = false
+          this.layoutWindow(win.id)
+        }
+      },
       (action) => this.handleShortcut(win.id, action),
       () => this.layoutWindow(win.id),
       () => this.windows.get(win.id)?.carousel !== null
@@ -173,7 +233,8 @@ export class WindowManager {
       windowDrag: null,
       carousel: null,
       carouselTabIds: [],
-      popupOpen: false
+      popupOpen: false,
+      mediaPermissionOpen: false
     })
 
     win.on('ready-to-show', () => win.show())
@@ -227,11 +288,35 @@ export class WindowManager {
     const entry = this.windows.get(windowId)
     if (!entry) return
 
-    const urls = sessionTabs
-      .map((tab) => sanitizeNavigationUrl(tab.url) ?? 'browsy://home')
-      .filter((url) => !url.startsWith('browsy://home'))
+    const restored = sessionTabs
+      .map((tab) => ({
+        url: sanitizeNavigationUrl(tab.url) ?? 'browsy://home',
+        active: tab.active
+      }))
+      .filter((tab) => !tab.url.startsWith('browsy://home'))
 
-    await Promise.allSettled(urls.map((url) => entry.tabs.createTab(url, false)))
+    if (restored.length === 0) return
+
+    const activeEntry = restored.find((tab) => tab.active) ?? restored[0]
+    const background = restored.filter((tab) => tab.url !== activeEntry.url)
+
+    const homeTab = entry.tabs.findNewTab()
+    if (homeTab) {
+      const wc = homeTab.view.webContents
+      if (!wc.isDestroyed()) {
+        await wc.loadURL(activeEntry.url)
+        entry.tabs.switchTab(homeTab.id)
+      }
+    } else {
+      await entry.tabs.createTab(activeEntry.url, true)
+    }
+
+    // Stagger background tab loads so the active page gets bandwidth first.
+    for (const tab of background) {
+      if (!this.windows.has(windowId)) return
+      await entry.tabs.createTab(tab.url, false)
+      await new Promise<void>((resolve) => setImmediate(resolve))
+    }
 
     if (this.windows.has(windowId)) {
       this.layoutWindow(windowId)
@@ -256,7 +341,7 @@ export class WindowManager {
     // Spotlight floats over full-bleed pages — never inset content for it.
     entry.tabs.layoutTabViews(0)
 
-    if (entry.carousel || spotlightOpen || entry.popupOpen) {
+    if (entry.carousel || spotlightOpen || entry.popupOpen || entry.mediaPermissionOpen) {
       entry.chromeView.setBounds({ x: 0, y: 0, width: bounds.width, height: bounds.height })
       this.ensureChromeOnTop(entry)
       entry.chromeView.webContents.focus()
@@ -899,6 +984,10 @@ export class WindowManager {
 
     ipcMain.handle(IPC.POPUP_RESPONSE, (event, id: string, allow: boolean) => {
       this.getEntryFromEvent(event)?.tabs.respondToPopup(id, allow)
+    })
+
+    ipcMain.handle(IPC.MEDIA_PERMISSION_RESPONSE, (event, id: string, allow: boolean) => {
+      this.getEntryFromEvent(event)?.tabs.respondToMediaPermission(id, allow)
     })
   }
 

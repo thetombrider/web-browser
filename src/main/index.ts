@@ -1,7 +1,10 @@
 import { app, BrowserWindow, protocol } from 'electron'
 import { randomBytes } from 'crypto'
 import { BROWSY_CDP_PORT } from '../shared/types'
+import { appendCacheCommandLineSwitches } from './services/cache'
 import { WindowManager } from './windows/window-manager'
+
+appendCacheCommandLineSwitches()
 
 // Must run before app is ready so browsy:// gets standard/secure privileges.
 protocol.registerSchemesAsPrivileged([
@@ -12,7 +15,8 @@ protocol.registerSchemesAsPrivileged([
       secure: true,
       supportFetchAPI: true,
       corsEnabled: true,
-      stream: true
+      stream: true,
+      codeCache: true
     }
   }
 ])
@@ -20,6 +24,11 @@ protocol.registerSchemesAsPrivileged([
 // Restored pages may try to resume media while they load in the background.
 // Require a user gesture so session restore never starts audio on its own.
 app.commandLine.appendSwitch('autoplay-policy', 'user-gesture-required')
+
+// Optional fake capture devices for headless / CI testing of getUserMedia flows.
+if (process.env.BROWSY_FAKE_MEDIA === '1') {
+  app.commandLine.appendSwitch('use-fake-device-for-media-stream')
+}
 
 function shouldEnableCdp(): boolean {
   return process.env.BROWSY_ENABLE_CDP === '1' || Boolean(process.env.BROWSY_CDP_PORT)
