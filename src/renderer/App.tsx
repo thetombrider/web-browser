@@ -72,7 +72,7 @@ export default function App() {
     } else if (!state.chromeVisible) {
       void window.browsy.setChromeHeight(CHROME_DRAG_HEIGHT)
     }
-  }, [popup, mediaPermission, state.chromeVisible, state.chromePanel, state.carousel])
+  }, [popup, mediaPermission, state.chromeVisible, state.chromePanel, Boolean(state.carousel)])
 
   useEffect(() => {
     if (!state.chromeVisible || state.chromePanel !== 'navigation') return

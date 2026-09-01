@@ -324,6 +324,13 @@ export class WindowManager {
     }
   }
 
+  private ensureChromeOnTop(entry: BrowserWindowEntry): void {
+    const children = entry.window.contentView.children
+    if (children[children.length - 1] !== entry.chromeView) {
+      entry.window.contentView.addChildView(entry.chromeView)
+    }
+  }
+
   private layoutWindow(windowId: number): void {
     const entry = this.windows.get(windowId)
     if (!entry || entry.window.isDestroyed()) return
@@ -336,7 +343,7 @@ export class WindowManager {
 
     if (entry.carousel || spotlightOpen || entry.popupOpen || entry.mediaPermissionOpen) {
       entry.chromeView.setBounds({ x: 0, y: 0, width: bounds.width, height: bounds.height })
-      entry.window.contentView.addChildView(entry.chromeView)
+      this.ensureChromeOnTop(entry)
       entry.chromeView.webContents.focus()
       return
     }
@@ -358,7 +365,7 @@ export class WindowManager {
     })
 
     // Keep chrome above the active page view.
-    entry.window.contentView.addChildView(entry.chromeView)
+    this.ensureChromeOnTop(entry)
 
     if (chromeVisible) {
       entry.chromeView.webContents.focus()
@@ -372,7 +379,9 @@ export class WindowManager {
     const spotlightOpen =
       entry.tabs.isChromeVisible() && entry.tabs.getChromePanel() === 'navigation'
     if (spotlightOpen || entry.carousel) {
-      entry.chromeHeight = Math.max(CHROME_DRAG_HEIGHT, Math.round(height))
+      const next = Math.max(CHROME_DRAG_HEIGHT, Math.round(height))
+      if (next === entry.chromeHeight) return
+      entry.chromeHeight = next
       this.layoutWindow(windowId)
       return
     }
@@ -481,13 +490,11 @@ export class WindowManager {
       const currentIndex = entry.carouselTabIds.indexOf(entry.carousel.selectedTabId)
       if (currentIndex === -1) {
         entry.carousel = { selectedTabId: entry.carouselTabIds[0], direction }
-        this.layoutWindow(windowId)
         this.broadcastState(windowId)
         return
       }
       const nextIndex = (currentIndex + direction + entry.carouselTabIds.length) % entry.carouselTabIds.length
       entry.carousel = { selectedTabId: entry.carouselTabIds[nextIndex], direction }
-      this.layoutWindow(windowId)
       this.broadcastState(windowId)
       return
     }
