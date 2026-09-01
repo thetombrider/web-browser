@@ -27,6 +27,8 @@ import {
   setSettings
 } from '../services/store'
 import { resolveNavigationInput, generateId, sanitizeNavigationUrl, isAllowedWebPermission } from '../../shared/utils'
+import { displayHostname } from '../../shared/link-preview'
+import { LinkPreviewCapturer, makeLinkPreviewPayload } from '../services/link-preview'
 import {
   parseBookmarkTitle,
   parseBookmarkUrl,
@@ -38,6 +40,7 @@ import type {
   BrowserState,
   CarouselState,
   ChromePanel,
+  LinkPreviewPayload,
   SessionWindow,
   ThumbnailFailedPayload,
   ThumbnailReadyPayload,
@@ -65,6 +68,7 @@ interface BrowserWindowEntry {
   carouselTabIds: string[]
   popupOpen: boolean
   mediaPermissionOpen: boolean
+  linkPreviewCapturer: LinkPreviewCapturer | null
 }
 
 function isFiniteNumber(value: unknown): value is number {
@@ -112,6 +116,7 @@ export class WindowManager {
     const ses = session.defaultSession
 
     ses.setPermissionCheckHandler((wc, permission, requestingOrigin, details) => {
+      if (wc && this.isLinkPreviewContents(wc)) return false
       // Allow sanitized clipboard writes so in-page copy buttons work.
       if (isAllowedWebPermission(permission)) return true
       if (permission !== 'media') return false
@@ -122,6 +127,10 @@ export class WindowManager {
     })
 
     ses.setPermissionRequestHandler((wc, permission, callback, details) => {
+      if (this.isLinkPreviewContents(wc)) {
+        callback(false)
+        return
+      }
       if (isAllowedWebPermission(permission)) {
         callback(true)
         return
@@ -234,12 +243,15 @@ export class WindowManager {
       carousel: null,
       carouselTabIds: [],
       popupOpen: false,
-      mediaPermissionOpen: false
+      mediaPermissionOpen: false,
+      linkPreviewCapturer: null
     })
 
     win.on('ready-to-show', () => win.show())
     win.on('resize', () => this.layoutWindow(win.id))
     win.on('closed', () => {
+      const current = this.windows.get(win.id)
+      current?.linkPreviewCapturer?.dispose()
       tabs.destroy()
       if (!chromeView.webContents.isDestroyed()) {
         chromeView.webContents.close()
@@ -991,6 +1003,87 @@ export class WindowManager {
     ipcMain.handle(IPC.MEDIA_PERMISSION_RESPONSE, (event, id: string, allow: boolean) => {
       this.getEntryFromEvent(event)?.tabs.respondToMediaPermission(id, allow)
     })
+
+    ipcMain.on(IPC.LINK_HOVER, (event, payload: unknown) => {
+      const entry = this.getEntryFromEvent(event)
+      if (!entry) return
+      void this.handleLinkHover(entry, event.sender, payload)
+    })
+
+    ipcMain.on(IPC.LINK_LEAVE, (event) => {
+      const entry = this.getEntryFromEvent(event)
+      entry?.linkPreviewCapturer?.cancel()
+    })
+  }
+
+  private isLinkPreviewContents(wc: WebContents): boolean {
+    for (const entry of this.windows.values()) {
+      if (entry.linkPreviewCapturer?.owns(wc)) return true
+    }
+    return false
+  }
+
+  private overlaysBlockLinkPreview(entry: BrowserWindowEntry): boolean {
+    const spotlightOpen = entry.tabs.isChromeVisible() && entry.tabs.getChromePanel() === 'navigation'
+    return Boolean(entry.carousel || entry.popupOpen || entry.mediaPermissionOpen || spotlightOpen)
+  }
+
+  private sendLinkPreview(wc: WebContents, payload: LinkPreviewPayload): void {
+    if (wc.isDestroyed()) return
+    wc.send(IPC.LINK_PREVIEW_READY, payload)
+  }
+
+  private async handleLinkHover(
+    entry: BrowserWindowEntry,
+    sender: WebContents,
+    payload: unknown
+  ): Promise<void> {
+    if (this.overlaysBlockLinkPreview(entry) || sender.isDestroyed()) return
+    const parsed = parseLinkHoverPayload(payload)
+    if (!parsed) return
+
+    const capturer = this.ensureLinkPreviewCapturer(entry)
+    const openTab = entry.tabs.findTabPreview(parsed.url)
+    const cached = capturer.getCached(parsed.url)
+    const immediate = makeLinkPreviewPayload({
+      url: parsed.url,
+      title: openTab?.title || parsed.title || displayHostname(parsed.url),
+      favicon: openTab?.favicon ?? cached?.favicon,
+      dataUrl: openTab?.thumbnail ?? cached?.dataUrl ?? null
+    })
+    this.sendLinkPreview(sender, immediate)
+
+    if (openTab?.isActive) {
+      const snapshot = await entry.tabs.captureActivePreview()
+      if (sender.isDestroyed() || this.overlaysBlockLinkPreview(entry)) return
+      if (snapshot) {
+        const next = makeLinkPreviewPayload({
+          url: parsed.url,
+          title: openTab.title || parsed.title,
+          favicon: openTab.favicon,
+          dataUrl: snapshot
+        })
+        capturer.remember(next)
+        this.sendLinkPreview(sender, next)
+        return
+      }
+    }
+
+    if (immediate.dataUrl) {
+      capturer.remember(immediate)
+      return
+    }
+
+    const captured = await capturer.capture(parsed.url)
+    if (sender.isDestroyed() || this.overlaysBlockLinkPreview(entry)) return
+    if (captured) this.sendLinkPreview(sender, captured)
+  }
+
+  private ensureLinkPreviewCapturer(entry: BrowserWindowEntry): LinkPreviewCapturer {
+    if (!entry.linkPreviewCapturer) {
+      entry.linkPreviewCapturer = new LinkPreviewCapturer(entry.window)
+    }
+    return entry.linkPreviewCapturer
   }
 
   private persistSession(): void {
@@ -1004,4 +1097,14 @@ export class WindowManager {
     }
     saveSession(session)
   }
+}
+
+function parseLinkHoverPayload(payload: unknown): { url: string; title: string } | null {
+  if (!payload || typeof payload !== 'object') return null
+  const url = 'url' in payload ? (payload as { url: unknown }).url : null
+  const title = 'title' in payload ? (payload as { title: unknown }).title : ''
+  if (typeof url !== 'string') return null
+  const safe = sanitizeNavigationUrl(url)
+  if (!safe) return null
+  return { url: safe, title: typeof title === 'string' ? title.slice(0, 300) : '' }
 }

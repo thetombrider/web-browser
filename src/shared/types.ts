@@ -49,6 +49,21 @@ export interface ThumbnailFailedPayload {
   tabId: string
 }
 
+export interface LinkHoverPayload {
+  url: string
+  title: string
+}
+
+export interface LinkPreviewPayload {
+  url: string
+  title: string
+  hostname: string
+  favicon: string | null
+  dataUrl: string | null
+  theme: 'light' | 'dark'
+  failed?: boolean
+}
+
 export interface BrowserState {
   tabs: TabState[]
   activeTabId: string | null
@@ -137,7 +152,10 @@ export const IPC = {
   THUMBNAIL_READY: 'browser:thumbnail-ready',
   THUMBNAIL_FAILED: 'browser:thumbnail-failed',
   TOAST: 'browser:toast',
-  BOOKMARK_PAGE: 'browser:bookmark-page'
+  BOOKMARK_PAGE: 'browser:bookmark-page',
+  LINK_HOVER: 'browser:link-hover',
+  LINK_LEAVE: 'browser:link-leave',
+  LINK_PREVIEW_READY: 'browser:link-preview-ready'
 } as const
 
 export interface PopupRequest {
