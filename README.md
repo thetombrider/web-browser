@@ -81,6 +81,7 @@ By default Browsy keeps local control surfaces **off**:
 - Navigation is limited to `http:`, `https:`, and `browsy:` (blocks `javascript:`, `file:`, `data:`, etc.).
 - Tab content runs sandboxed with most permissions and invalid TLS certificates denied by default.
 - Microphone and camera access are prompted per site (decision remembered); other powerful permissions stay denied.
+- For local getUserMedia testing without real devices, set `BROWSY_FAKE_MEDIA=1` (Chromium fake capture devices).
 
 ## Agent integration
 
