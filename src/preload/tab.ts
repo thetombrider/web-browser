@@ -27,7 +27,13 @@ if (blockMediaUntilActivated) {
   document.addEventListener('play', (event) => pauseIfBlocked(event.target), true)
   document.addEventListener('playing', (event) => pauseIfBlocked(event.target), true)
 
-  ipcRenderer.on('browsy:allow-media-playback', () => {
+  const allowMediaPlaybackAfterUserGesture = (event: Event): void => {
+    if (!event.isTrusted || !mediaPlaybackBlocked) return
     mediaPlaybackBlocked = false
-  })
+    ipcRenderer.send('browsy:media-user-activation')
+  }
+
+  document.addEventListener('pointerdown', allowMediaPlaybackAfterUserGesture, { capture: true, once: true })
+  document.addEventListener('keydown', allowMediaPlaybackAfterUserGesture, { capture: true, once: true })
+  document.addEventListener('touchstart', allowMediaPlaybackAfterUserGesture, { capture: true, once: true })
 }
