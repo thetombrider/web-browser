@@ -22,7 +22,8 @@ const defaults: StoreSchema = {
     restoreSession: 'always',
     theme: 'system',
     hasSeenShortcutTip: false,
-    linkPreview: true
+    linkPreview: true,
+    aiAssistant: 'chatgpt'
   },
   siteMediaPermissions: {}
 }

@@ -14,6 +14,7 @@ A minimal, keyboard-first Electron browser built for learning and portfolio use.
 - Custom error pages
 - DevTools docked right, one per tab (`F12`)
 - Session restore on launch
+- Right-click page menu: open in new tab or window, screenshot, and Ask AI on selected text (ChatGPT, Claude, or Gemini in Settings)
 - MCP bridge for agent control
 - Optional Chrome DevTools Protocol (off by default)
 

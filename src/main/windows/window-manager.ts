@@ -154,7 +154,7 @@ export class WindowManager {
     })
   }
 
-  async createWindow(session?: SessionWindow): Promise<BrowserWindow> {
+  async createWindow(session?: SessionWindow, url?: string): Promise<BrowserWindow> {
     const isMac = process.platform === 'darwin'
 
     const win = new BrowserWindow({
@@ -234,7 +234,10 @@ export class WindowManager {
       },
       (action) => this.handleShortcut(win.id, action),
       () => this.layoutWindow(win.id),
-      () => this.windows.get(win.id)?.carousel !== null
+      () => this.windows.get(win.id)?.carousel !== null,
+      (url) => {
+        void this.createWindow(undefined, url)
+      }
     )
 
     this.windows.set(win.id, {
@@ -289,7 +292,8 @@ export class WindowManager {
     })
 
     // Do not show the launcher at startup.
-    await tabs.createTab('browsy://home', true, false)
+    const startUrl = sanitizeNavigationUrl(url) ?? 'browsy://home'
+    await tabs.createTab(startUrl, true, false)
 
     this.layoutWindow(win.id)
     this.registerChromeShortcuts(chromeView, win.id)

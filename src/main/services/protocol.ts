@@ -5,6 +5,7 @@ import { renderBookmarksPage } from './bookmarks-page'
 import { renderShortcutsPage } from './shortcuts-page'
 import { getShortcutsPageShortcut } from '../../shared/shortcuts'
 import { faviconUrlForPage, isAllowedNavigationUrl, sanitizeNavigationUrl } from '../../shared/utils'
+import { AI_ASSISTANT_HOME_URLS } from '../../shared/ai-assistant'
 import {
   APP_SURFACE_DARK,
   APP_SURFACE_ELEVATED_DARK,
@@ -16,6 +17,7 @@ import {
   PINNED_SITES_MAX,
   RECENT_SITES_COUNT,
   SEARCH_ENGINE_URLS,
+  type AiAssistant,
   type RestoreSession,
   type SearchEngine,
   type Settings,
@@ -892,6 +894,10 @@ function applySettingsFromQuery(url: URL): boolean {
   const linkPreview = url.searchParams.get('linkPreview')
   if (linkPreview === 'on') patch.linkPreview = true
   if (linkPreview === 'off') patch.linkPreview = false
+  const aiAssistant = url.searchParams.get('aiAssistant')
+  if (aiAssistant === 'chatgpt' || aiAssistant === 'claude' || aiAssistant === 'gemini') {
+    patch.aiAssistant = aiAssistant as AiAssistant
+  }
   if (Object.keys(patch).length === 0) return false
   setSettings(patch)
   return true
@@ -940,6 +946,33 @@ export function renderSettingsPage(
   const linkPreviewOptions = [
     renderOption('linkPreview', 'on', 'On hover', settings.linkPreview ? 'on' : 'off', showDev),
     renderOption('linkPreview', 'off', 'Off', settings.linkPreview ? 'on' : 'off', showDev)
+  ].join('')
+
+  const askAiOptions = [
+    renderOption(
+      'aiAssistant',
+      'chatgpt',
+      'ChatGPT',
+      settings.aiAssistant ?? 'chatgpt',
+      showDev,
+      AI_ASSISTANT_HOME_URLS.chatgpt
+    ),
+    renderOption(
+      'aiAssistant',
+      'claude',
+      'Claude',
+      settings.aiAssistant ?? 'chatgpt',
+      showDev,
+      AI_ASSISTANT_HOME_URLS.claude
+    ),
+    renderOption(
+      'aiAssistant',
+      'gemini',
+      'Gemini',
+      settings.aiAssistant ?? 'chatgpt',
+      showDev,
+      AI_ASSISTANT_HOME_URLS.gemini
+    )
   ].join('')
 
   const moreCards = `
@@ -1012,6 +1045,7 @@ export function renderSettingsPage(
       ${renderSettingsSection('New tab', newTabOptions)}
       ${renderSettingsSection('Search engine', searchOptions)}
       ${renderSettingsSection('Link preview', linkPreviewOptions)}
+      ${renderSettingsSection('Ask AI', askAiOptions)}
     </section>
     <section class="home-col" aria-label="Session">
       ${renderSettingsSection('On startup', startupOptions)}
