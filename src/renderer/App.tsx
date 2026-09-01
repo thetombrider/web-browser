@@ -99,6 +99,9 @@ export default function App() {
       case 'bookmark-page':
         void window.browsy.bookmarkPage()
         break
+      case 'pin-page':
+        void window.browsy.pinPage()
+        break
       case 'new-tab':
         void window.browsy.newTab()
         break
