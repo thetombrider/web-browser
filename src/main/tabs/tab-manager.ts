@@ -6,6 +6,7 @@ import {
   type Event,
   type HandlerDetails,
   type MediaAccessPermissionRequest,
+  type NativeImage,
   type PermissionCheckHandlerHandlerDetails,
   type WebContents
 } from 'electron'
@@ -28,6 +29,7 @@ export interface Tab {
   view: WebContentsView
   favicon: string | null
   devToolsOpen: boolean
+  thumbnail: string | null
 }
 
 export type TabUpdateCallback = () => void
@@ -61,6 +63,8 @@ export class TabManager {
   private pendingPopups = new Map<string, PendingPopup>()
   private pendingMediaPermissions = new Map<string, PendingMediaPermission>()
   private destroying = false
+  /** Tab currently being snapshotted so layout does not hide it mid-capture. */
+  private thumbnailCaptureTabId: string | null = null
 
   constructor(
     private window: BrowserWindow,
@@ -160,7 +164,8 @@ export class TabManager {
         sandbox: true,
         webSecurity: true,
         allowRunningInsecureContent: false,
-        navigateOnDragDrop: false
+        navigateOnDragDrop: false,
+        backgroundThrottling: false
       }
     })
     view.setBackgroundColor(APP_SURFACE_DARK)
@@ -169,7 +174,8 @@ export class TabManager {
       id: generateId(),
       view,
       favicon: null,
-      devToolsOpen: false
+      devToolsOpen: false,
+      thumbnail: null
     }
 
     this.tabs.push(tab)
@@ -202,6 +208,7 @@ export class TabManager {
       if (wc && !wc.isDestroyed()) wc.focus()
     }
     this.onUpdate()
+    this.cacheActiveThumbnail(tab)
   }
 
   nextTab(): void {
@@ -304,16 +311,15 @@ export class TabManager {
   async captureThumbnail(tabId: string): Promise<string | null> {
     const tab = this.tabs.find((candidate) => candidate.id === tabId)
     const wc = tab?.view.webContents
-    if (!wc || wc.isDestroyed()) return null
+    if (!tab || !wc || wc.isDestroyed()) return null
+    if (tab.thumbnail) return tab.thumbnail
 
-    try {
-      const image = await wc.capturePage()
-      if (image.isEmpty()) return null
-      const resized = image.resize({ width: 320 })
-      return `data:image/jpeg;base64,${resized.toJPEG(72).toString('base64')}`
-    } catch {
-      return null
+    const captured = await this.snapshotTab(tab)
+    if (captured) {
+      tab.thumbnail = captured
+      return captured
     }
+    return null
   }
 
   hasTab(tabId: string): boolean {
@@ -452,23 +458,145 @@ export class TabManager {
     if (this.window.isDestroyed()) return
     const bounds = this.window.getContentBounds()
     const contentView = this.window.contentView
-
-    for (const tab of this.tabs) {
-      const isActive = tab.id === this.activeTabId
-      if (isActive) {
-        if (!contentView.children.includes(tab.view)) {
-          contentView.addChildView(tab.view)
-        }
-        tab.view.setBounds({
-          x: 0,
-          y: topInset,
-          width: bounds.width,
-          height: Math.max(0, bounds.height - topInset)
-        })
-      } else if (contentView.children.includes(tab.view)) {
-        contentView.removeChildView(tab.view)
-      }
+    const viewBounds = {
+      x: 0,
+      y: topInset,
+      width: bounds.width,
+      height: Math.max(0, bounds.height - topInset)
     }
+    const activeTab = this.tabs.find((tab) => tab.id === this.activeTabId)
+
+    // Keep restored/background tabs attached so a later snapshot can paint them
+    // without recreating the view. Only the active (or in-capture) tab is shown.
+    for (const tab of this.tabs) {
+      if (!contentView.children.includes(tab.view)) {
+        contentView.addChildView(tab.view)
+      }
+      tab.view.setBounds(viewBounds)
+      tab.view.setVisible(tab.id === this.activeTabId || tab.id === this.thumbnailCaptureTabId)
+    }
+
+    if (this.thumbnailCaptureTabId) {
+      const capturing = this.tabs.find((item) => item.id === this.thumbnailCaptureTabId)
+      if (capturing) this.raiseTabUnderChrome(capturing)
+    } else if (activeTab && contentView.children.includes(activeTab.view)) {
+      contentView.addChildView(activeTab.view)
+    }
+  }
+
+  private encodeThumbnail(image: NativeImage): string | null {
+    if (image.isEmpty()) return null
+    const { width, height } = image.getSize()
+    if (width < 2 || height < 2) return null
+    try {
+      const resized = image.resize({ width: 320 })
+      return `data:image/jpeg;base64,${resized.toJPEG(72).toString('base64')}`
+    } catch {
+      return null
+    }
+  }
+
+  private raiseTabUnderChrome(tab: Tab): void {
+    const contentView = this.window.contentView
+    const isTabView = (child: unknown) => this.tabs.some((item) => item.view === child)
+    if (contentView.children.includes(tab.view)) {
+      contentView.removeChildView(tab.view)
+    }
+    const overlayIndex = contentView.children.findIndex((child) => !isTabView(child))
+    const index = overlayIndex >= 0 ? overlayIndex : contentView.children.length
+    contentView.addChildView(tab.view, index)
+  }
+
+  private async waitForPaint(wc: WebContents): Promise<void> {
+    if (wc.isDestroyed()) return
+
+    if (wc.isLoadingMainFrame() || wc.isLoading()) {
+      await new Promise<void>((resolve) => {
+        const finish = (): void => {
+          wc.removeListener('did-stop-loading', finish)
+          resolve()
+        }
+        wc.once('did-stop-loading', finish)
+        setTimeout(finish, 5000)
+      })
+    }
+
+    if (wc.isDestroyed()) return
+
+    await new Promise<void>((resolve) => {
+      let settled = false
+      const done = (): void => {
+        if (settled) return
+        settled = true
+        try {
+          wc.endFrameSubscription()
+        } catch {
+          // Subscription may already have ended.
+        }
+        resolve()
+      }
+      const timer = setTimeout(done, 250)
+      try {
+        wc.beginFrameSubscription(false, () => {
+          clearTimeout(timer)
+          done()
+        })
+      } catch {
+        clearTimeout(timer)
+        done()
+      }
+    })
+
+    if (wc.isDestroyed()) return
+    try {
+      await wc.executeJavaScript(
+        'new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))'
+      )
+    } catch {
+      await new Promise<void>((resolve) => setTimeout(resolve, 32))
+    }
+  }
+
+  private async snapshotTab(tab: Tab): Promise<string | null> {
+    const wc = tab.view.webContents
+    if (this.window.isDestroyed() || !wc || wc.isDestroyed()) return null
+
+    const bounds = this.window.getContentBounds()
+    const viewBounds = {
+      x: 0,
+      y: 0,
+      width: Math.max(1, bounds.width),
+      height: Math.max(1, bounds.height)
+    }
+
+    this.thumbnailCaptureTabId = tab.id
+    tab.view.setVisible(true)
+    tab.view.setBounds(viewBounds)
+    this.raiseTabUnderChrome(tab)
+
+    try {
+      await this.waitForPaint(wc)
+      if (wc.isDestroyed()) return null
+      const image = await wc.capturePage(undefined, { stayHidden: false, stayAwake: true })
+      return this.encodeThumbnail(image)
+    } catch {
+      return null
+    } finally {
+      if (this.thumbnailCaptureTabId === tab.id) this.thumbnailCaptureTabId = null
+      if (!this.destroying && !this.window.isDestroyed()) this.onLayout()
+    }
+  }
+
+  private cacheActiveThumbnail(tab: Tab): void {
+    const wc = tab.view.webContents
+    if (tab.id !== this.activeTabId || !wc || wc.isDestroyed()) return
+    void wc
+      .capturePage(undefined, { stayHidden: false, stayAwake: true })
+      .then((image) => {
+        const encoded = this.encodeThumbnail(image)
+        if (encoded) tab.thumbnail = encoded
+      })
+      .catch(() => undefined)
   }
 
   destroy(): void {
@@ -655,7 +783,10 @@ export class TabManager {
     })
 
     wc.on('did-start-loading', () => this.onUpdate())
-    wc.on('did-stop-loading', () => this.onUpdate())
+    wc.on('did-stop-loading', () => {
+      this.onUpdate()
+      this.cacheActiveThumbnail(tab)
+    })
     wc.on('page-title-updated', () => this.onUpdate())
     wc.on('page-favicon-updated', (_event, favicons: string[]) => {
       const next = favicons.find((icon) => icon.startsWith('data:image/') || isAllowedNavigationUrl(icon))
@@ -664,6 +795,7 @@ export class TabManager {
     })
     wc.on('did-navigate', () => {
       tab.favicon = null
+      tab.thumbnail = null
       if (tab.id === this.activeTabId) {
         this.syncChromeWithActiveTab()
       }

@@ -1,7 +1,10 @@
 import { app, BrowserWindow, protocol } from 'electron'
 import { randomBytes } from 'crypto'
 import { BROWSY_CDP_PORT } from '../shared/types'
+import { appendCacheCommandLineSwitches } from './services/cache'
 import { WindowManager } from './windows/window-manager'
+
+appendCacheCommandLineSwitches()
 
 // Must run before app is ready so browsy:// gets standard/secure privileges.
 protocol.registerSchemesAsPrivileged([
@@ -12,7 +15,8 @@ protocol.registerSchemesAsPrivileged([
       secure: true,
       supportFetchAPI: true,
       corsEnabled: true,
-      stream: true
+      stream: true,
+      codeCache: true
     }
   }
 ])

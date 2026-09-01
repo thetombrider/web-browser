@@ -13,6 +13,7 @@ import { join } from 'path'
 import { pathToFileURL } from 'url'
 import { TabManager } from '../tabs/tab-manager'
 import { ApiServer } from '../services/api-server'
+import { configureSessionCache } from '../services/cache'
 import { setupProtocolHandler } from '../services/protocol'
 import {
   addBookmark,
@@ -82,6 +83,7 @@ export class WindowManager {
   }
 
   async initialize(): Promise<void> {
+    configureSessionCache()
     setupProtocolHandler(() => this.broadcastSettings())
     this.registerSessionPermissions()
     this.registerIpc()
@@ -286,11 +288,35 @@ export class WindowManager {
     const entry = this.windows.get(windowId)
     if (!entry) return
 
-    const urls = sessionTabs
-      .map((tab) => sanitizeNavigationUrl(tab.url) ?? 'browsy://home')
-      .filter((url) => !url.startsWith('browsy://home'))
+    const restored = sessionTabs
+      .map((tab) => ({
+        url: sanitizeNavigationUrl(tab.url) ?? 'browsy://home',
+        active: tab.active
+      }))
+      .filter((tab) => !tab.url.startsWith('browsy://home'))
 
-    await Promise.allSettled(urls.map((url) => entry.tabs.createTab(url, false)))
+    if (restored.length === 0) return
+
+    const activeEntry = restored.find((tab) => tab.active) ?? restored[0]
+    const background = restored.filter((tab) => tab.url !== activeEntry.url)
+
+    const homeTab = entry.tabs.findNewTab()
+    if (homeTab) {
+      const wc = homeTab.view.webContents
+      if (!wc.isDestroyed()) {
+        await wc.loadURL(activeEntry.url)
+        entry.tabs.switchTab(homeTab.id)
+      }
+    } else {
+      await entry.tabs.createTab(activeEntry.url, true)
+    }
+
+    // Stagger background tab loads so the active page gets bandwidth first.
+    for (const tab of background) {
+      if (!this.windows.has(windowId)) return
+      await entry.tabs.createTab(tab.url, false)
+      await new Promise<void>((resolve) => setImmediate(resolve))
+    }
 
     if (this.windows.has(windowId)) {
       this.layoutWindow(windowId)
