@@ -1,5 +1,5 @@
 import { getBookmarks, getSettings } from './store'
-import { isAllowedNavigationUrl } from '../../shared/utils'
+import { faviconUrlForPage, isAllowedNavigationUrl } from '../../shared/utils'
 import type { Bookmark } from '../../shared/types'
 import {
   APP_SURFACE_DARK,
@@ -48,6 +48,18 @@ function pathForUrl(url: string): string {
 
 function letterForDomain(domain: string): string {
   return domain[0]?.toUpperCase() ?? '?'
+}
+
+function renderDomainGlyph(domain: string, sampleUrl: string): string {
+  const letter = escapeHtml(letterForDomain(domain))
+  const favicon = faviconUrlForPage(sampleUrl)
+  if (!favicon) {
+    return `<span class="glyph" aria-hidden="true">${letter}</span>`
+  }
+  return `<span class="glyph" aria-hidden="true">
+            <span class="glyph-letter">${letter}</span>
+            <img class="favicon" src="${escapeHtml(favicon)}" alt="" width="16" height="16" loading="lazy" decoding="async" onerror="this.remove()" />
+          </span>`
 }
 
 function titleForBookmark(bookmark: Bookmark): string {
@@ -144,6 +156,7 @@ function pageStyles(theme: ThemeMode): string {
     }
     .domain-head:hover { background: ${APP_SURFACE_ELEVATED_DARK}; }
     .glyph {
+      position: relative;
       width: 24px;
       height: 24px;
       border-radius: 6px;
@@ -155,6 +168,16 @@ function pageStyles(theme: ThemeMode): string {
       font-size: 0.7rem;
       font-weight: 600;
       flex-shrink: 0;
+      overflow: hidden;
+    }
+    .glyph-letter { line-height: 1; }
+    .favicon {
+      position: absolute;
+      inset: 0;
+      margin: auto;
+      width: 16px;
+      height: 16px;
+      object-fit: contain;
     }
     .domain-name {
       flex: 1;
@@ -264,8 +287,16 @@ function clientScript(): string {
 
        function visibleRows() {
          return Array.from(groupsRoot.querySelectorAll('.row')).filter(function (row) {
-           return !row.classList.contains('hidden') && !row.closest('.group').classList.contains('collapsed');
+           var group = row.closest('.group');
+           return !row.classList.contains('hidden') && group && !group.classList.contains('hidden');
          });
+       }
+
+       function expandGroup(group) {
+         if (!group || !group.classList.contains('collapsed')) return;
+         group.classList.remove('collapsed');
+         var button = group.querySelector('.domain-head');
+         if (button) button.setAttribute('aria-expanded', 'true');
        }
 
        function setSelected(index) {
@@ -278,8 +309,9 @@ function clientScript(): string {
            selectedIndex = -1;
            return null;
          }
-         selectedIndex = index;
+         selectedIndex = ((index % rows.length) + rows.length) % rows.length;
          var selected = rows[selectedIndex];
+         expandGroup(selected.closest('.group'));
          selected.classList.add('selected');
          selected.setAttribute('aria-current', 'true');
          selected.scrollIntoView({ block: 'nearest' });
@@ -374,10 +406,11 @@ export function renderBookmarksPage(bookmarksOverride?: Bookmark[]): string {
               })
               .join('')
 
+            const sampleUrl = group.bookmarks[0]?.url ?? `https://${group.domain}`
             return `
         <section class="group${group.bookmarks.length === 1 ? ' collapsed' : ''}" data-domain="${escapeHtml(group.domain)}">
           <button type="button" class="domain-head" aria-expanded="${group.bookmarks.length === 1 ? 'false' : 'true'}">
-            <span class="glyph">${escapeHtml(letterForDomain(group.domain))}</span>
+            ${renderDomainGlyph(group.domain, sampleUrl)}
             <span class="domain-name">${escapeHtml(group.domain)}</span>
             <span class="count">${group.bookmarks.length}</span>
             <span class="chevron" aria-hidden="true">▾</span>
@@ -410,7 +443,7 @@ export function renderBookmarksPage(bookmarksOverride?: Bookmark[]): string {
     <p class="muted">${escapeHtml(subtitle)}</p>
     <div class="filter-wrap">
       <input id="filter" class="filter" type="search" placeholder="Filter by title, path, or site" autocomplete="off" spellcheck="false" />
-      <p class="hint">Sites with one save start collapsed · click a header to toggle · type to filter</p>
+      <p class="hint">Sites with one save start collapsed · arrows move across all bookmarks · enter opens · type to filter</p>
     </div>
     <p id="empty-all" class="empty${bookmarks.length === 0 ? '' : ' hidden'}">No bookmarks yet. Press Ctrl+D on any page to save it.</p>
     <p id="empty-filter" class="empty hidden">No matches.</p>
