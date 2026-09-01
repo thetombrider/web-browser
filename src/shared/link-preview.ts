@@ -43,12 +43,8 @@ export function isPreviewableUrl(url: string): boolean {
   if (!url || typeof url !== 'string') return false
   try {
     const parsed = new URL(url.trim())
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:' && parsed.protocol !== 'browsy:') {
-      return false
-    }
-    if ((parsed.protocol === 'http:' || parsed.protocol === 'https:') && (parsed.username || parsed.password)) {
-      return false
-    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false
+    if (parsed.username || parsed.password) return false
     return true
   } catch {
     return false

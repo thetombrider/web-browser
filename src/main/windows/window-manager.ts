@@ -27,7 +27,7 @@ import {
   setSettings
 } from '../services/store'
 import { resolveNavigationInput, generateId, sanitizeNavigationUrl, isAllowedWebPermission } from '../../shared/utils'
-import { displayHostname } from '../../shared/link-preview'
+import { displayHostname, isPreviewableUrl } from '../../shared/link-preview'
 import { LinkPreviewCapturer, makeLinkPreviewPayload } from '../services/link-preview'
 import {
   parseBookmarkTitle,
@@ -1105,6 +1105,6 @@ function parseLinkHoverPayload(payload: unknown): { url: string; title: string }
   const title = 'title' in payload ? (payload as { title: unknown }).title : ''
   if (typeof url !== 'string') return null
   const safe = sanitizeNavigationUrl(url)
-  if (!safe) return null
+  if (!safe || !isPreviewableUrl(safe)) return null
   return { url: safe, title: typeof title === 'string' ? title.slice(0, 300) : '' }
 }

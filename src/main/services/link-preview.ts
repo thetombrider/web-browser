@@ -1,10 +1,6 @@
 import { BrowserWindow, nativeTheme, type DownloadItem, type Event, type NativeImage, type WebContents } from 'electron'
 import type { LinkPreviewPayload } from '../../shared/types'
-import {
-  LINK_PREVIEW_CACHE_LIMIT,
-  canonicalPreviewUrl,
-  displayHostname
-} from '../../shared/link-preview'
+import { LINK_PREVIEW_CACHE_LIMIT, canonicalPreviewUrl, displayHostname, isPreviewableUrl } from '../../shared/link-preview'
 import { faviconUrlForPage, isAllowedNavigationUrl, sanitizeNavigationUrl } from '../../shared/utils'
 import { getSettings } from './store'
 
@@ -101,7 +97,7 @@ export class LinkPreviewCapturer {
 
   async capture(url: string): Promise<LinkPreviewPayload | null> {
     const safeUrl = sanitizeNavigationUrl(url)
-    if (!safeUrl) return null
+    if (!safeUrl || !isPreviewableUrl(safeUrl)) return null
 
     const cached = this.getCached(safeUrl)
     if (cached?.dataUrl) return cached
