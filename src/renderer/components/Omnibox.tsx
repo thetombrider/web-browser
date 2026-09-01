@@ -320,112 +320,122 @@ export function Omnibox({
       </Box>
 
       {suggestions.length > 0 && (
-        <Box
-          borderTop="1px solid"
-          borderColor="browsy.border"
-          maxH="min(52vh, 420px)"
-          overflowY="auto"
-          css={{
-            '&::-webkit-scrollbar': { width: '6px' },
-            '&::-webkit-scrollbar-thumb': {
-              background: 'var(--chakra-colors-browsy-border)',
-              borderRadius: '3px'
-            }
-          }}
-        >
+        <Box borderTop="1px solid" borderColor="browsy.border">
           {showingTabsInventory && (
-            <Text px={4} pt={3} pb={1} fontSize="xs" fontWeight="600" color="browsy.muted" letterSpacing="wide">
+            <Text
+              px={4}
+              pt={3}
+              pb={1}
+              fontSize="xs"
+              fontWeight="600"
+              color="browsy.muted"
+              letterSpacing="wide"
+              bg="browsy.elevated"
+              flexShrink={0}
+            >
               OPEN TABS
             </Text>
           )}
-          <VStack align="stretch" spacing={0} px={2} py={1.5} role="listbox" aria-label="Suggestions">
-            {suggestions.map((suggestion, index) => {
-              const itemIndex = quickCount + index
-              const selected = itemIndex === activeIndex
-              const isTabRow = suggestion.kind === 'tab'
-              return (
-                <HStack
-                  key={suggestion.id}
-                  role="option"
-                  aria-selected={selected}
-                  px={2}
-                  py={2}
-                  borderRadius="md"
-                  cursor="pointer"
-                  bg={selected ? 'browsy.active' : suggestion.isActiveTab ? 'browsy.hover' : 'transparent'}
-                  _hover={{ bg: selected ? 'browsy.active' : 'browsy.hover' }}
-                  onMouseEnter={() => setActiveIndex(itemIndex)}
-                  onMouseDown={(e) => {
-                    e.preventDefault()
-                    choose(suggestion)
-                  }}
-                  spacing={2.5}
-                  sx={
-                    isTabRow
-                      ? {
-                          '& .tab-close': { opacity: selected || suggestion.isActiveTab ? 0.7 : 0 },
-                          '&:hover .tab-close': { opacity: 1 }
-                        }
-                      : undefined
-                  }
-                >
-                  {suggestion.kind === 'command' || !suggestion.url ? (
-                    <Box
-                      w="22px"
-                      h="22px"
-                      borderRadius="sm"
-                      bg="browsy.glyph"
-                      display="flex"
-                      alignItems="center"
-                      justifyContent="center"
-                      fontSize="10px"
-                      fontWeight="600"
-                      color="browsy.muted"
-                      flexShrink={0}
-                    >
-                      {suggestion.glyph}
+          <Box
+            maxH="min(52vh, 420px)"
+            overflowY="auto"
+            css={{
+              '&::-webkit-scrollbar': { width: '6px' },
+              '&::-webkit-scrollbar-thumb': {
+                background: 'var(--chakra-colors-browsy-border)',
+                borderRadius: '3px'
+              }
+            }}
+          >
+            <VStack align="stretch" spacing={0} px={2} py={1.5} role="listbox" aria-label="Suggestions">
+              {suggestions.map((suggestion, index) => {
+                const itemIndex = quickCount + index
+                const selected = itemIndex === activeIndex
+                const isTabRow = suggestion.kind === 'tab'
+                return (
+                  <HStack
+                    key={suggestion.id}
+                    role="option"
+                    aria-selected={selected}
+                    px={2}
+                    py={2}
+                    borderRadius="md"
+                    cursor="pointer"
+                    bg={selected ? 'browsy.active' : suggestion.isActiveTab ? 'browsy.hover' : 'transparent'}
+                    _hover={{ bg: selected ? 'browsy.active' : 'browsy.hover' }}
+                    onMouseEnter={() => setActiveIndex(itemIndex)}
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      choose(suggestion)
+                    }}
+                    spacing={2.5}
+                    sx={
+                      isTabRow
+                        ? {
+                            '& .tab-close': { opacity: selected || suggestion.isActiveTab ? 0.7 : 0 },
+                            '&:hover .tab-close': { opacity: 1 }
+                          }
+                        : undefined
+                    }
+                  >
+                    {suggestion.kind === 'command' || !suggestion.url ? (
+                      <Box
+                        w="22px"
+                        h="22px"
+                        borderRadius="sm"
+                        bg="browsy.glyph"
+                        display="flex"
+                        alignItems="center"
+                        justifyContent="center"
+                        fontSize="10px"
+                        fontWeight="600"
+                        color="browsy.muted"
+                        flexShrink={0}
+                      >
+                        {suggestion.glyph}
+                      </Box>
+                    ) : (
+                      <Favicon url={suggestion.url} favicon={suggestion.favicon} size={22} />
+                    )}
+                    <Box flex={1} minW={0}>
+                      <Text fontSize="sm" noOfLines={1} fontWeight={suggestion.isActiveTab ? '600' : '500'}>
+                        {suggestion.title}
+                        {suggestion.isActiveTab ? (
+                          <Text as="span" color="browsy.muted" fontWeight="400">
+                            {' '}
+                            · current
+                          </Text>
+                        ) : null}
+                      </Text>
+                      <Text fontSize="xs" color="browsy.muted" noOfLines={1}>
+                        {suggestion.subtitle}
+                      </Text>
                     </Box>
-                  ) : (
-                    <Favicon url={suggestion.url} favicon={suggestion.favicon} size={22} />
-                  )}
-                  <Box flex={1} minW={0}>
-                    <Text fontSize="sm" noOfLines={1} fontWeight={suggestion.isActiveTab ? '600' : '500'}>
-                      {suggestion.title}
-                      {suggestion.isActiveTab ? (
-                        <Text as="span" color="browsy.muted" fontWeight="400">
-                          {' '}
-                          · current
-                        </Text>
-                      ) : null}
-                    </Text>
-                    <Text fontSize="xs" color="browsy.muted" noOfLines={1}>
-                      {suggestion.subtitle}
-                    </Text>
-                  </Box>
-                  {isTabRow && suggestion.tabId ? (
-                    <CloseButton
-                      className="tab-close"
-                      size="sm"
-                      flexShrink={0}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        e.preventDefault()
-                        onCloseTab(suggestion.tabId!)
-                      }}
-                      onMouseDown={(e) => {
-                        e.stopPropagation()
-                        e.preventDefault()
-                      }}
-                    />
-                  ) : (
-                    <Text fontSize="xs" color="browsy.muted" flexShrink={0}>
-                      {kindLabel(suggestion.kind)}
-                    </Text>
-                  )}
-                </HStack>
-              )
-            })}
-          </VStack>
+                    {isTabRow && suggestion.tabId ? (
+                      <CloseButton
+                        className="tab-close"
+                        size="sm"
+                        flexShrink={0}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          e.preventDefault()
+                          onCloseTab(suggestion.tabId!)
+                        }}
+                        onMouseDown={(e) => {
+                          e.stopPropagation()
+                          e.preventDefault()
+                        }}
+                      />
+                    ) : (
+                      <Text fontSize="xs" color="browsy.muted" flexShrink={0}>
+                        {kindLabel(suggestion.kind)}
+                      </Text>
+                    )}
+                  </HStack>
+                )
+              })}
+            </VStack>
+          </Box>
         </Box>
       )}
 
