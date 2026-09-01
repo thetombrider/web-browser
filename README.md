@@ -79,7 +79,7 @@ By default Browsy keeps local control surfaces **off**:
 - **Local HTTP API** is disabled unless `BROWSY_ENABLE_API=1` or `BROWSY_API_TOKEN` is set.
 - When the API is enabled, every request requires `Authorization: Bearer <token>` (or `X-Browsy-Token`).
 - Navigation is limited to `http:`, `https:`, and `browsy:` (blocks `javascript:`, `file:`, `data:`, etc.).
-- Tab content runs sandboxed with permissions and invalid TLS certificates denied by default.
+- Tab content runs sandboxed with web permissions denied by default (except sanitized clipboard write for copy buttons) and invalid TLS certificates rejected.
 
 ## Agent integration
 

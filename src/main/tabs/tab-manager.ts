@@ -6,7 +6,12 @@ import {
   type Event,
   type HandlerDetails
 } from 'electron'
-import { generateId, isAllowedNavigationUrl, sanitizeNavigationUrl } from '../../shared/utils'
+import {
+  generateId,
+  isAllowedNavigationUrl,
+  isAllowedWebPermission,
+  sanitizeNavigationUrl
+} from '../../shared/utils'
 import { showsNavigationChrome } from '../../shared/internal-pages'
 import type { ChromePanel, TabState } from '../../shared/types'
 import { APP_SURFACE_DARK } from '../../shared/types'
@@ -444,11 +449,12 @@ export class TabManager {
       this.removeDestroyedTab(tab)
     })
 
-    // Deny powerful permissions for untrusted web content.
-    wc.session.setPermissionRequestHandler((_wc, _permission, callback) => {
-      callback(false)
+    // Default-deny web permissions; allow sanitized clipboard writes so
+    // in-page copy buttons (navigator.clipboard.writeText) keep working.
+    wc.session.setPermissionRequestHandler((_wc, permission, callback) => {
+      callback(isAllowedWebPermission(permission))
     })
-    wc.session.setPermissionCheckHandler(() => false)
+    wc.session.setPermissionCheckHandler((_wc, permission) => isAllowedWebPermission(permission))
 
     wc.setWindowOpenHandler((details: HandlerDetails) => {
       const target = sanitizeNavigationUrl(details.url)
