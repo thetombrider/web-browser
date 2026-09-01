@@ -314,7 +314,7 @@ export class WindowManager {
     // Stagger background tab loads so the active page gets bandwidth first.
     for (const tab of background) {
       if (!this.windows.has(windowId)) return
-      await entry.tabs.createTab(tab.url, false)
+      await entry.tabs.createTab(tab.url, false, true)
       await new Promise<void>((resolve) => setImmediate(resolve))
     }
 
