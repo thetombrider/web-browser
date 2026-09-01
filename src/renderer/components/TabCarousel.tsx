@@ -48,6 +48,7 @@ export function TabCarousel({ tabs, carousel, thumbnails }: TabCarouselProps) {
           return (
             <MotionBox
               key={tab.id}
+              initial={false}
               position="absolute"
               top="50%"
               left="50%"
