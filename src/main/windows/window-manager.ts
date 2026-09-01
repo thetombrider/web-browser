@@ -25,7 +25,7 @@ import {
   saveSession,
   setSettings
 } from '../services/store'
-import { resolveNavigationInput, generateId, sanitizeNavigationUrl } from '../../shared/utils'
+import { resolveNavigationInput, generateId, sanitizeNavigationUrl, isAllowedWebPermission } from '../../shared/utils'
 import {
   parseBookmarkTitle,
   parseBookmarkUrl,
@@ -110,6 +110,8 @@ export class WindowManager {
     const ses = session.defaultSession
 
     ses.setPermissionCheckHandler((wc, permission, requestingOrigin, details) => {
+      // Allow sanitized clipboard writes so in-page copy buttons work.
+      if (isAllowedWebPermission(permission)) return true
       if (permission !== 'media') return false
       if (!wc) return false
       const entry = this.findEntryByWebContents(wc)
@@ -118,6 +120,10 @@ export class WindowManager {
     })
 
     ses.setPermissionRequestHandler((wc, permission, callback, details) => {
+      if (isAllowedWebPermission(permission)) {
+        callback(true)
+        return
+      }
       if (permission !== 'media') {
         callback(false)
         return

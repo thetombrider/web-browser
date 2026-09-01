@@ -556,9 +556,9 @@ export class TabManager {
       this.removeDestroyedTab(tab)
     })
 
-    // Powerful permissions stay denied by default. Media (mic/camera) is
-    // handled once on the shared session from WindowManager so multi-window
-    // routing stays correct.
+    // Powerful permissions stay denied by default. Media (mic/camera) and
+    // sanitized clipboard writes are handled once on the shared session from
+    // WindowManager so multi-window routing stays correct.
 
     wc.setWindowOpenHandler((details: HandlerDetails) => {
       const target = sanitizeNavigationUrl(details.url)

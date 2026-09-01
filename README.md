@@ -80,6 +80,7 @@ By default Browsy keeps local control surfaces **off**:
 - When the API is enabled, every request requires `Authorization: Bearer <token>` (or `X-Browsy-Token`).
 - Navigation is limited to `http:`, `https:`, and `browsy:` (blocks `javascript:`, `file:`, `data:`, etc.).
 - Tab content runs sandboxed with most permissions and invalid TLS certificates denied by default.
+- Sanitized clipboard writes are allowed so in-page copy buttons work; clipboard read stays denied.
 - Microphone and camera access are prompted per site (decision remembered); other powerful permissions stay denied.
 - For local getUserMedia testing without real devices, set `BROWSY_FAKE_MEDIA=1` (Chromium fake capture devices).
 
