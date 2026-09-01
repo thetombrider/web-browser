@@ -15,7 +15,20 @@ export default defineConfig({
     }
   },
   preload: {
-    plugins: [externalizeDepsPlugin()]
+    plugins: [externalizeDepsPlugin()],
+    build: {
+      rollupOptions: {
+        input: {
+          index: resolve(__dirname, 'src/preload/index.ts'),
+          tab: resolve(__dirname, 'src/preload/tab.ts')
+        },
+        output: {
+          format: 'cjs',
+          // Sandboxed preloads cannot require sibling Rollup chunks.
+          experimentalMinChunkSize: 10_000_000
+        }
+      }
+    }
   },
   renderer: {
     resolve: {

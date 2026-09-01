@@ -10,7 +10,11 @@ import {
   type PermissionCheckHandlerHandlerDetails,
   type WebContents
 } from 'electron'
+import { join } from 'path'
+import { existsSync } from 'fs'
 import { generateId, isAllowedNavigationUrl, sanitizeNavigationUrl } from '../../shared/utils'
+import { canonicalPreviewUrl } from '../../shared/link-preview'
+import { encodePreviewImage } from '../services/link-preview'
 import { showsNavigationChrome } from '../../shared/internal-pages'
 import type { ChromePanel, MediaKind, TabState } from '../../shared/types'
 import { APP_SURFACE_DARK } from '../../shared/types'
@@ -164,8 +168,14 @@ export class TabManager {
   ): Promise<Tab> {
     const safeUrl = sanitizeNavigationUrl(url) ?? 'browsy://home'
 
+    const preloadPath = join(__dirname, '../preload/tab.js')
+    if (!existsSync(preloadPath)) {
+      console.error('[Browsy] Tab preload missing', preloadPath)
+    }
+
     const view = new WebContentsView({
       webPreferences: {
+        preload: preloadPath,
         nodeIntegration: false,
         contextIsolation: true,
         sandbox: true,
@@ -348,6 +358,41 @@ export class TabManager {
 
   hasTab(tabId: string): boolean {
     return this.tabs.some((tab) => tab.id === tabId)
+  }
+
+  findTabPreview(url: string): {
+    title: string
+    favicon: string | null
+    thumbnail: string | null
+    isActive: boolean
+  } | null {
+    this.pruneDestroyedTabs()
+    const key = canonicalPreviewUrl(url)
+    const tab = this.tabs.find((item) => {
+      const wc = item.view?.webContents
+      if (!wc || wc.isDestroyed()) return false
+      return canonicalPreviewUrl(wc.getURL()) === key
+    })
+    if (!tab) return null
+    const wc = tab.view.webContents
+    return {
+      title: wc.getTitle() || '',
+      favicon: tab.favicon,
+      thumbnail: tab.thumbnail,
+      isActive: tab.id === this.activeTabId
+    }
+  }
+
+  async captureActivePreview(): Promise<string | null> {
+    const tab = this.getActiveTab()
+    const wc = tab?.view.webContents
+    if (!tab || !wc || wc.isDestroyed()) return null
+    try {
+      const image = await wc.capturePage(undefined, { stayHidden: false, stayAwake: true })
+      return encodePreviewImage(image)
+    } catch {
+      return null
+    }
   }
 
   getSessionTabs(): { url: string; active: boolean }[] {
@@ -720,6 +765,15 @@ export class TabManager {
 
     wc.on('destroyed', () => {
       this.removeDestroyedTab(tab)
+    })
+
+    wc.on('preload-error', (_event, preloadPath, error) => {
+      console.error('[Browsy] Tab preload failed', preloadPath, error)
+    })
+    wc.on('console-message', (_event, _level, message) => {
+      if (typeof message === 'string' && message.includes('[Browsy]')) {
+        console.log(message)
+      }
     })
 
     // Powerful permissions stay denied by default. Media (mic/camera) and

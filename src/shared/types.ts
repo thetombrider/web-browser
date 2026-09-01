@@ -51,6 +51,21 @@ export interface ThumbnailFailedPayload {
   tabId: string
 }
 
+export interface LinkHoverPayload {
+  url: string
+  title: string
+}
+
+export interface LinkPreviewPayload {
+  url: string
+  title: string
+  hostname: string
+  favicon: string | null
+  dataUrl: string | null
+  theme: 'light' | 'dark'
+  failed?: boolean
+}
+
 export interface BrowserState {
   tabs: TabState[]
   activeTabId: string | null
@@ -93,6 +108,8 @@ export interface Settings {
   restoreSession: RestoreSession
   theme: ThemeMode
   hasSeenShortcutTip: boolean
+  /** Hover previews of http(s) destinations. Default on. */
+  linkPreview: boolean
 }
 
 export interface ToastPayload {
@@ -145,7 +162,10 @@ export const IPC = {
   TOAST: 'browser:toast',
   BOOKMARK_PAGE: 'browser:bookmark-page',
   PIN_PAGE: 'browser:pin-page',
-  BOOKMARKS_CHANGED: 'browser:bookmarks-changed'
+  BOOKMARKS_CHANGED: 'browser:bookmarks-changed',
+  LINK_HOVER: 'browser:link-hover',
+  LINK_LEAVE: 'browser:link-leave',
+  LINK_PREVIEW_READY: 'browser:link-preview-ready'
 } as const
 
 export interface PopupRequest {

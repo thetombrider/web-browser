@@ -889,6 +889,9 @@ function applySettingsFromQuery(url: URL): boolean {
   }
   const theme = url.searchParams.get('theme')
   if (theme === 'light' || theme === 'dark' || theme === 'system') patch.theme = theme
+  const linkPreview = url.searchParams.get('linkPreview')
+  if (linkPreview === 'on') patch.linkPreview = true
+  if (linkPreview === 'off') patch.linkPreview = false
   if (Object.keys(patch).length === 0) return false
   setSettings(patch)
   return true
@@ -932,6 +935,11 @@ export function renderSettingsPage(
     renderOption('theme', 'light', 'Light', settings.theme, showDev),
     renderOption('theme', 'dark', 'Dark', settings.theme, showDev),
     renderOption('theme', 'system', 'System', settings.theme, showDev)
+  ].join('')
+
+  const linkPreviewOptions = [
+    renderOption('linkPreview', 'on', 'On hover', settings.linkPreview ? 'on' : 'off', showDev),
+    renderOption('linkPreview', 'off', 'Off', settings.linkPreview ? 'on' : 'off', showDev)
   ].join('')
 
   const moreCards = `
@@ -1003,6 +1011,7 @@ export function renderSettingsPage(
       ${renderSettingsSection('Theme', themeOptions)}
       ${renderSettingsSection('New tab', newTabOptions)}
       ${renderSettingsSection('Search engine', searchOptions)}
+      ${renderSettingsSection('Link preview', linkPreviewOptions)}
     </section>
     <section class="home-col" aria-label="Session">
       ${renderSettingsSection('On startup', startupOptions)}
