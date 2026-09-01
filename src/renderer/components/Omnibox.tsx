@@ -14,6 +14,7 @@ import {
 } from '@chakra-ui/react'
 import { CloseIcon, SearchIcon } from '@chakra-ui/icons'
 import type { Bookmark, HistoryEntry, TabState } from '@shared/types'
+import { selectPinnedBookmarks } from '@shared/pinned-sites'
 import { browsyPageLabel } from '@shared/internal-pages'
 import {
   buildSuggestions,
@@ -27,6 +28,7 @@ import {
 import { getUrlScheme } from '../utils/origin'
 import { OriginCue } from './OriginCue'
 import { Favicon } from './Favicon'
+import { PinnedSitesRow } from './PinnedSitesRow'
 
 interface OmniboxProps {
   initialValue: string
@@ -73,13 +75,18 @@ export function Omnibox({
   const suggestions = buildSuggestions(suggestionQuery, tabs, bookmarks, history, activeTabId)
   const queryEmpty = suggestionQuery.trim().length === 0
   const showingTabsInventory = queryEmpty && suggestions.some((s) => s.kind === 'tab')
+  const pinnedSites = selectPinnedBookmarks(bookmarks)
 
-  // Flat index space for Enter/hover: cards [0..quickCount), then suggestion rows.
+  // Flat index space: quick cards, then pinned favicons, then suggestion rows.
   // Arrow nav is spatial (omnibox hub), not a single cycle — see moveUp/moveDown.
-  const selectable = [...SPOTLIGHT_QUICK_ACTIONS, ...suggestions]
   const quickCount = SPOTLIGHT_QUICK_ACTIONS.length
-  const firstResult = quickCount
-  const lastResult = selectable.length - 1
+  const pinnedCount = pinnedSites.length
+  const firstPinned = quickCount
+  const firstResult = quickCount + pinnedCount
+  const lastResult = firstResult + suggestions.length - 1
+  const inQuick = (index: number) => index >= 0 && index < quickCount
+  const inPinned = (index: number) =>
+    pinnedCount > 0 && index >= firstPinned && index < firstPinned + pinnedCount
 
   const completionMatch =
     activeIndex === -1 && completionSuppressedFor !== value && !showingLiveUrl
@@ -112,6 +119,8 @@ export function Omnibox({
         setHistory(nextHistory)
       }
     )
+    const unsubBookmarks = window.browsy.onBookmarksChanged(setBookmarks)
+    return unsubBookmarks
   }, [focusToken])
 
   useEffect(() => {
@@ -142,16 +151,29 @@ export function Omnibox({
   }
 
   const activateIndex = (index: number) => {
-    const item = selectable[index]
-    if (item) choose(item)
+    if (inQuick(index)) {
+      choose(SPOTLIGHT_QUICK_ACTIONS[index])
+      return
+    }
+    if (inPinned(index)) {
+      const site = pinnedSites[index - firstPinned]
+      if (site) onSubmit(site.url)
+      return
+    }
+    const suggestion = suggestions[index - firstResult]
+    if (suggestion) choose(suggestion)
   }
 
-  // Spatial zones: cards above ← omnibox (-1) → results below.
-  // ↑ from omnibox enters cards; ↓ enters results. Zones don't bleed into each other.
+  // Spatial zones: cards above ← omnibox (-1) → pinned + results below.
+  // ↑ from omnibox enters cards; ↓ enters pinned/results. Zones don't bleed.
   const moveDown = () => {
     setActiveIndex((i) => {
-      if (i < 0) return suggestions.length ? firstResult : -1
-      if (i < quickCount) return -1
+      if (i < 0) {
+        if (pinnedCount) return firstPinned
+        return suggestions.length ? firstResult : -1
+      }
+      if (inQuick(i)) return -1
+      if (inPinned(i)) return suggestions.length ? firstResult : i
       if (!suggestions.length) return -1
       return i >= lastResult ? firstResult : i + 1
     })
@@ -160,8 +182,9 @@ export function Omnibox({
   const moveUp = () => {
     setActiveIndex((i) => {
       if (i < 0) return quickCount ? 0 : -1
-      if (i < quickCount) return i
-      if (i <= firstResult) return -1
+      if (inQuick(i)) return i
+      if (inPinned(i)) return -1
+      if (i <= firstResult) return pinnedCount ? firstPinned : -1
       return i - 1
     })
   }
@@ -273,15 +296,21 @@ export function Omnibox({
                 moveUp()
               } else if (
                 (e.key === 'ArrowLeft' || e.key === 'ArrowRight') &&
-                activeIndex >= 0 &&
-                activeIndex < quickCount
+                inQuick(activeIndex)
               ) {
                 e.preventDefault()
                 const delta = e.key === 'ArrowRight' ? 1 : -1
                 setActiveIndex((i) => (i + delta + quickCount) % quickCount)
+              } else if (
+                (e.key === 'ArrowLeft' || e.key === 'ArrowRight') &&
+                inPinned(activeIndex)
+              ) {
+                e.preventDefault()
+                const delta = e.key === 'ArrowRight' ? 1 : -1
+                setActiveIndex((i) => firstPinned + ((i - firstPinned + delta + pinnedCount) % pinnedCount))
               } else if (e.key === 'Enter') {
                 e.preventDefault()
-                if (activeIndex >= 0 && selectable[activeIndex]) {
+                if (activeIndex >= 0) {
                   activateIndex(activeIndex)
                 } else if (completionMatch) {
                   choose(completionMatch.suggestion)
@@ -319,12 +348,18 @@ export function Omnibox({
         </InputGroup>
       </Box>
 
-      {suggestions.length > 0 && (
+      {(suggestions.length > 0 || pinnedSites.length > 0) && (
         <Box borderTop="1px solid" borderColor="browsy.border">
+          <PinnedSitesRow
+            sites={pinnedSites}
+            activeIndex={inPinned(activeIndex) ? activeIndex - firstPinned : -1}
+            onHover={(index) => setActiveIndex(firstPinned + index)}
+            onChoose={(site) => onSubmit(site.url)}
+          />
           {showingTabsInventory && (
             <Text
               px={4}
-              pt={3}
+              pt={pinnedSites.length ? 1 : 3}
               pb={1}
               fontSize="xs"
               fontWeight="600"
@@ -336,6 +371,7 @@ export function Omnibox({
               OPEN TABS
             </Text>
           )}
+          {suggestions.length > 0 && (
           <Box
             maxH="min(52vh, 420px)"
             overflowY="auto"
@@ -349,7 +385,7 @@ export function Omnibox({
           >
             <VStack align="stretch" spacing={0} px={2} py={1.5} role="listbox" aria-label="Suggestions">
               {suggestions.map((suggestion, index) => {
-                const itemIndex = quickCount + index
+                const itemIndex = firstResult + index
                 const selected = itemIndex === activeIndex
                 const isTabRow = suggestion.kind === 'tab'
                 return (
@@ -436,6 +472,7 @@ export function Omnibox({
               })}
             </VStack>
           </Box>
+          )}
         </Box>
       )}
 

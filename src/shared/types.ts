@@ -3,6 +3,8 @@ export const BROWSY_CDP_PORT = 9222
 /** Max JSON body size for the local agent API (bytes). */
 export const BROWSY_API_MAX_BODY_BYTES = 64 * 1024
 export const RECENT_SITES_COUNT = 12
+/** Max bookmarks that can be marked as pinned home/launcher shortcuts. */
+export const PINNED_SITES_MAX = 5
 /** Max chrome overlay height the renderer may request (px). */
 export const CHROME_HEIGHT_MAX = 4000
 export const GOOGLE_SEARCH_URL = 'https://www.google.com/search?q='
@@ -63,6 +65,10 @@ export interface Bookmark {
   title: string
   url: string
   createdAt: number
+  /** When true, this bookmark is shown as a pinned shortcut (max PINNED_SITES_MAX). */
+  pinned?: boolean
+  /** Timestamp used to order pinned shortcuts; ignored when not pinned. */
+  pinnedAt?: number
 }
 
 export interface HistoryEntry {
@@ -137,7 +143,9 @@ export const IPC = {
   THUMBNAIL_READY: 'browser:thumbnail-ready',
   THUMBNAIL_FAILED: 'browser:thumbnail-failed',
   TOAST: 'browser:toast',
-  BOOKMARK_PAGE: 'browser:bookmark-page'
+  BOOKMARK_PAGE: 'browser:bookmark-page',
+  PIN_PAGE: 'browser:pin-page',
+  BOOKMARKS_CHANGED: 'browser:bookmarks-changed'
 } as const
 
 export interface PopupRequest {
@@ -166,6 +174,15 @@ export interface BookmarkResult {
   url: string
 }
 
+export interface PinResult {
+  pinned: boolean
+  alreadyPinned: boolean
+  atLimit: boolean
+  bookmarked: boolean
+  title: string
+  url: string
+}
+
 export interface BrowsyAPI {
   getState: () => Promise<BrowserState>
   navigate: (input: string) => Promise<void>
@@ -189,12 +206,14 @@ export interface BrowsyAPI {
   getBookmarks: () => Promise<Bookmark[]>
   addBookmark: (url?: string, title?: string) => Promise<BookmarkResult>
   bookmarkPage: () => Promise<BookmarkResult>
+  pinPage: () => Promise<PinResult>
   removeBookmark: (id: string) => Promise<void>
   getHistory: () => Promise<HistoryEntry[]>
   getRecentSites: () => Promise<HistoryEntry[]>
   getSettings: () => Promise<Settings>
   setSettings: (settings: Partial<Settings>) => Promise<Settings>
   onSettingsChanged: (callback: (settings: Settings) => void) => () => void
+  onBookmarksChanged: (callback: (bookmarks: Bookmark[]) => void) => () => void
   onStateChanged: (callback: (state: BrowserState) => void) => () => void
   onPopupRequest: (callback: (request: PopupRequest) => void) => () => void
   onMediaPermissionRequest: (callback: (request: MediaPermissionRequest) => void) => () => void

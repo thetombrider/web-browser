@@ -25,6 +25,7 @@ const SHORTCUTS = [
   ['Cmd + Right Arrow', 'Tab switcher (carousel)'],
   ['Cmd + Left Arrow', 'Tab switcher (carousel)'],
   ['Ctrl/Cmd + D', 'Bookmark page'],
+  ['Ctrl/Cmd + Shift + P', 'Pin page'],
   ['Ctrl/Cmd + B', 'Bookmarks page'],
   ['Ctrl/Cmd + ,', 'Settings'],
   ['Ctrl/Cmd + R', 'Reload'],

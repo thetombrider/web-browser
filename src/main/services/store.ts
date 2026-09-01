@@ -1,11 +1,7 @@
 import Store from 'electron-store'
-import type {
-  Bookmark,
-  HistoryEntry,
-  SessionWindow,
-  Settings,
-  SiteMediaPermissions
-} from '../../shared/types'
+import { PINNED_SITES_MAX, type Bookmark } from '../../shared/types'
+import type { HistoryEntry, SessionWindow, Settings, SiteMediaPermissions } from '../../shared/types'
+import { selectPinnedBookmarks } from '../../shared/pinned-sites'
 
 interface StoreSchema {
   bookmarks: Bookmark[]
@@ -44,7 +40,10 @@ export function addBookmark(bookmark: Bookmark): { added: boolean; alreadyExists
   if (bookmarks.some((b) => b.url === bookmark.url)) {
     return { added: false, alreadyExists: true }
   }
-  store.set('bookmarks', [bookmark, ...bookmarks])
+  store.set('bookmarks', [
+    { id: bookmark.id, title: bookmark.title, url: bookmark.url, createdAt: bookmark.createdAt, pinned: false },
+    ...bookmarks
+  ])
   return { added: true, alreadyExists: false }
 }
 
@@ -53,6 +52,45 @@ export function removeBookmark(id: string): void {
     'bookmarks',
     getBookmarks().filter((b) => b.id !== id)
   )
+}
+
+export function getPinnedBookmarks(): Bookmark[] {
+  return selectPinnedBookmarks(getBookmarks())
+}
+
+export function setBookmarkPinned(
+  id: string,
+  pinned: boolean
+): { updated: boolean; atLimit: boolean } {
+  const bookmarks = getBookmarks()
+  const target = bookmarks.find((bookmark) => bookmark.id === id)
+  if (!target) return { updated: false, atLimit: false }
+  if (Boolean(target.pinned) === pinned) return { updated: false, atLimit: false }
+  if (pinned && bookmarks.filter((bookmark) => bookmark.pinned).length >= PINNED_SITES_MAX) {
+    return { updated: false, atLimit: true }
+  }
+
+  store.set(
+    'bookmarks',
+    bookmarks.map((bookmark) => {
+      if (bookmark.id !== id) return bookmark
+      if (pinned) return { ...bookmark, pinned: true, pinnedAt: Date.now() }
+      return { ...bookmark, pinned: false, pinnedAt: undefined }
+    })
+  )
+  return { updated: true, atLimit: false }
+}
+
+export function pinBookmarkByUrl(url: string): {
+  pinned: boolean
+  alreadyPinned: boolean
+  atLimit: boolean
+} {
+  const target = getBookmarks().find((bookmark) => bookmark.url === url)
+  if (!target) return { pinned: false, alreadyPinned: false, atLimit: false }
+  if (target.pinned) return { pinned: false, alreadyPinned: true, atLimit: false }
+  const result = setBookmarkPinned(target.id, true)
+  return { pinned: result.updated, alreadyPinned: false, atLimit: result.atLimit }
 }
 
 export function addHistoryEntry(url: string, title: string): void {
