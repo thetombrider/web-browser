@@ -132,6 +132,8 @@ export const IPC = {
   SETTINGS_CHANGED: 'browser:settings-changed',
   POPUP_REQUEST: 'browser:popup-request',
   POPUP_RESPONSE: 'browser:popup-response',
+  MEDIA_PERMISSION_REQUEST: 'browser:media-permission-request',
+  MEDIA_PERMISSION_RESPONSE: 'browser:media-permission-response',
   THUMBNAIL_READY: 'browser:thumbnail-ready',
   THUMBNAIL_FAILED: 'browser:thumbnail-failed',
   TOAST: 'browser:toast',
@@ -141,6 +143,20 @@ export const IPC = {
 export interface PopupRequest {
   id: string
   url: string
+}
+
+export type MediaKind = 'microphone' | 'camera'
+export type MediaPermissionDecision = 'allow' | 'deny'
+
+export interface SiteMediaPermissions {
+  microphone?: MediaPermissionDecision
+  camera?: MediaPermissionDecision
+}
+
+export interface MediaPermissionRequest {
+  id: string
+  origin: string
+  kinds: MediaKind[]
 }
 
 export interface BookmarkResult {
@@ -181,10 +197,12 @@ export interface BrowsyAPI {
   onSettingsChanged: (callback: (settings: Settings) => void) => () => void
   onStateChanged: (callback: (state: BrowserState) => void) => () => void
   onPopupRequest: (callback: (request: PopupRequest) => void) => () => void
+  onMediaPermissionRequest: (callback: (request: MediaPermissionRequest) => void) => () => void
   onThumbnailReady: (callback: (payload: ThumbnailReadyPayload) => void) => () => void
   onThumbnailFailed: (callback: (payload: ThumbnailFailedPayload) => void) => () => void
   onToast: (callback: (toast: ToastPayload) => void) => () => void
   respondToPopup: (id: string, allow: boolean) => Promise<void>
+  respondToMediaPermission: (id: string, allow: boolean) => Promise<void>
 }
 
 declare global {

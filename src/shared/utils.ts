@@ -4,6 +4,17 @@ import { SEARCH_ENGINE_URLS, type SearchEngine } from './types'
 /** Schemes permitted for tab navigation, bookmarks, session restore, and pop-ups. */
 export const ALLOWED_NAVIGATION_PROTOCOLS = new Set(['http:', 'https:', 'browsy:'])
 
+/**
+ * Web permissions granted to tab content. Default-deny everything else.
+ * `clipboard-sanitized-write` is required for page copy buttons
+ * (`navigator.clipboard.writeText`); clipboard-read stays denied.
+ */
+export const ALLOWED_WEB_PERMISSIONS = new Set(['clipboard-sanitized-write'])
+
+export function isAllowedWebPermission(permission: string): boolean {
+  return ALLOWED_WEB_PERMISSIONS.has(permission)
+}
+
 export function isAllowedNavigationUrl(url: string): boolean {
   if (!url || typeof url !== 'string') return false
   try {

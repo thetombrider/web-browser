@@ -2,10 +2,11 @@ import { useCallback, useEffect, useState } from 'react'
 import type { ThumbnailReadyPayload } from '@shared/types'
 import { Box, Text } from '@chakra-ui/react'
 import { AnimatePresence } from 'framer-motion'
-import type { BrowserState, PopupRequest, ToastPayload } from '@shared/types'
+import type { BrowserState, MediaPermissionRequest, PopupRequest, ToastPayload } from '@shared/types'
 import { CHROME_DRAG_HEIGHT } from '@shared/types'
 import { NavigationChrome } from './components/NavigationChrome'
 import { PopupDialog } from './components/PopupDialog'
+import { PermissionDialog } from './components/PermissionDialog'
 import { DragRegion } from './components/DragRegion'
 import { ToastHost } from './components/ToastHost'
 import { TabCarousel } from './components/TabCarousel'
@@ -21,14 +22,19 @@ export default function App() {
     carousel: null
   })
   const [popup, setPopup] = useState<PopupRequest | null>(null)
+  const [mediaQueue, setMediaQueue] = useState<MediaPermissionRequest[]>([])
   const [toast, setToast] = useState<ToastPayload | null>(null)
   const [thumbnails, setThumbnails] = useState<Record<string, string>>({})
   const [shortcutTip, setShortcutTip] = useState(false)
+  const mediaPermission = mediaQueue[0] ?? null
 
   useEffect(() => {
     window.browsy.getState().then(setState)
     const unsub = window.browsy.onStateChanged(setState)
     const unsubPopup = window.browsy.onPopupRequest(setPopup)
+    const unsubMedia = window.browsy.onMediaPermissionRequest((request) => {
+      setMediaQueue((current) => (current.some((item) => item.id === request.id) ? current : [...current, request]))
+    })
     const unsubThumbnail = window.browsy.onThumbnailReady((payload: ThumbnailReadyPayload) => {
       setThumbnails((current) => ({ ...current, [payload.tabId]: payload.dataUrl }))
     })
@@ -48,6 +54,7 @@ export default function App() {
     return () => {
       unsub()
       unsubPopup()
+      unsubMedia()
       unsubThumbnail()
       unsubThumbnailFailed()
       unsubToast()
@@ -55,12 +62,17 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    if (popup || state.carousel || (state.chromeVisible && state.chromePanel === 'navigation')) {
+    if (
+      popup ||
+      mediaPermission ||
+      state.carousel ||
+      (state.chromeVisible && state.chromePanel === 'navigation')
+    ) {
       void window.browsy.setChromeHeight(window.innerHeight)
     } else if (!state.chromeVisible) {
       void window.browsy.setChromeHeight(CHROME_DRAG_HEIGHT)
     }
-  }, [popup, state.chromeVisible, state.chromePanel, state.carousel])
+  }, [popup, mediaPermission, state.chromeVisible, state.chromePanel, Boolean(state.carousel)])
 
   useEffect(() => {
     if (!state.chromeVisible || state.chromePanel !== 'navigation') return
@@ -194,6 +206,20 @@ export default function App() {
           onDeny={() => {
             void window.browsy.respondToPopup(popup.id, false)
             setPopup(null)
+          }}
+        />
+      )}
+
+      {mediaPermission && (
+        <PermissionDialog
+          request={mediaPermission}
+          onAllow={() => {
+            void window.browsy.respondToMediaPermission(mediaPermission.id, true)
+            setMediaQueue((current) => current.filter((item) => item.id !== mediaPermission.id))
+          }}
+          onDeny={() => {
+            void window.browsy.respondToMediaPermission(mediaPermission.id, false)
+            setMediaQueue((current) => current.filter((item) => item.id !== mediaPermission.id))
           }}
         />
       )}

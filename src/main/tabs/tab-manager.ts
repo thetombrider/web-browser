@@ -4,25 +4,39 @@ import {
   dialog,
   type DownloadItem,
   type Event,
-  type HandlerDetails
+  type HandlerDetails,
+  type MediaAccessPermissionRequest,
+  type NativeImage,
+  type PermissionCheckHandlerHandlerDetails,
+  type WebContents
 } from 'electron'
 import { join } from 'path'
 import { generateId, isAllowedNavigationUrl, sanitizeNavigationUrl } from '../../shared/utils'
 import { showsNavigationChrome } from '../../shared/internal-pages'
-import type { ChromePanel, TabState } from '../../shared/types'
+import type { ChromePanel, MediaKind, TabState } from '../../shared/types'
 import { APP_SURFACE_DARK } from '../../shared/types'
 import { addHistoryEntry } from '../services/store'
+import {
+  ensureOsMediaAccess,
+  getStoredDecisions,
+  mediaKindFromCheckType,
+  mediaKindsFromTypes,
+  normalizeOrigin,
+  rememberMediaDecision
+} from '../services/media-permissions'
 
 export interface Tab {
   id: string
   view: WebContentsView
   favicon: string | null
   devToolsOpen: boolean
+  thumbnail: string | null
 }
 
 export type TabUpdateCallback = () => void
 export type PopupCallback = (id: string, url: string) => void
 export type PopupClosedCallback = (id: string) => void
+export type MediaPermissionCallback = (id: string, origin: string, kinds: MediaKind[]) => void
 export type ShortcutCallback = (action: string) => void
 
 interface PendingPopup {
@@ -31,6 +45,13 @@ interface PendingPopup {
   ready: boolean
   decision: boolean | null
 }
+
+interface PendingMediaPermission {
+  origin: string
+  kinds: MediaKind[]
+  callback: (granted: boolean) => void
+}
+
 export type LayoutCallback = () => void
 export type CarouselOpenCallback = () => boolean
 
@@ -41,13 +62,18 @@ export class TabManager {
   private chromePanel: ChromePanel = null
   private chromeFocusToken = 0
   private pendingPopups = new Map<string, PendingPopup>()
+  private pendingMediaPermissions = new Map<string, PendingMediaPermission>()
   private destroying = false
+  /** Tab currently being snapshotted so layout does not hide it mid-capture. */
+  private thumbnailCaptureTabId: string | null = null
 
   constructor(
     private window: BrowserWindow,
     private onUpdate: TabUpdateCallback,
     private onPopup: PopupCallback,
     private onPopupClosed: PopupClosedCallback,
+    private onMediaPermission: MediaPermissionCallback,
+    private onMediaPermissionClosed: PopupClosedCallback,
     private onShortcut: ShortcutCallback,
     private onLayout: LayoutCallback,
     private isCarouselOpen: CarouselOpenCallback
@@ -141,6 +167,7 @@ export class TabManager {
         webSecurity: true,
         allowRunningInsecureContent: false,
         navigateOnDragDrop: false,
+        backgroundThrottling: false,
         ...(blockMediaUntilActivated
           ? { additionalArguments: ['--browsy-block-media-until-activated'] }
           : {})
@@ -152,7 +179,8 @@ export class TabManager {
       id: generateId(),
       view,
       favicon: null,
-      devToolsOpen: false
+      devToolsOpen: false,
+      thumbnail: null
     }
 
     this.tabs.push(tab)
@@ -186,6 +214,7 @@ export class TabManager {
       if (!wc.isDestroyed()) wc.focus()
     }
     this.onUpdate()
+    this.cacheActiveThumbnail(tab)
   }
 
   nextTab(): void {
@@ -288,16 +317,15 @@ export class TabManager {
   async captureThumbnail(tabId: string): Promise<string | null> {
     const tab = this.tabs.find((candidate) => candidate.id === tabId)
     const wc = tab?.view.webContents
-    if (!wc || wc.isDestroyed()) return null
+    if (!tab || !wc || wc.isDestroyed()) return null
+    if (tab.thumbnail) return tab.thumbnail
 
-    try {
-      const image = await wc.capturePage()
-      if (image.isEmpty()) return null
-      const resized = image.resize({ width: 320 })
-      return `data:image/jpeg;base64,${resized.toJPEG(72).toString('base64')}`
-    } catch {
-      return null
+    const captured = await this.snapshotTab(tab)
+    if (captured) {
+      tab.thumbnail = captured
+      return captured
     }
+    return null
   }
 
   hasTab(tabId: string): boolean {
@@ -332,6 +360,95 @@ export class TabManager {
     this.maybeShowPopup(id, pending)
   }
 
+  ownsWebContents(wc: WebContents): boolean {
+    return this.tabs.some((tab) => {
+      const tabWc = tab?.view?.webContents
+      return Boolean(tabWc && !tabWc.isDestroyed() && tabWc.id === wc.id)
+    })
+  }
+
+  checkMediaPermission(
+    requestingOrigin: string,
+    details: PermissionCheckHandlerHandlerDetails
+  ): boolean {
+    const origin =
+      normalizeOrigin(details.securityOrigin) ??
+      normalizeOrigin(requestingOrigin) ??
+      normalizeOrigin(details.requestingUrl)
+    if (!origin) return false
+
+    const kinds = mediaKindFromCheckType(details.mediaType)
+    const { anyDenied } = getStoredDecisions(origin, kinds)
+    // Allow the check unless the origin was explicitly blocked so getUserMedia
+    // can still reach the request handler and show a prompt when undecided.
+    return !anyDenied
+  }
+
+  handleMediaPermissionRequest(
+    wc: WebContents,
+    details: MediaAccessPermissionRequest,
+    callback: (granted: boolean) => void
+  ): void {
+    const origin =
+      normalizeOrigin(details.securityOrigin) ??
+      normalizeOrigin(details.requestingUrl) ??
+      normalizeOrigin(wc.isDestroyed() ? '' : wc.getURL())
+    if (!origin) {
+      callback(false)
+      return
+    }
+
+    const kinds = mediaKindsFromTypes(details.mediaTypes)
+    const { allAllowed, anyDenied, needsPrompt } = getStoredDecisions(origin, kinds)
+
+    if (anyDenied) {
+      callback(false)
+      return
+    }
+
+    if (allAllowed && !needsPrompt) {
+      void ensureOsMediaAccess(kinds).then((ok) => callback(ok))
+      return
+    }
+
+    const id = generateId()
+    this.pendingMediaPermissions.set(id, { origin, kinds, callback })
+    this.onMediaPermission(id, origin, kinds)
+  }
+
+  respondToMediaPermission(id: string, allow: boolean): void {
+    const pending = this.pendingMediaPermissions.get(id)
+    if (!pending) return
+    this.pendingMediaPermissions.delete(id)
+    this.onMediaPermissionClosed(id)
+
+    if (!allow) {
+      rememberMediaDecision(pending.origin, pending.kinds, 'deny')
+      pending.callback(false)
+      return
+    }
+
+    rememberMediaDecision(pending.origin, pending.kinds, 'allow')
+    void ensureOsMediaAccess(pending.kinds).then((ok) => {
+      if (!ok) {
+        // OS denied device access — keep the site allow so we do not re-prompt
+        // endlessly, but fail this request.
+        pending.callback(false)
+        return
+      }
+      pending.callback(true)
+    })
+  }
+
+  /** Reject in-flight media prompts when the window/tab manager is torn down. */
+  private rejectPendingMediaPermissions(): void {
+    for (const [id, pending] of this.pendingMediaPermissions) {
+      pending.callback(false)
+      this.pendingMediaPermissions.delete(id)
+      this.onMediaPermissionClosed(id)
+    }
+  }
+
   private maybeShowPopup(id: string, pending: PendingPopup): void {
     if (!pending.ready || pending.decision !== true || !pending.popup) return
     if (pending.popup.isDestroyed()) {
@@ -347,27 +464,150 @@ export class TabManager {
     if (this.window.isDestroyed()) return
     const bounds = this.window.getContentBounds()
     const contentView = this.window.contentView
-
-    for (const tab of this.tabs) {
-      const isActive = tab.id === this.activeTabId
-      if (isActive) {
-        if (!contentView.children.includes(tab.view)) {
-          contentView.addChildView(tab.view)
-        }
-        tab.view.setBounds({
-          x: 0,
-          y: topInset,
-          width: bounds.width,
-          height: Math.max(0, bounds.height - topInset)
-        })
-      } else if (contentView.children.includes(tab.view)) {
-        contentView.removeChildView(tab.view)
-      }
+    const viewBounds = {
+      x: 0,
+      y: topInset,
+      width: bounds.width,
+      height: Math.max(0, bounds.height - topInset)
     }
+    const activeTab = this.tabs.find((tab) => tab.id === this.activeTabId)
+
+    // Keep restored/background tabs attached so a later snapshot can paint them
+    // without recreating the view. Only the active (or in-capture) tab is shown.
+    for (const tab of this.tabs) {
+      if (!contentView.children.includes(tab.view)) {
+        contentView.addChildView(tab.view)
+      }
+      tab.view.setBounds(viewBounds)
+      tab.view.setVisible(tab.id === this.activeTabId || tab.id === this.thumbnailCaptureTabId)
+    }
+
+    if (this.thumbnailCaptureTabId) {
+      const capturing = this.tabs.find((item) => item.id === this.thumbnailCaptureTabId)
+      if (capturing) this.raiseTabUnderChrome(capturing)
+    } else if (activeTab && contentView.children.includes(activeTab.view)) {
+      contentView.addChildView(activeTab.view)
+    }
+  }
+
+  private encodeThumbnail(image: NativeImage): string | null {
+    if (image.isEmpty()) return null
+    const { width, height } = image.getSize()
+    if (width < 2 || height < 2) return null
+    try {
+      const resized = image.resize({ width: 320 })
+      return `data:image/jpeg;base64,${resized.toJPEG(72).toString('base64')}`
+    } catch {
+      return null
+    }
+  }
+
+  private raiseTabUnderChrome(tab: Tab): void {
+    const contentView = this.window.contentView
+    const isTabView = (child: unknown) => this.tabs.some((item) => item.view === child)
+    if (contentView.children.includes(tab.view)) {
+      contentView.removeChildView(tab.view)
+    }
+    const overlayIndex = contentView.children.findIndex((child) => !isTabView(child))
+    const index = overlayIndex >= 0 ? overlayIndex : contentView.children.length
+    contentView.addChildView(tab.view, index)
+  }
+
+  private async waitForPaint(wc: WebContents): Promise<void> {
+    if (wc.isDestroyed()) return
+
+    if (wc.isLoadingMainFrame() || wc.isLoading()) {
+      await new Promise<void>((resolve) => {
+        const finish = (): void => {
+          wc.removeListener('did-stop-loading', finish)
+          resolve()
+        }
+        wc.once('did-stop-loading', finish)
+        setTimeout(finish, 5000)
+      })
+    }
+
+    if (wc.isDestroyed()) return
+
+    await new Promise<void>((resolve) => {
+      let settled = false
+      const done = (): void => {
+        if (settled) return
+        settled = true
+        try {
+          wc.endFrameSubscription()
+        } catch {
+          // Subscription may already have ended.
+        }
+        resolve()
+      }
+      const timer = setTimeout(done, 250)
+      try {
+        wc.beginFrameSubscription(false, () => {
+          clearTimeout(timer)
+          done()
+        })
+      } catch {
+        clearTimeout(timer)
+        done()
+      }
+    })
+
+    if (wc.isDestroyed()) return
+    try {
+      await wc.executeJavaScript(
+        'new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))'
+      )
+    } catch {
+      await new Promise<void>((resolve) => setTimeout(resolve, 32))
+    }
+  }
+
+  private async snapshotTab(tab: Tab): Promise<string | null> {
+    const wc = tab.view.webContents
+    if (this.window.isDestroyed() || !wc || wc.isDestroyed()) return null
+
+    const bounds = this.window.getContentBounds()
+    const viewBounds = {
+      x: 0,
+      y: 0,
+      width: Math.max(1, bounds.width),
+      height: Math.max(1, bounds.height)
+    }
+
+    this.thumbnailCaptureTabId = tab.id
+    tab.view.setVisible(true)
+    tab.view.setBounds(viewBounds)
+    this.raiseTabUnderChrome(tab)
+
+    try {
+      await this.waitForPaint(wc)
+      if (wc.isDestroyed()) return null
+      const image = await wc.capturePage(undefined, { stayHidden: false, stayAwake: true })
+      return this.encodeThumbnail(image)
+    } catch {
+      return null
+    } finally {
+      if (this.thumbnailCaptureTabId === tab.id) this.thumbnailCaptureTabId = null
+      if (!this.destroying && !this.window.isDestroyed()) this.onLayout()
+    }
+  }
+
+  private cacheActiveThumbnail(tab: Tab): void {
+    const wc = tab.view.webContents
+    if (tab.id !== this.activeTabId || !wc || wc.isDestroyed()) return
+    void wc
+      .capturePage(undefined, { stayHidden: false, stayAwake: true })
+      .then((image) => {
+        const encoded = this.encodeThumbnail(image)
+        if (encoded) tab.thumbnail = encoded
+      })
+      .catch(() => undefined)
   }
 
   destroy(): void {
     this.destroying = true
+    this.rejectPendingMediaPermissions()
     for (const pending of this.pendingPopups.values()) {
       if (pending.popup && !pending.popup.isDestroyed()) pending.popup.close()
     }
@@ -450,11 +690,9 @@ export class TabManager {
       this.removeDestroyedTab(tab)
     })
 
-    // Deny powerful permissions for untrusted web content.
-    wc.session.setPermissionRequestHandler((_wc, _permission, callback) => {
-      callback(false)
-    })
-    wc.session.setPermissionCheckHandler(() => false)
+    // Powerful permissions stay denied by default. Media (mic/camera) and
+    // sanitized clipboard writes are handled once on the shared session from
+    // WindowManager so multi-window routing stays correct.
 
     wc.setWindowOpenHandler((details: HandlerDetails) => {
       const target = sanitizeNavigationUrl(details.url)
@@ -551,7 +789,10 @@ export class TabManager {
     })
 
     wc.on('did-start-loading', () => this.onUpdate())
-    wc.on('did-stop-loading', () => this.onUpdate())
+    wc.on('did-stop-loading', () => {
+      this.onUpdate()
+      this.cacheActiveThumbnail(tab)
+    })
     wc.on('page-title-updated', () => this.onUpdate())
     wc.on('page-favicon-updated', (_event, favicons: string[]) => {
       const next = favicons.find((icon) => icon.startsWith('data:image/') || isAllowedNavigationUrl(icon))
@@ -560,6 +801,7 @@ export class TabManager {
     })
     wc.on('did-navigate', () => {
       tab.favicon = null
+      tab.thumbnail = null
       if (tab.id === this.activeTabId) {
         this.syncChromeWithActiveTab()
       }
