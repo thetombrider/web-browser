@@ -156,7 +156,12 @@ export class TabManager {
     return await this.createTab(safeUrl)
   }
 
-  async createTab(url = 'browsy://home', activate = true, blockMediaUntilActivated = false): Promise<Tab> {
+  async createTab(
+    url = 'browsy://home',
+    activate = true,
+    blockMediaUntilActivated = false,
+    showNavigationChrome = true
+  ): Promise<Tab> {
     const safeUrl = sanitizeNavigationUrl(url) ?? 'browsy://home'
 
     const view = new WebContentsView({
@@ -197,7 +202,7 @@ export class TabManager {
       this.onLayout()
     }
 
-    if (activate && showsNavigationChrome(safeUrl)) {
+    if (activate && showNavigationChrome && showsNavigationChrome(safeUrl)) {
       this.showChrome('navigation')
     }
 
@@ -211,18 +216,11 @@ export class TabManager {
 
     this.activeTabId = tabId
     const wc = tab.view.webContents
-    if (!wc.isDestroyed()) {
-      if (tab.mediaPlaybackBlocked) {
-        tab.mediaPlaybackBlocked = false
-        wc.setAudioMuted(false)
-      }
-      wc.send('browsy:allow-media-playback')
-    }
     this.onLayout()
     // Keep the user's current chrome state when moving between tabs.
     if (this.chromeVisible) this.chromeFocusToken += 1
-    else {
-      if (!wc.isDestroyed()) wc.focus()
+    else if (!wc.isDestroyed()) {
+      wc.focus()
     }
     this.onUpdate()
     this.cacheActiveThumbnail(tab)
@@ -701,6 +699,12 @@ export class TabManager {
       this.removeDestroyedTab(tab)
     })
 
+    wc.on('ipc-message', (_event, channel) => {
+      if (channel !== 'browsy:media-user-activation' || !tab.mediaPlaybackBlocked || wc.isDestroyed()) return
+      tab.mediaPlaybackBlocked = false
+      wc.setAudioMuted(false)
+    })
+
     // Powerful permissions stay denied by default. Media (mic/camera) and
     // sanitized clipboard writes are handled once on the shared session from
     // WindowManager so multi-window routing stays correct.
@@ -822,9 +826,6 @@ export class TabManager {
 
     wc.on('did-finish-load', () => {
       if (wc.isDestroyed()) return
-      if (tab.id === this.activeTabId) {
-        wc.send('browsy:allow-media-playback')
-      }
       const url = wc.getURL()
       const title = wc.getTitle()
       if (url && !url.startsWith('browsy://error') && isAllowedNavigationUrl(url)) {
