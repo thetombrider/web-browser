@@ -14,6 +14,7 @@ export type CommandAction =
   | 'close-tab'
   | 'devtools'
   | 'bookmark-page'
+  | 'pin-page'
 
 export interface Suggestion {
   id: string
@@ -55,6 +56,14 @@ const COMMANDS: CommandDef[] = [
     glyph: '+★',
     keywords: ['bookmark page', 'save page', 'star'],
     slashes: ['/bookmark', '/star']
+  },
+  {
+    action: 'pin-page',
+    title: 'Pin page',
+    subtitle: 'Bookmark and pin the current page',
+    glyph: '⊙',
+    keywords: ['pin page', 'pin', 'pinned'],
+    slashes: ['/pin']
   },
   {
     action: 'settings',

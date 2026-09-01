@@ -1,6 +1,6 @@
 import { protocol } from 'electron'
 import { clearSessionCache } from './cache'
-import { getBookmarks, getRecentSites, getSettings, setSettings } from './store'
+import { getBookmarks, getPinnedBookmarks, getRecentSites, getSettings, setBookmarkPinned, setSettings } from './store'
 import { renderBookmarksPage } from './bookmarks-page'
 import { renderShortcutsPage } from './shortcuts-page'
 import { getShortcutsPageShortcut } from '../../shared/shortcuts'
@@ -13,6 +13,7 @@ import {
   BROWSY_API_PORT,
   BROWSY_CDP_PORT,
   HOME_PAGE_TOP_PADDING,
+  PINNED_SITES_MAX,
   RECENT_SITES_COUNT,
   SEARCH_ENGINE_URLS,
   type RestoreSession,
@@ -27,6 +28,7 @@ const HOME_TIP_SHORTCUTS = [
   ['Ctrl/Cmd + L', 'Address bar'],
   ['Ctrl/Cmd + T', 'New tab'],
   ['Ctrl/Cmd + D', 'Bookmark page'],
+  ['Ctrl/Cmd + Shift + P', 'Pin page'],
   ['Ctrl/Cmd + B', 'Bookmarks'],
   [getShortcutsPageShortcut(process.platform).label, 'All shortcuts']
 ] as const
@@ -103,6 +105,31 @@ function baseStyles(theme: ThemeMode): string {
       text-align: center;
       margin: 8px 0 36px;
     }
+    .greeting:has(+ .pinned-sites),
+    .greeting:has(+ .pin-manage) { margin-bottom: 16px; }
+    .pinned-sites {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 4px;
+      width: 100%;
+      max-width: 920px;
+      margin: 0 auto 28px;
+    }
+    .pinned-site {
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 6px;
+      text-decoration: none;
+      color: inherit;
+      transition: background 0.12s ease;
+    }
+    .pinned-site:hover, .pinned-site.selected { background: ${APP_SURFACE_ELEVATED_DARK}; }
+    .pinned-site .glyph { width: 22px; height: 22px; font-size: 10px; }
     .muted { color: #a1a1aa; margin-bottom: 28px; font-size: 0.9rem; }
     .home-layout {
       display: grid;
@@ -319,6 +346,62 @@ function baseStyles(theme: ThemeMode): string {
     }
     .settings-section:last-child { margin-bottom: 0; }
     .settings-section .home-cards { margin-top: 0; }
+    .pin-manage {
+      width: 100%;
+      max-width: 920px;
+      margin: 0 auto 36px;
+    }
+    .pin-manage > .col-label { padding: 0 0 0 12px; }
+    .pin-hint {
+      color: #71717a;
+      font-size: 0.8rem;
+      margin: 0 12px 12px;
+    }
+    .pin-notice {
+      color: #a1a1aa;
+      font-size: 0.8rem;
+      margin: 0 12px 12px;
+    }
+    .pin-group {
+      font-size: 0.7rem;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #71717a;
+      margin: 16px 12px 6px;
+    }
+    .pin-group:first-of-type { margin-top: 4px; }
+    .pin-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      width: 100%;
+    }
+    .pin-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex: 1;
+      min-width: 0;
+      padding: 10px 12px;
+      border-radius: 8px;
+      text-decoration: none;
+      color: inherit;
+      transition: background 0.12s ease;
+    }
+    .pin-row:hover, .pin-row.kb-selected { background: ${APP_SURFACE_ELEVATED_DARK}; }
+    .pin-row.kb-selected { outline: 1px solid rgba(255,255,255,0.16); }
+    .pin-action {
+      flex-shrink: 0;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      color: #71717a;
+      text-decoration: none;
+      transition: background 0.12s ease, color 0.12s ease;
+    }
+    .pin-action:hover, .pin-action.kb-selected { color: inherit; background: ${APP_SURFACE_ELEVATED_DARK}; }
+    .pin-action.kb-selected { outline: 1px solid rgba(255,255,255,0.16); }
     .settings-home {
       display: block;
       max-width: 920px;
@@ -428,12 +511,30 @@ function baseStyles(theme: ThemeMode): string {
       .muted { color: #71717a; }
       .site:hover, .site.selected, .home-card:hover, .home-card.selected, .home-card.kb-selected { background: ${APP_SURFACE_ELEVATED_LIGHT}; }
       .site.selected, .home-card.selected, .home-card.kb-selected { outline: 1px solid rgba(0,0,0,0.08); }
+      .pinned-site:hover, .pinned-site.selected { background: ${APP_SURFACE_ELEVATED_LIGHT}; }
+      .pin-row:hover, .pin-row.kb-selected, .pin-action:hover, .pin-action.kb-selected { background: ${APP_SURFACE_ELEVATED_LIGHT}; }
+      .pin-row.kb-selected, .pin-action.kb-selected { outline: 1px solid rgba(0,0,0,0.08); }
       .glyph { background: rgba(0,0,0,0.06); color: #52525b; }
       .tip-row:hover { background: ${APP_SURFACE_ELEVATED_LIGHT}; }
       .tip-row kbd { background: rgba(0,0,0,0.06); }
       .btn { background: #2563eb; }
     ${lightThemeEnd(theme)}
   `
+}
+
+function renderPinnedSitesBar(): string {
+  const pinned = getPinnedBookmarks()
+  if (pinned.length === 0) return ''
+  const buttons = pinned
+    .map((site) => {
+      const title = escapeHtml(getSiteName(site.title, site.url))
+      return `
+        <a class="pinned-site" href="${escapeHtml(site.url)}" title="${title}" aria-label="${title}">
+          ${renderSiteGlyph(site.url)}
+        </a>`
+    })
+    .join('')
+  return `<div class="pinned-sites" aria-label="Pinned sites">${buttons}</div>`
 }
 
 function renderHomeSiteRow(url: string, title: string, clip = false): string {
@@ -540,6 +641,7 @@ export function renderHomePage(): string {
 </head>
 <body>
   <div class="greeting" id="greeting" aria-live="polite">${escapeHtml(greeting)}</div>
+  ${renderPinnedSitesBar()}
   <div class="home-layout">
     <section class="home-col" aria-label="Recent">
       <div class="col-label">${recent.length === 0 ? 'Home' : 'Recent'}</div>
@@ -570,7 +672,7 @@ function homeClientScript(): string {
       updateGreeting();
       setInterval(updateGreeting, 60000);
 
-      var rows = Array.from(document.querySelectorAll('.site, .home-card'));
+      var rows = Array.from(document.querySelectorAll('.pinned-site, .site, .home-card'));
       if (!rows.length) return;
       var selectedIndex = -1;
 
@@ -598,6 +700,17 @@ function homeClientScript(): string {
             ? (selectedIndex + 1) % rows.length
             : (selectedIndex <= 0 ? rows.length - 1 : selectedIndex - 1);
           setSelected(next);
+        } else if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && selectedIndex >= 0) {
+          var current = rows[selectedIndex];
+          if (!current || !current.classList.contains('pinned-site')) return;
+          event.preventDefault();
+          var pins = rows.filter(function (row) { return row.classList.contains('pinned-site'); });
+          var pinIndex = pins.indexOf(current);
+          if (pinIndex < 0) return;
+          var nextPin = event.key === 'ArrowRight'
+            ? (pinIndex + 1) % pins.length
+            : (pinIndex <= 0 ? pins.length - 1 : pinIndex - 1);
+          setSelected(rows.indexOf(pins[nextPin]));
         } else if (event.key === 'Enter' || event.key === 'NumpadEnter') {
           if (selectedIndex < 0) return;
           var selected = rows[selectedIndex];
@@ -654,7 +767,7 @@ function settingsClientScript(replaceUrl?: string): string {
   return `
     (function () {
       ${replaceHistory}
-      var rows = Array.from(document.querySelectorAll('a.option, a.dev-toggle, a.home-card, a.footer-link'));
+      var rows = Array.from(document.querySelectorAll('a.option, a.dev-toggle, a.home-card, a.footer-link, a.pin-row, a.pin-action'));
       if (!rows.length) return;
       var selectedIndex = -1;
 
@@ -694,6 +807,74 @@ function settingsClientScript(replaceUrl?: string): string {
   `
 }
 
+function applyPinnedFromQuery(url: URL): { changed: boolean; notice: string | null } {
+  const unpin = url.searchParams.get('unpin')
+  if (unpin) {
+    const result = setBookmarkPinned(unpin, false)
+    return { changed: result.updated, notice: null }
+  }
+  const pin = url.searchParams.get('pin')
+  if (!pin) return { changed: false, notice: null }
+  const result = setBookmarkPinned(pin, true)
+  if (result.atLimit) return { changed: false, notice: `You can pin up to ${PINNED_SITES_MAX} sites` }
+  return { changed: result.updated, notice: null }
+}
+
+function renderPinItem(
+  bookmark: { id: string; title: string; url: string },
+  action: 'pin' | 'unpin',
+  showDev: boolean
+): string {
+  const href = escapeHtml(settingsPageUrl({ [action]: bookmark.id }, showDev))
+  const actionLabel = action === 'pin' ? 'Pin' : 'Unpin'
+  return `
+        <div class="pin-item">
+          <a class="pin-row" href="${escapeHtml(bookmark.url)}">
+            ${renderSiteGlyph(bookmark.url)}
+            <div class="site-meta">
+              <div class="site-title">${escapeHtml(getSiteName(bookmark.title, bookmark.url))}</div>
+              <div class="site-url">${escapeHtml(bookmark.url)}</div>
+            </div>
+          </a>
+          <a class="pin-action" href="${href}">${actionLabel}</a>
+        </div>`
+}
+
+function renderPinnedSettingsSection(showDev: boolean, notice: string | null): string {
+  const pinned = getPinnedBookmarks()
+  const unpinned = getBookmarks().filter(
+    (bookmark) => !bookmark.pinned && isAllowedNavigationUrl(bookmark.url) && !bookmark.url.startsWith('browsy://')
+  )
+  const countLabel = `${pinned.length}/${PINNED_SITES_MAX}`
+  const hint =
+    unpinned.length === 0 && pinned.length === 0
+      ? `Bookmark a page, then pin it here. Or press Ctrl/Cmd+Shift+P on a page to bookmark and pin it.`
+      : `Choose up to ${PINNED_SITES_MAX} bookmarks. They appear on Home and in the launcher.`
+
+  const pinnedBlock =
+    pinned.length === 0
+      ? ''
+      : `<div class="pin-group">Pinned · ${escapeHtml(countLabel)}</div>${pinned
+          .map((bookmark) => renderPinItem(bookmark, 'unpin', showDev))
+          .join('')}`
+
+  const unpinnedBlock =
+    unpinned.length === 0
+      ? ''
+      : `<div class="pin-group">Bookmarks</div>${unpinned
+          .map((bookmark) => renderPinItem(bookmark, 'pin', showDev))
+          .join('')}`
+
+  return `
+      <div class="pin-manage" aria-label="Pinned sites">
+        <div class="col-label">Pinned sites</div>
+        <p class="pin-hint">${escapeHtml(hint)}</p>
+        ${notice ? `<p class="pin-notice">${escapeHtml(notice)}</p>` : ''}
+        ${pinnedBlock}
+        ${unpinnedBlock}
+      </div>`
+}
+
 function applySettingsFromQuery(url: URL): boolean {
   const patch: Partial<Settings> = {}
   const homepage = url.searchParams.get('homepage')
@@ -713,7 +894,11 @@ function applySettingsFromQuery(url: URL): boolean {
   return true
 }
 
-export function renderSettingsPage(showDev = false, cacheCleared = false): string {
+export function renderSettingsPage(
+  showDev = false,
+  cacheCleared = false,
+  pinNotice: string | null = null
+): string {
   const settings = getSettings()
   const devToggleHref = escapeHtml(settingsPageUrl({}, !showDev))
   const devToggleLabel = showDev ? 'Hide developer' : 'Developer'
@@ -812,6 +997,7 @@ export function renderSettingsPage(showDev = false, cacheCleared = false): strin
 </head>
 <body>
   <div class="greeting">Settings</div>
+  ${renderPinnedSettingsSection(showDev, pinNotice)}
   <div class="home-layout">
     <section class="home-col" aria-label="Browsing">
       ${renderSettingsSection('Theme', themeOptions)}
@@ -972,7 +1158,10 @@ function renderNotFoundPage(url: string): string {
 </html>`
 }
 
-export function setupProtocolHandler(onSettingsChanged?: () => void): void {
+export function setupProtocolHandler(
+  onSettingsChanged?: () => void,
+  onPinsChanged?: () => void
+): void {
   protocol.handle('browsy', async (request) => {
     const url = new URL(request.url)
 
@@ -990,6 +1179,8 @@ export function setupProtocolHandler(onSettingsChanged?: () => void): void {
 
     if (url.hostname === 'settings' || url.pathname === '/settings') {
       if (applySettingsFromQuery(url)) onSettingsChanged?.()
+      const pinResult = applyPinnedFromQuery(url)
+      if (pinResult.changed) onPinsChanged?.()
       const showDev = url.searchParams.get('dev') === '1'
       let cacheCleared = false
       if (url.searchParams.get('clearCache') === '1') {
@@ -1000,7 +1191,7 @@ export function setupProtocolHandler(onSettingsChanged?: () => void): void {
           cacheCleared = false
         }
       }
-      return new Response(renderSettingsPage(showDev, cacheCleared), {
+      return new Response(renderSettingsPage(showDev, cacheCleared, pinResult.notice), {
         headers: { 'Content-Type': 'text/html; charset=utf-8' }
       })
     }

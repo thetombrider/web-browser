@@ -10,7 +10,6 @@ import {
   type PermissionCheckHandlerHandlerDetails,
   type WebContents
 } from 'electron'
-import { join } from 'path'
 import { generateId, isAllowedNavigationUrl, sanitizeNavigationUrl } from '../../shared/utils'
 import { showsNavigationChrome } from '../../shared/internal-pages'
 import type { ChromePanel, MediaKind, TabState } from '../../shared/types'
@@ -31,7 +30,8 @@ export interface Tab {
   favicon: string | null
   devToolsOpen: boolean
   thumbnail: string | null
-  mediaPlaybackBlocked: boolean
+  /** Restored tabs stay muted until this WebContents receives a user gesture. */
+  audioLockedUntilGesture: boolean
 }
 
 export type TabUpdateCallback = () => void
@@ -156,12 +156,16 @@ export class TabManager {
     return await this.createTab(safeUrl)
   }
 
-  async createTab(url = 'browsy://home', activate = true, blockMediaUntilActivated = false): Promise<Tab> {
+  async createTab(
+    url = 'browsy://home',
+    activate = true,
+    showNavigationChrome = true,
+    lockAudioUntilGesture = false
+  ): Promise<Tab> {
     const safeUrl = sanitizeNavigationUrl(url) ?? 'browsy://home'
 
     const view = new WebContentsView({
       webPreferences: {
-        preload: join(__dirname, '../../preload/tab.js'),
         nodeIntegration: false,
         contextIsolation: true,
         sandbox: true,
@@ -169,9 +173,7 @@ export class TabManager {
         allowRunningInsecureContent: false,
         navigateOnDragDrop: false,
         backgroundThrottling: false,
-        ...(blockMediaUntilActivated
-          ? { additionalArguments: ['--browsy-block-media-until-activated'] }
-          : {})
+        autoplayPolicy: 'user-gesture-required'
       }
     })
     view.setBackgroundColor(APP_SURFACE_DARK)
@@ -182,13 +184,13 @@ export class TabManager {
       favicon: null,
       devToolsOpen: false,
       thumbnail: null,
-      mediaPlaybackBlocked: blockMediaUntilActivated
+      audioLockedUntilGesture: false
     }
 
     this.tabs.push(tab)
     this.attachWebContentsHandlers(tab)
-    if (blockMediaUntilActivated) {
-      tab.view.webContents.setAudioMuted(true)
+    if (lockAudioUntilGesture) {
+      this.lockAudioUntilGesture(tab)
     }
 
     if (activate) {
@@ -197,7 +199,7 @@ export class TabManager {
       this.onLayout()
     }
 
-    if (activate && showsNavigationChrome(safeUrl)) {
+    if (activate && showNavigationChrome && showsNavigationChrome(safeUrl)) {
       this.showChrome('navigation')
     }
 
@@ -211,18 +213,11 @@ export class TabManager {
 
     this.activeTabId = tabId
     const wc = tab.view.webContents
-    if (!wc.isDestroyed()) {
-      if (tab.mediaPlaybackBlocked) {
-        tab.mediaPlaybackBlocked = false
-        wc.setAudioMuted(false)
-      }
-      wc.send('browsy:allow-media-playback')
-    }
     this.onLayout()
     // Keep the user's current chrome state when moving between tabs.
     if (this.chromeVisible) this.chromeFocusToken += 1
-    else {
-      if (!wc.isDestroyed()) wc.focus()
+    else if (!wc.isDestroyed()) {
+      wc.focus()
     }
     this.onUpdate()
     this.cacheActiveThumbnail(tab)
@@ -297,6 +292,18 @@ export class TabManager {
 
   reload(): void {
     this.getActiveTab()?.view.webContents.reload()
+  }
+
+  reloadTabsMatching(predicate: (url: string) => boolean): void {
+    for (const tab of this.getTabs()) {
+      const wc = tab.view?.webContents
+      if (!wc || wc.isDestroyed()) continue
+      try {
+        if (predicate(wc.getURL())) wc.reload()
+      } catch {
+        // Ignore tabs whose URL cannot be read.
+      }
+    }
   }
 
   stop(): void {
@@ -376,6 +383,20 @@ export class TabManager {
       const tabWc = tab?.view?.webContents
       return Boolean(tabWc && !tabWc.isDestroyed() && tabWc.id === wc.id)
     })
+  }
+
+  /** Mute restored media until this tab's WebContents receives a user gesture. */
+  lockAudioUntilGesture(tab: Tab): void {
+    tab.audioLockedUntilGesture = true
+    const wc = tab.view.webContents
+    if (!wc.isDestroyed()) wc.setAudioMuted(true)
+  }
+
+  private unlockAudioFromGesture(tab: Tab): void {
+    if (!tab.audioLockedUntilGesture) return
+    tab.audioLockedUntilGesture = false
+    const wc = tab.view.webContents
+    if (!wc.isDestroyed()) wc.setAudioMuted(false)
   }
 
   checkMediaPermission(
@@ -822,9 +843,6 @@ export class TabManager {
 
     wc.on('did-finish-load', () => {
       if (wc.isDestroyed()) return
-      if (tab.id === this.activeTabId) {
-        wc.send('browsy:allow-media-playback')
-      }
       const url = wc.getURL()
       const title = wc.getTitle()
       if (url && !url.startsWith('browsy://error') && isAllowedNavigationUrl(url)) {
@@ -855,6 +873,17 @@ export class TabManager {
         item.setSavePath(savePath)
       } else {
         item.cancel()
+      }
+    })
+
+    wc.on('input-event', (_event, inputEvent) => {
+      if (
+        inputEvent.type === 'mouseDown' ||
+        inputEvent.type === 'keyDown' ||
+        inputEvent.type === 'touchStart' ||
+        inputEvent.type === 'gestureTap'
+      ) {
+        this.unlockAudioFromGesture(tab)
       }
     })
 
@@ -895,6 +924,7 @@ export class TabManager {
       else if (key === 't' && !input.shift) action = 'new-tab'
       else if (key === 'w') action = 'close-tab'
       else if (key === 'r') action = 'reload'
+      else if (key === 'p' && input.shift) action = 'pin-page'
       else if (key === 'p') action = 'back'
       else if (key === 'n' && !input.shift) action = 'forward'
       else if (key === 'n' && input.shift) action = 'new-window'
