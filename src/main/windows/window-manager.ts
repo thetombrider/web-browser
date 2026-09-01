@@ -270,9 +270,8 @@ export class WindowManager {
       if (!allowed) event.preventDefault()
     })
 
-    // Do not show the launcher at startup. When restoring, the initial tab
-    // also carries the media guard in case it becomes the restored active tab.
-    await tabs.createTab('browsy://home', true, Boolean(session?.tabs?.length), false)
+    // Do not show the launcher at startup.
+    await tabs.createTab('browsy://home', true, false)
 
     this.layoutWindow(win.id)
     this.registerChromeShortcuts(chromeView, win.id)
@@ -306,17 +305,18 @@ export class WindowManager {
     if (homeTab) {
       const wc = homeTab.view.webContents
       if (!wc.isDestroyed()) {
+        entry.tabs.lockAudioUntilGesture(homeTab)
         await wc.loadURL(activeEntry.url)
         entry.tabs.switchTab(homeTab.id)
       }
     } else {
-      await entry.tabs.createTab(activeEntry.url, true, true)
+      await entry.tabs.createTab(activeEntry.url, true, true, true)
     }
 
     // Stagger background tab loads so the active page gets bandwidth first.
     for (const tab of background) {
       if (!this.windows.has(windowId)) return
-      await entry.tabs.createTab(tab.url, false, true)
+      await entry.tabs.createTab(tab.url, false, true, true)
       await new Promise<void>((resolve) => setImmediate(resolve))
     }
 
