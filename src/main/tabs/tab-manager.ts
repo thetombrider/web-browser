@@ -10,7 +10,6 @@ import {
   type PermissionCheckHandlerHandlerDetails,
   type WebContents
 } from 'electron'
-import { join } from 'path'
 import { generateId, isAllowedNavigationUrl, sanitizeNavigationUrl } from '../../shared/utils'
 import { showsNavigationChrome } from '../../shared/internal-pages'
 import type { ChromePanel, MediaKind, TabState } from '../../shared/types'
@@ -31,7 +30,8 @@ export interface Tab {
   favicon: string | null
   devToolsOpen: boolean
   thumbnail: string | null
-  mediaPlaybackBlocked: boolean
+  /** Restored tabs stay muted until this WebContents receives a user gesture. */
+  audioLockedUntilGesture: boolean
 }
 
 export type TabUpdateCallback = () => void
@@ -159,14 +159,13 @@ export class TabManager {
   async createTab(
     url = 'browsy://home',
     activate = true,
-    blockMediaUntilActivated = false,
-    showNavigationChrome = true
+    showNavigationChrome = true,
+    lockAudioUntilGesture = false
   ): Promise<Tab> {
     const safeUrl = sanitizeNavigationUrl(url) ?? 'browsy://home'
 
     const view = new WebContentsView({
       webPreferences: {
-        preload: join(__dirname, '../../preload/tab.js'),
         nodeIntegration: false,
         contextIsolation: true,
         sandbox: true,
@@ -174,9 +173,7 @@ export class TabManager {
         allowRunningInsecureContent: false,
         navigateOnDragDrop: false,
         backgroundThrottling: false,
-        ...(blockMediaUntilActivated
-          ? { additionalArguments: ['--browsy-block-media-until-activated'] }
-          : {})
+        autoplayPolicy: 'user-gesture-required'
       }
     })
     view.setBackgroundColor(APP_SURFACE_DARK)
@@ -187,13 +184,13 @@ export class TabManager {
       favicon: null,
       devToolsOpen: false,
       thumbnail: null,
-      mediaPlaybackBlocked: blockMediaUntilActivated
+      audioLockedUntilGesture: false
     }
 
     this.tabs.push(tab)
     this.attachWebContentsHandlers(tab)
-    if (blockMediaUntilActivated) {
-      tab.view.webContents.setAudioMuted(true)
+    if (lockAudioUntilGesture) {
+      this.lockAudioUntilGesture(tab)
     }
 
     if (activate) {
@@ -374,6 +371,20 @@ export class TabManager {
       const tabWc = tab?.view?.webContents
       return Boolean(tabWc && !tabWc.isDestroyed() && tabWc.id === wc.id)
     })
+  }
+
+  /** Mute restored media until this tab's WebContents receives a user gesture. */
+  lockAudioUntilGesture(tab: Tab): void {
+    tab.audioLockedUntilGesture = true
+    const wc = tab.view.webContents
+    if (!wc.isDestroyed()) wc.setAudioMuted(true)
+  }
+
+  private unlockAudioFromGesture(tab: Tab): void {
+    if (!tab.audioLockedUntilGesture) return
+    tab.audioLockedUntilGesture = false
+    const wc = tab.view.webContents
+    if (!wc.isDestroyed()) wc.setAudioMuted(false)
   }
 
   checkMediaPermission(
@@ -699,12 +710,6 @@ export class TabManager {
       this.removeDestroyedTab(tab)
     })
 
-    wc.on('ipc-message', (_event, channel) => {
-      if (channel !== 'browsy:media-user-activation' || !tab.mediaPlaybackBlocked || wc.isDestroyed()) return
-      tab.mediaPlaybackBlocked = false
-      wc.setAudioMuted(false)
-    })
-
     // Powerful permissions stay denied by default. Media (mic/camera) and
     // sanitized clipboard writes are handled once on the shared session from
     // WindowManager so multi-window routing stays correct.
@@ -856,6 +861,17 @@ export class TabManager {
         item.setSavePath(savePath)
       } else {
         item.cancel()
+      }
+    })
+
+    wc.on('input-event', (_event, inputEvent) => {
+      if (
+        inputEvent.type === 'mouseDown' ||
+        inputEvent.type === 'keyDown' ||
+        inputEvent.type === 'touchStart' ||
+        inputEvent.type === 'gestureTap'
+      ) {
+        this.unlockAudioFromGesture(tab)
       }
     })
 
