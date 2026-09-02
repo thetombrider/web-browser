@@ -3,8 +3,15 @@ export const LINK_PREVIEW_CARD_WIDTH = 420
 export const LINK_PREVIEW_IMAGE_HEIGHT = 262
 export const LINK_PREVIEW_FOOTER_HEIGHT = 72
 export const LINK_PREVIEW_CARD_HEIGHT = LINK_PREVIEW_IMAGE_HEIGHT + LINK_PREVIEW_FOOTER_HEIGHT
-export const LINK_PREVIEW_HOVER_MS = 280
+export const LINK_PREVIEW_HOVER_MS = 420
 export const LINK_PREVIEW_CACHE_LIMIT = 24
+/** Max time to wait for a destination page before giving up on a live preview. */
+export const LINK_PREVIEW_LOAD_TIMEOUT_MS = 4500
+/** Settle delay after load before capturePage. */
+export const LINK_PREVIEW_SETTLE_MS = 200
+/** Offscreen capture viewport — smaller than a full window to cut compositor cost. */
+export const LINK_PREVIEW_VIEWPORT_WIDTH = 800
+export const LINK_PREVIEW_VIEWPORT_HEIGHT = 500
 
 export interface LinkRect {
   x: number

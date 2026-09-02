@@ -21,13 +21,14 @@ import { setupProtocolHandler } from '../services/protocol'
 import {
   addBookmark,
   getBookmarks,
-  getHistory,
+  getRecentHistory,
   getRecentSites,
   getSession,
   getSettings,
   pinBookmarkByUrl,
   removeBookmark,
   saveSession,
+  searchHistory,
   setSettings
 } from '../services/store'
 import { resolveNavigationInput, generateId, sanitizeNavigationUrl, isAllowedWebPermission } from '../../shared/utils'
@@ -58,7 +59,10 @@ import {
   CHROME_NAV_HEIGHT,
   CHROME_PANEL_HEIGHT,
   CHROME_HEIGHT_MAX,
-  IPC
+  HISTORY_LAUNCHER_PREFETCH,
+  HISTORY_SEARCH_LIMIT,
+  IPC,
+  STATE_BROADCAST_COALESCE_MS
 } from '../../shared/types'
 
 interface BrowserWindowEntry {
@@ -86,6 +90,7 @@ export class WindowManager {
   private windows = new Map<number, BrowserWindowEntry>()
   private apiServer: ApiServer | null = null
   private shortcutDispatching = false
+  private stateBroadcastTimers = new Map<number, ReturnType<typeof setTimeout>>()
 
   constructor(options?: { apiToken?: string | null }) {
     const token = options?.apiToken ?? null
@@ -212,7 +217,8 @@ export class WindowManager {
     }
 
     // Window shell is unused for UI — chrome lives in its own WebContentsView.
-    await win.loadURL('data:text/html,<html><body style="margin:0;background:#111114"></body></html>')
+    // Do not block window setup on the empty shell document.
+    void win.loadURL('data:text/html,<html><body style="margin:0;background:#111114"></body></html>')
 
     const chromeView = new WebContentsView({
       webPreferences: {
@@ -289,6 +295,7 @@ export class WindowManager {
     })
     win.on('resize', () => this.layoutWindow(win.id))
     win.on('closed', () => {
+      this.clearStateBroadcast(win.id)
       const current = this.windows.get(win.id)
       current?.linkPreviewCapturer?.dispose()
       tabs.destroy()
@@ -302,7 +309,7 @@ export class WindowManager {
     })
 
     win.on('focus', () => {
-      this.broadcastState(win.id)
+      this.broadcastState(win.id, true)
       this.focusShortcutTarget(win.id)
     })
 
@@ -311,8 +318,6 @@ export class WindowManager {
       rendererUrl && rendererUrl.length > 0
         ? rendererUrl
         : pathToFileURL(join(__dirname, '../renderer/index.html')).href
-
-    await chromeView.webContents.loadURL(chromeUrl)
 
     // Lock the privileged chrome UI to its own origin.
     chromeView.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
@@ -326,13 +331,15 @@ export class WindowManager {
 
     const restoring = Boolean(session?.tabs?.length)
     const startUrl = sanitizeNavigationUrl(url) ?? 'browsy://home'
-    // Fresh windows show the launcher; restored sessions and "open in new window" do not.
-    await tabs.createTab(startUrl, true, !restoring && !url)
+    // Load chrome UI and the first tab in parallel — biggest startup latency cut.
+    const chromeReady = chromeView.webContents.loadURL(chromeUrl)
+    const firstTabReady = tabs.createTab(startUrl, true, !restoring && !url)
+    await Promise.all([chromeReady, firstTabReady])
 
     this.layoutWindow(win.id)
     this.registerShortcuts(chromeView.webContents, win.id)
     this.registerShortcuts(win.webContents, win.id)
-    this.broadcastState(win.id)
+    this.broadcastState(win.id, true)
     win.show()
     this.focusShortcutTarget(win.id)
 
@@ -377,7 +384,7 @@ export class WindowManager {
 
     if (this.windows.has(windowId)) {
       this.layoutWindow(windowId)
-      this.broadcastState(windowId)
+      this.broadcastState(windowId, true)
     }
   }
 
@@ -497,7 +504,7 @@ export class WindowManager {
         void tabs.navigate('browsy://bookmarks').then(() => {
           tabs.hideChrome()
           this.layoutWindow(windowId)
-          this.broadcastState(windowId)
+          this.broadcastState(windowId, true)
         })
         return
       case 'settings':
@@ -546,7 +553,7 @@ export class WindowManager {
         break
     }
     this.layoutWindow(windowId)
-    this.broadcastState(windowId)
+    this.broadcastState(windowId, true)
   }
 
   private handleTabNavigationShortcut(windowId: number, direction: -1 | 1): void {
@@ -562,12 +569,12 @@ export class WindowManager {
       const currentIndex = entry.carouselTabIds.indexOf(entry.carousel.selectedTabId)
       if (currentIndex === -1) {
         entry.carousel = { selectedTabId: entry.carouselTabIds[0], direction }
-        this.broadcastState(windowId)
+        this.broadcastState(windowId, true)
         return
       }
       const nextIndex = (currentIndex + direction + entry.carouselTabIds.length) % entry.carouselTabIds.length
       entry.carousel = { selectedTabId: entry.carouselTabIds[nextIndex], direction }
-      this.broadcastState(windowId)
+      this.broadcastState(windowId, true)
       void this.captureCarouselThumbnails(windowId, entry.carouselTabIds, entry.carousel.selectedTabId)
       return
     }
@@ -578,7 +585,7 @@ export class WindowManager {
         if (direction === 1) await entry.tabs.nextTab()
         else await entry.tabs.prevTab()
         this.layoutWindow(windowId)
-        this.broadcastState(windowId)
+        this.broadcastState(windowId, true)
       })()
       return
     }
@@ -592,7 +599,7 @@ export class WindowManager {
     entry.carouselTabIds = tabIds
     entry.carousel = { selectedTabId: tabIds[activeIndex >= 0 ? activeIndex : 0], direction }
     this.layoutWindow(windowId)
-    this.broadcastState(windowId)
+    this.broadcastState(windowId, true)
     void this.captureCarouselThumbnails(windowId, tabIds, entry.carousel.selectedTabId)
   }
 
@@ -618,7 +625,7 @@ export class WindowManager {
       direction
     }
     this.layoutWindow(windowId)
-    this.broadcastState(windowId)
+    this.broadcastState(windowId, true)
     void this.captureCarouselThumbnails(windowId, entry.carouselTabIds, entry.carousel.selectedTabId)
   }
 
@@ -668,7 +675,7 @@ export class WindowManager {
     entry.carouselTabIds = []
     void entry.tabs.switchTab(tabId).then(() => {
       this.layoutWindow(windowId)
-      this.broadcastState(windowId)
+      this.broadcastState(windowId, true)
     })
   }
 
@@ -678,7 +685,7 @@ export class WindowManager {
     entry.carousel = null
     entry.carouselTabIds = []
     this.layoutWindow(windowId)
-    this.broadcastState(windowId)
+    this.broadcastState(windowId, true)
   }
 
   private bookmarkActivePage(windowId: number): BookmarkResult {
@@ -953,7 +960,29 @@ export class WindowManager {
     }
   }
 
-  private broadcastState(windowId: number): void {
+  private clearStateBroadcast(windowId: number): void {
+    const timer = this.stateBroadcastTimers.get(windowId)
+    if (!timer) return
+    clearTimeout(timer)
+    this.stateBroadcastTimers.delete(windowId)
+  }
+
+  /** Coalesce noisy tab events; pass `immediate` for chrome/carousel UI actions. */
+  private broadcastState(windowId: number, immediate = false): void {
+    if (immediate) {
+      this.flushBroadcastState(windowId)
+      return
+    }
+    if (this.stateBroadcastTimers.has(windowId)) return
+    const timer = setTimeout(() => {
+      this.stateBroadcastTimers.delete(windowId)
+      this.flushBroadcastState(windowId)
+    }, STATE_BROADCAST_COALESCE_MS)
+    this.stateBroadcastTimers.set(windowId, timer)
+  }
+
+  private flushBroadcastState(windowId: number): void {
+    this.clearStateBroadcast(windowId)
     const entry = this.windows.get(windowId)
     if (!entry || entry.chromeView.webContents.isDestroyed()) return
     const state = this.buildState(entry.tabs)
@@ -1110,7 +1139,7 @@ export class WindowManager {
       }
       entry.tabs.showChrome(panel)
       this.layoutWindow(entry.window.id)
-      this.broadcastState(entry.window.id)
+      this.broadcastState(entry.window.id, true)
     })
 
     ipcMain.handle(IPC.HIDE_CHROME, (event) => {
@@ -1118,7 +1147,7 @@ export class WindowManager {
       if (!entry) return
       entry.tabs.hideChrome()
       this.layoutWindow(entry.window.id)
-      this.broadcastState(entry.window.id)
+      this.broadcastState(entry.window.id, true)
     })
 
     ipcMain.handle(IPC.SET_CHROME_HEIGHT, (event, height: unknown) => {
@@ -1183,7 +1212,17 @@ export class WindowManager {
       this.notifyPinsChanged(false)
     })
 
-    ipcMain.handle(IPC.GET_HISTORY, () => getHistory())
+    ipcMain.handle(IPC.GET_HISTORY, (_event, limit?: unknown) => {
+      const parsed =
+        typeof limit === 'number' && Number.isFinite(limit) ? limit : HISTORY_LAUNCHER_PREFETCH
+      return getRecentHistory(parsed)
+    })
+    ipcMain.handle(IPC.SEARCH_HISTORY, (_event, query?: unknown, limit?: unknown) => {
+      const q = typeof query === 'string' ? query : ''
+      const parsed =
+        typeof limit === 'number' && Number.isFinite(limit) ? limit : HISTORY_SEARCH_LIMIT
+      return searchHistory(q, parsed)
+    })
     ipcMain.handle(IPC.GET_RECENT_SITES, () => getRecentSites())
     ipcMain.handle(IPC.GET_SETTINGS, () => getSettings())
     ipcMain.handle(IPC.SET_SETTINGS, (_event, settings) => {
@@ -1252,19 +1291,9 @@ export class WindowManager {
     this.sendLinkPreview(sender, immediate)
 
     if (openTab?.isActive) {
-      const snapshot = await entry.tabs.captureActivePreview()
-      if (sender.isDestroyed() || this.overlaysBlockLinkPreview(entry) || !getSettings().linkPreview) return
-      if (snapshot) {
-        const next = makeLinkPreviewPayload({
-          url: parsed.url,
-          title: openTab.title || parsed.title,
-          favicon: openTab.favicon,
-          dataUrl: snapshot
-        })
-        capturer.remember(next)
-        this.sendLinkPreview(sender, next)
-        return
-      }
+      // Prefer the cached tab thumbnail — never capturePage the live page on hover.
+      if (immediate.dataUrl) capturer.remember(immediate)
+      return
     }
 
     if (immediate.dataUrl) {

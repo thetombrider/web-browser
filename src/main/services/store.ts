@@ -106,6 +106,29 @@ export function getHistory(): HistoryEntry[] {
   return store.get('history')
 }
 
+/** Newest-first slice for launcher prefetch (avoids shipping the full 5k list). */
+export function getRecentHistory(limit = 40): HistoryEntry[] {
+  const safeLimit = Math.max(0, Math.min(500, Math.floor(limit)))
+  return getHistory().slice(0, safeLimit)
+}
+
+/** Case-insensitive title/URL substring search over history, newest first. */
+export function searchHistory(query: string, limit = 12): HistoryEntry[] {
+  const safeLimit = Math.max(1, Math.min(100, Math.floor(limit)))
+  const q = query.trim().toLowerCase()
+  const history = getHistory()
+  if (!q) return history.slice(0, safeLimit)
+
+  const results: HistoryEntry[] = []
+  for (const entry of history) {
+    if (entry.title.toLowerCase().includes(q) || entry.url.toLowerCase().includes(q)) {
+      results.push(entry)
+      if (results.length >= safeLimit) break
+    }
+  }
+  return results
+}
+
 export function getRecentSites(limit = 12): HistoryEntry[] {
   const seen = new Set<string>()
   const recent: HistoryEntry[] = []

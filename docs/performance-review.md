@@ -15,7 +15,12 @@
 | P0.3 Lazy session restore | **Done** — background restored tabs are hibernated metadata until first focus |
 | P0.4 Carousel neighbor-only thumbs | **Done** — capture ±2 around selection; never wake hibernated tabs for thumbs |
 | P0.5 `will-download` session leak | **Done** — single shared session listener in `WindowManager` |
-| P1+ | Not started |
+| P1 Coalesce `STATE_CHANGED` | **Done** (follow-up PR) — 32ms coalesce; immediate flush for chrome/carousel |
+| P1 Omnibox history search | **Done** (follow-up PR) — `searchHistory` IPC; launcher prefetches 40 rows |
+| P1 Link-preview cost controls | **Done** (follow-up PR) — no active-tab capturePage; smaller viewport; serialized captures |
+| P2 Local fonts | **Done** (follow-up PR) — `@fontsource` + `browsy://font/*`; Google Fonts removed |
+| P2 Startup parallelization | **Done** (follow-up PR) — chrome + first tab load in parallel; shell load non-blocking |
+| Remaining P1+ | History disk batching, chrome bundle weight |
 
 ---
 
