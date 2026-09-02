@@ -20,26 +20,24 @@ A minimal, keyboard-first Electron browser built for learning and portfolio use.
 
 ## Requirements
 
-- Node.js 18+
-- macOS or Linux (developed for both; Linux CI/dev environment)
+- **Install:** macOS, plus Node.js 18+ (the one-liner builds a DMG on your Mac)
+- **Development:** Node.js 18+, macOS or Linux
 
 ## Install
 
-Anyone can install from a public clone of this repository:
+On a Mac, this one-liner builds a disk image and installs Browsy the same way you would after downloading it from a website: the DMG is saved to `~/Downloads`, mounted, and `Browsy.app` is copied into Applications.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/thetombrider/web-browser/main/install.sh | bash
 ```
 
-That downloads `install.sh`, clones into `~/browsy` (override with `BROWSY_DIR`), installs dependencies, and builds the app. Then:
-
-```bash
-cd ~/browsy && npm start
-```
+Then open Browsy from Applications or Launchpad.
 
 **The repository must be public** for this one-liner to work. GitHub serves `raw.githubusercontent.com` and anonymous `git clone` without auth only for public repos. While the repo is private, `curl` gets a 404 and clone fails unless the caller has GitHub credentials.
 
-If you already have the source:
+Source used to build the DMG is cached in `~/Library/Caches/browsy` (override with `BROWSY_DIR`). Pass `BROWSY_DMG=/path/to/Browsy.dmg` to skip the build and install an existing disk image.
+
+If you already have the source and want to run from the checkout instead of installing the app:
 
 ```bash
 npm install
@@ -60,13 +58,13 @@ npm start
 
 ## Build an installable DMG
 
-On macOS, run:
+The curl installer above already builds a DMG and installs from it. To produce a disk image without installing:
 
 ```bash
 npm run dmg
 ```
 
-The DMG is written to `release/` and can be opened to drag Browsy into Applications. The build targets the current Mac architecture. Override it with `BROWSY_ARCH=arm64` or `BROWSY_ARCH=x64` when needed. Local builds are unsigned, so macOS may require opening the app manually in System Settings.
+The DMG is written to `release/` (and copied to `~/Downloads` by the installer). Open it and drag Browsy into Applications. The build targets the current Mac architecture. Override it with `BROWSY_ARCH=arm64` or `BROWSY_ARCH=x64` when needed. Local builds are unsigned, so macOS may require opening the app manually in System Settings.
 
 ## Keyboard shortcuts
 

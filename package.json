@@ -8,6 +8,7 @@
     "build": "electron-vite build",
     "dist": "npm run build && electron-builder --mac dmg",
     "dmg": "bash scripts/build-dmg.sh",
+    "test:install": "bash scripts/test-install-from-dmg.sh",
     "start": "electron-vite preview",
     "mcp": "tsx src/mcp/bridge.ts",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json"
@@ -18,10 +19,14 @@
     "directories": {
       "output": "release"
     },
+    "artifactName": "${productName}-${version}-${arch}.${ext}",
     "files": [
       "out/**/*",
       "package.json"
     ],
+    "dmg": {
+      "title": "Browsy"
+    },
     "mac": {
       "target": [
         "dmg"
