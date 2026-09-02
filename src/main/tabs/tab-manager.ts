@@ -324,16 +324,18 @@ export class TabManager {
 
       this.onLayout()
       const wc = tab.view?.webContents
-      if (wc && !wc.isDestroyed() && previousId !== tabId) {
-        await this.waitForCompositorFrame(wc, 180)
-        if (!wc.isDestroyed()) {
+      // New tabs call switchTab before loadURL. Waiting for rAF on an empty
+      // WebContents never resolves and leaves the window black.
+      if (previousId && previousId !== tabId && wc && !wc.isDestroyed() && this.isCarouselOpen()) {
+        const url = (() => {
           try {
-            await wc.executeJavaScript(
-              'new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))'
-            )
+            return wc.getURL()
           } catch {
-            await new Promise<void>((resolve) => setTimeout(resolve, 32))
+            return ''
           }
+        })()
+        if (url && url !== 'about:blank') {
+          await this.waitForCompositorFrame(wc, 180)
         }
       }
     } finally {
@@ -847,9 +849,12 @@ export class TabManager {
 
     if (wc.isDestroyed()) return
     try {
-      await wc.executeJavaScript(
-        'new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))'
-      )
+      await Promise.race([
+        wc.executeJavaScript(
+          'new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))'
+        ),
+        new Promise<void>((resolve) => setTimeout(resolve, 80))
+      ])
     } catch {
       await new Promise<void>((resolve) => setTimeout(resolve, 32))
     }
