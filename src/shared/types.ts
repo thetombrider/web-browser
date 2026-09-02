@@ -20,6 +20,14 @@ export const CHROME_PANEL_HEIGHT = 280
 export const CHROME_DRAG_HEIGHT = 32
 /** Top padding on browsy:// internal pages (below the chrome strip). */
 export const HOME_PAGE_TOP_PADDING = 48
+/** Max background tabs that keep a live WebContents (active is always live). */
+export const MAX_WARM_BACKGROUND_TABS = 2
+/** Idle time before a warm background tab may hibernate. */
+export const TAB_HIBERNATE_IDLE_MS = 2 * 60 * 1000
+/** How often to scan for hibernation candidates. */
+export const TAB_HIBERNATE_POLL_MS = 15_000
+/** Carousel thumbnail capture radius around the selected tab. */
+export const CAROUSEL_THUMB_NEIGHBOR_RADIUS = 2
 
 export type ChromePanel = 'navigation' | 'bookmarks' | null
 
@@ -36,6 +44,8 @@ export interface TabState {
   isLoading: boolean
   canGoBack: boolean
   canGoForward: boolean
+  /** True when the tab has no live WebContents and only stores metadata. */
+  hibernated: boolean
 }
 
 export interface CarouselState {

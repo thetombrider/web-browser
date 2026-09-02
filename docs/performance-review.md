@@ -6,6 +6,17 @@
 
 **Verdict:** Browsy currently optimizes for *warm, always-ready tabs* (fast carousel snapshots, no background throttling). That feels fine with a handful of tabs and becomes the main failure mode at 20–50+. The highest-leverage work is a real **tab lifecycle** (hibernate / discard / lazy restore), then quieter IPC and cheaper chrome.
 
+### Implementation status (in progress)
+
+| Item | Status |
+|------|--------|
+| P0.1 Hibernate / discard inactive tabs | **Done** — warm budget `MAX_WARM_BACKGROUND_TABS=2`, idle hibernate, audible tabs stay warm |
+| P0.2 Re-enable background throttling | **Done** — throttling on by default; briefly disabled only during thumbnail capture |
+| P0.3 Lazy session restore | **Done** — background restored tabs are hibernated metadata until first focus |
+| P0.4 Carousel neighbor-only thumbs | **Done** — capture ±2 around selection; never wake hibernated tabs for thumbs |
+| P0.5 `will-download` session leak | **Done** — single shared session listener in `WindowManager` |
+| P1+ | Not started |
+
 ---
 
 ## Priority P0 — Fix first (many-tabs / memory / CPU)

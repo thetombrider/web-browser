@@ -14,8 +14,8 @@ const PRECONNECT_LIMIT = 6
 export function appendCacheCommandLineSwitches(): void {
   app.commandLine.appendSwitch('disk-cache-size', String(DISK_CACHE_BYTES))
   app.commandLine.appendSwitch('media-cache-size', String(MEDIA_CACHE_BYTES))
-  // Keep background tabs from aggressive renderer throttling so restored tabs stay warm.
-  app.commandLine.appendSwitch('disable-renderer-backgrounding')
+  // Keep a spare renderer warm for faster navigations without disabling background
+  // throttling globally (that would keep every open tab hot).
   app.commandLine.appendSwitch('enable-features', 'SpareRendererForSitePerProcess')
 }
 

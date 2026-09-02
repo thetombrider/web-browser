@@ -1,9 +1,12 @@
 import {
   BrowserWindow,
   WebContentsView,
+  dialog,
   ipcMain,
   app,
   session,
+  type DownloadItem,
+  type Event,
   type IpcMainEvent,
   type IpcMainInvokeEvent,
   type MediaAccessPermissionRequest,
@@ -50,6 +53,7 @@ import type {
   ToastPayload
 } from '../../shared/types'
 import {
+  CAROUSEL_THUMB_NEIGHBOR_RADIUS,
   CHROME_DRAG_HEIGHT,
   CHROME_NAV_HEIGHT,
   CHROME_PANEL_HEIGHT,
@@ -152,6 +156,28 @@ export class WindowManager {
         return
       }
       entry.tabs.handleMediaPermissionRequest(wc, details as MediaAccessPermissionRequest, callback)
+    })
+
+    // One shared listener — never register per-tab (that leaked on every createTab).
+    ses.on('will-download', (_event: Event, item: DownloadItem, contents: WebContents) => {
+      if (this.isLinkPreviewContents(contents)) {
+        item.cancel()
+        return
+      }
+      const entry = this.findEntryByWebContents(contents)
+      if (!entry || entry.window.isDestroyed()) {
+        item.cancel()
+        return
+      }
+      const filename = item.getFilename()
+      const savePath = dialog.showSaveDialogSync(entry.window, {
+        defaultPath: filename
+      })
+      if (savePath) {
+        item.setSavePath(savePath)
+      } else {
+        item.cancel()
+      }
     })
   }
 
@@ -335,21 +361,18 @@ export class WindowManager {
 
     const homeTab = entry.tabs.findNewTab()
     if (homeTab) {
-      const wc = homeTab.view.webContents
-      if (!wc.isDestroyed()) {
-        entry.tabs.lockAudioUntilGesture(homeTab)
-        await wc.loadURL(activeEntry.url)
-        entry.tabs.switchTab(homeTab.id)
-      }
+      entry.tabs.lockAudioUntilGesture(homeTab)
+      await entry.tabs.navigate(activeEntry.url)
+      await entry.tabs.switchTab(homeTab.id)
     } else {
       await entry.tabs.createTab(activeEntry.url, true, true, true)
     }
 
-    // Stagger background tab loads so the active page gets bandwidth first.
+    // Background tabs stay hibernated (metadata only) until first focus — the
+    // biggest multi-tab memory win on restore.
     for (const tab of background) {
       if (!this.windows.has(windowId)) return
-      await entry.tabs.createTab(tab.url, false, true, true)
-      await new Promise<void>((resolve) => setImmediate(resolve))
+      entry.tabs.createHibernatedTab(tab.url)
     }
 
     if (this.windows.has(windowId)) {
@@ -545,15 +568,18 @@ export class WindowManager {
       const nextIndex = (currentIndex + direction + entry.carouselTabIds.length) % entry.carouselTabIds.length
       entry.carousel = { selectedTabId: entry.carouselTabIds[nextIndex], direction }
       this.broadcastState(windowId)
+      void this.captureCarouselThumbnails(windowId, entry.carouselTabIds, entry.carousel.selectedTabId)
       return
     }
 
     // Carousel is the sole tab switcher (≥2 tabs). Spotlight dismisses first.
     if (entry.tabs.getTabs().length < 2) {
-      if (direction === 1) entry.tabs.nextTab()
-      else entry.tabs.prevTab()
-      this.layoutWindow(windowId)
-      this.broadcastState(windowId)
+      void (async () => {
+        if (direction === 1) await entry.tabs.nextTab()
+        else await entry.tabs.prevTab()
+        this.layoutWindow(windowId)
+        this.broadcastState(windowId)
+      })()
       return
     }
 
@@ -567,7 +593,7 @@ export class WindowManager {
     entry.carousel = { selectedTabId: tabIds[activeIndex >= 0 ? activeIndex : 0], direction }
     this.layoutWindow(windowId)
     this.broadcastState(windowId)
-    void this.captureCarouselThumbnails(windowId, tabIds)
+    void this.captureCarouselThumbnails(windowId, tabIds, entry.carousel.selectedTabId)
   }
 
   private closeCarouselTab(windowId: number): void {
@@ -593,14 +619,29 @@ export class WindowManager {
     }
     this.layoutWindow(windowId)
     this.broadcastState(windowId)
-    void this.captureCarouselThumbnails(windowId, entry.carouselTabIds)
+    void this.captureCarouselThumbnails(windowId, entry.carouselTabIds, entry.carousel.selectedTabId)
   }
 
-  private async captureCarouselThumbnails(windowId: number, tabIds: string[]): Promise<void> {
+  private async captureCarouselThumbnails(
+    windowId: number,
+    tabIds: string[],
+    selectedTabId: string
+  ): Promise<void> {
     const entry = this.windows.get(windowId)
     if (!entry) return
 
-    for (const tabId of tabIds) {
+    const selectedIndex = tabIds.indexOf(selectedTabId)
+    const neighborIds =
+      selectedIndex < 0
+        ? tabIds.slice(0, 1)
+        : tabIds.filter((_, index) => {
+            let offset = index - selectedIndex
+            if (offset > tabIds.length / 2) offset -= tabIds.length
+            if (offset < -tabIds.length / 2) offset += tabIds.length
+            return Math.abs(offset) <= CAROUSEL_THUMB_NEIGHBOR_RADIUS
+          })
+
+    for (const tabId of neighborIds) {
       const current = this.windows.get(windowId)
       if (!current || !current.carousel || !current.tabs.hasTab(tabId)) continue
       const dataUrl = await current.tabs.captureThumbnail(tabId)
@@ -625,9 +666,10 @@ export class WindowManager {
 
     entry.carousel = null
     entry.carouselTabIds = []
-    entry.tabs.switchTab(tabId)
-    this.layoutWindow(windowId)
-    this.broadcastState(windowId)
+    void entry.tabs.switchTab(tabId).then(() => {
+      this.layoutWindow(windowId)
+      this.broadcastState(windowId)
+    })
   }
 
   private dismissCarousel(windowId: number): void {
@@ -645,7 +687,7 @@ export class WindowManager {
     if (!entry) return empty
 
     const active = entry.tabs.getActiveTab()
-    const wc = active?.view.webContents
+    const wc = active?.view?.webContents
     if (!wc || wc.isDestroyed()) return empty
 
     const url = wc.getURL()
@@ -683,7 +725,7 @@ export class WindowManager {
     if (!entry) return empty
 
     const active = entry.tabs.getActiveTab()
-    const wc = active?.view.webContents
+    const wc = active?.view?.webContents
     if (!wc || wc.isDestroyed()) return empty
 
     const url = wc.getURL()
@@ -778,7 +820,7 @@ export class WindowManager {
       return
     }
 
-    const page = entry.tabs.getActiveTab()?.view.webContents
+    const page = entry.tabs.getActiveTab()?.view?.webContents
     if (page && !page.isDestroyed()) {
       page.focus()
     }
@@ -891,8 +933,9 @@ export class WindowManager {
   switchTabFocused(tabId: string): void {
     const entry = this.getFocusedEntry()
     if (!entry) return
-    entry.tabs.switchTab(tabId)
-    this.layoutWindow(entry.window.id)
+    void entry.tabs.switchTab(tabId).then(() => {
+      this.layoutWindow(entry.window.id)
+    })
   }
 
   toggleDevToolsFocused(): void {
@@ -1032,24 +1075,24 @@ export class WindowManager {
       this.layoutWindow(entry.window.id)
     })
 
-    ipcMain.handle(IPC.SWITCH_TAB, (event, tabId: string) => {
+    ipcMain.handle(IPC.SWITCH_TAB, async (event, tabId: string) => {
       const entry = this.getEntryFromEvent(event)
       if (!entry) return
-      entry.tabs.switchTab(tabId)
+      await entry.tabs.switchTab(tabId)
       this.layoutWindow(entry.window.id)
     })
 
-    ipcMain.handle(IPC.NEXT_TAB, (event) => {
+    ipcMain.handle(IPC.NEXT_TAB, async (event) => {
       const entry = this.getEntryFromEvent(event)
       if (!entry) return
-      entry.tabs.nextTab()
+      await entry.tabs.nextTab()
       this.layoutWindow(entry.window.id)
     })
 
-    ipcMain.handle(IPC.PREV_TAB, (event) => {
+    ipcMain.handle(IPC.PREV_TAB, async (event) => {
       const entry = this.getEntryFromEvent(event)
       if (!entry) return
-      entry.tabs.prevTab()
+      await entry.tabs.prevTab()
       this.layoutWindow(entry.window.id)
     })
 
