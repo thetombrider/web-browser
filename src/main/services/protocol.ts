@@ -6,7 +6,6 @@ import { applyBookmarksPageQuery, renderBookmarksPage } from './bookmarks-page'
 import { renderShortcutsPage } from './shortcuts-page'
 import { getShortcutsPageShortcut } from '../../shared/shortcuts'
 import { faviconUrlForPage, isAllowedNavigationUrl, sanitizeNavigationUrl } from '../../shared/utils'
-import { AI_ASSISTANT_HOME_URLS } from '../../shared/ai-assistant'
 import {
   APP_SURFACE_DARK,
   APP_SURFACE_ELEVATED_DARK,
@@ -16,7 +15,6 @@ import {
   BROWSY_CDP_PORT,
   HOME_PAGE_TOP_PADDING,
   RECENT_SITES_COUNT,
-  SEARCH_ENGINE_URLS,
   type AiAssistant,
   type RestoreSession,
   type SearchEngine,
@@ -466,6 +464,255 @@ function baseStyles(theme: ThemeMode): string {
   `
 }
 
+function settingsPageStyles(theme: ThemeMode): string {
+  return `
+    body.settings-page {
+      height: 100%;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      padding: ${HOME_PAGE_TOP_PADDING}px 32px 32px;
+    }
+    .settings-wrap {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      max-width: 980px;
+      min-height: 0;
+      margin: 0 auto;
+    }
+    .settings-brand {
+      font-size: 1.75rem;
+      font-weight: 600;
+      letter-spacing: -0.03em;
+      margin-bottom: 4px;
+    }
+    .settings-muted {
+      color: #a1a1aa;
+      font-size: 0.9rem;
+      margin-bottom: 16px;
+    }
+    .settings-notice {
+      color: #a1a1aa;
+      font-size: 0.85rem;
+      margin: -8px 0 16px;
+    }
+    .settings-filter-wrap {
+      flex-shrink: 0;
+      margin-bottom: 14px;
+    }
+    .settings-filter {
+      width: 100%;
+      height: 40px;
+      padding: 0 14px;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      outline: none;
+      background: ${APP_SURFACE_ELEVATED_DARK};
+      color: #f4f4f5;
+      font: inherit;
+      font-size: 0.925rem;
+    }
+    .settings-filter:focus { border-color: rgba(255,255,255,0.28); }
+    .settings-filter::placeholder { color: #71717a; }
+    .settings-hint {
+      margin-top: 8px;
+      color: #71717a;
+      font-size: 0.75rem;
+    }
+    .settings-finder {
+      flex: 1;
+      min-height: 320px;
+      display: grid;
+      grid-template-columns: 240px minmax(0, 1fr);
+      overflow: hidden;
+      border-radius: 10px;
+      background: ${APP_SURFACE_ELEVATED_DARK};
+    }
+    .settings-finder.hidden { display: none; }
+    .settings-sidebar {
+      overflow: auto;
+      padding: 8px;
+    }
+    .settings-folder {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 8px 10px;
+      border: none;
+      border-radius: 8px;
+      background: transparent;
+      color: inherit;
+      cursor: pointer;
+      font: inherit;
+      text-align: left;
+      appearance: none;
+      -webkit-appearance: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .settings-folder:hover, .settings-folder:active { background: rgba(255,255,255,0.05); }
+    .settings-folder:focus { outline: none; color: inherit; background: transparent; }
+    .settings-folder.active, .settings-folder.active:hover, .settings-folder.active:active, .settings-folder.active:focus {
+      background: ${APP_SURFACE_DARK};
+    }
+    .settings-folder.active.kb, .settings-folder.active:focus-visible { background: ${APP_SURFACE_DARK}; }
+    .settings-folder.hidden { display: none; }
+    .settings-folder-name {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      font-size: 0.875rem;
+      font-weight: 560;
+      letter-spacing: -0.01em;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .settings-count {
+      flex-shrink: 0;
+      color: #71717a;
+      font-size: 0.75rem;
+      font-variant-numeric: tabular-nums;
+    }
+    .settings-pane {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      overflow: hidden;
+      background: ${APP_SURFACE_DARK};
+    }
+    .settings-pane-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+      padding: 12px 14px 10px;
+    }
+    .settings-pane-title {
+      min-width: 0;
+      overflow: hidden;
+      font-size: 0.875rem;
+      font-weight: 560;
+      letter-spacing: -0.01em;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .settings-panels { flex: 1; overflow: auto; padding: 8px; }
+    .settings-panel.hidden { display: none; }
+    .settings-options { display: flex; flex-direction: column; gap: 2px; }
+    .settings-options .option,
+    .settings-action {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      min-height: 42px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      color: inherit;
+      font-size: 0.925rem;
+      text-decoration: none;
+      transition: background 0.12s ease;
+    }
+    .settings-options .option:hover,
+    .settings-action:hover,
+    .settings-options .option.kb-selected,
+    .settings-action.kb-selected { background: ${APP_SURFACE_ELEVATED_DARK}; }
+    .settings-options .option.selected {
+      background: ${APP_SURFACE_ELEVATED_DARK};
+      font-weight: 500;
+      outline: none;
+    }
+    .settings-options .option.kb-selected,
+    .settings-action.kb-selected { outline: none; }
+    .settings-options .option-check {
+      margin-left: auto;
+      flex-shrink: 0;
+      color: #71717a;
+      font-size: 0.8rem;
+      font-weight: 500;
+    }
+    .settings-option-label { min-width: 0; }
+    .settings-action-mark {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      flex-shrink: 0;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.08);
+      color: #a1a1aa;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .settings-action-copy { min-width: 0; }
+    .settings-action-label { font-weight: 500; }
+    .settings-action-detail { color: #71717a; font-size: 0.75rem; }
+    .settings-dev-panel {
+      margin-top: 8px;
+      padding: 14px 16px;
+      border-radius: 8px;
+      background: ${APP_SURFACE_ELEVATED_DARK};
+      color: #a1a1aa;
+      font-size: 0.8rem;
+      line-height: 1.65;
+    }
+    .settings-dev-panel p { margin-bottom: 4px; }
+    .settings-dev-panel p:last-child { margin-bottom: 0; }
+    .settings-empty {
+      color: #71717a;
+      font-size: 0.9rem;
+      line-height: 1.5;
+      padding: 18px 12px;
+    }
+    .settings-empty.hidden { display: none; }
+    .settings-footer {
+      display: inline-block;
+      flex-shrink: 0;
+      margin-top: 16px;
+      color: #71717a;
+      font-size: 0.85rem;
+      text-decoration: none;
+    }
+    .settings-footer:hover { color: inherit; }
+    @media (max-width: 720px) {
+      .settings-finder { grid-template-columns: 1fr; min-height: 0; }
+      .settings-sidebar {
+        max-height: 210px;
+        border-right: none;
+      }
+    }
+    ${lightThemeStart(theme)}
+      body.settings-page { background: ${APP_SURFACE_LIGHT}; color: #18181b; }
+      .settings-muted, .settings-notice { color: #71717a; }
+      .settings-filter {
+        background: ${APP_SURFACE_ELEVATED_LIGHT};
+        border-color: rgba(0,0,0,0.08);
+        color: #18181b;
+      }
+      .settings-filter:focus { border-color: rgba(0,0,0,0.22); }
+      .settings-finder { background: ${APP_SURFACE_ELEVATED_LIGHT}; }
+      .settings-folder:hover, .settings-folder:active { background: rgba(0,0,0,0.04); }
+      .settings-folder:focus { outline: none; color: inherit; background: transparent; }
+      .settings-folder.active, .settings-folder.active:hover, .settings-folder.active:active, .settings-folder.active:focus, .settings-folder.active:focus-visible {
+        background: ${APP_SURFACE_LIGHT};
+      }
+      .settings-folder.active.kb, .settings-folder.active:focus-visible { background: ${APP_SURFACE_LIGHT}; }
+      .settings-pane { background: ${APP_SURFACE_LIGHT}; }
+      .settings-options .option:hover,
+      .settings-action:hover,
+      .settings-options .option.kb-selected,
+      .settings-action.kb-selected,
+      .settings-options .option.selected { background: ${APP_SURFACE_ELEVATED_LIGHT}; }
+      .settings-action-mark { background: rgba(0,0,0,0.06); color: #52525b; }
+      .settings-dev-panel { background: ${APP_SURFACE_ELEVATED_LIGHT}; color: #52525b; }
+      .settings-empty { color: #71717a; }
+    ${lightThemeEnd(theme)}
+  `
+}
+
 function renderPinnedSitesBar(): string {
   const pinned = getPinnedBookmarks()
   if (pinned.length === 0) return ''
@@ -676,30 +923,43 @@ function settingsPageUrl(params: Record<string, string>, showDev: boolean): stri
 }
 
 function renderOption(
+  section: string,
   param: string,
   value: string,
   label: string,
   current: string,
-  showDev: boolean,
-  iconUrl?: string
+  showDev: boolean
 ): string {
   const selected = current === value
   const check = selected ? '<span class="option-check" aria-hidden="true">✓</span>' : ''
-  const glyph = iconUrl ? renderSiteGlyph(iconUrl) : ''
-  const content = `${glyph}<span class="option-label">${escapeHtml(label)}</span>${check}`
+  const content = `<span class="settings-option-label">${escapeHtml(label)}</span>${check}`
+  const hay = escapeHtml(label)
   if (selected) {
-    return `<span class="option selected" aria-current="true">${content}</span>`
+    return `<span class="option selected" data-hay="${hay}" aria-current="true">${content}</span>`
   }
-  const href = escapeHtml(settingsPageUrl({ [param]: value }, showDev))
-  return `<a class="option" href="${href}">${content}</a>`
+  const href = escapeHtml(settingsPageUrl({ section, [param]: value }, showDev))
+  return `<a class="option" data-hay="${hay}" href="${href}">${content}</a>`
 }
 
-function renderSettingsSection(label: string, optionsHtml: string): string {
+function renderSettingsAction(label: string, detail: string, href: string, mark: string): string {
   return `
-      <div class="settings-section">
-        <div class="col-label">${escapeHtml(label)}</div>
-        <div class="options">${optionsHtml}</div>
-      </div>`
+    <a class="settings-action" data-hay="${escapeHtml(`${label} ${detail}`)}" href="${escapeHtml(href)}">
+      <span class="settings-action-mark" aria-hidden="true">${escapeHtml(mark)}</span>
+      <span class="settings-action-copy">
+        <span class="settings-action-label">${escapeHtml(label)}</span>
+        <span class="settings-action-detail">${escapeHtml(detail)}</span>
+      </span>
+    </a>`
+}
+
+function renderSettingsFolder(label: string, section: string, count: number, active: boolean): string {
+  return `
+    <button type="button" class="settings-folder${active ? ' active kb' : ''}" data-section="${escapeHtml(section)}"${
+      active ? ' aria-current="true"' : ''
+    }>
+      <span class="settings-folder-name">${escapeHtml(label)}</span>
+      <span class="settings-count">${count}</span>
+    </button>`
 }
 
 function settingsClientScript(replaceUrl?: string): string {
@@ -709,42 +969,227 @@ function settingsClientScript(replaceUrl?: string): string {
   return `
     (function () {
       ${replaceHistory}
-      var rows = Array.from(document.querySelectorAll('a.option, a.dev-toggle, a.home-card, a.footer-link'));
-      if (!rows.length) return;
-      var selectedIndex = -1;
+      var filter = document.getElementById('settings-filter');
+      var finder = document.getElementById('settings-finder');
+      var foldersRoot = document.getElementById('settings-folders');
+      var panelsRoot = document.getElementById('settings-panels');
+      var paneTitle = document.getElementById('settings-pane-title');
+      var paneCount = document.getElementById('settings-pane-count');
+      var emptyFilter = document.getElementById('settings-empty-filter');
+      var paneEmpty = document.getElementById('settings-pane-empty');
+      var paneFocus = 'folders';
+      if (!filter || !finder || !foldersRoot || !panelsRoot) return;
 
-      function setSelected(index) {
-        rows.forEach(function (row) {
-          row.classList.remove('kb-selected');
-          row.removeAttribute('aria-current');
-        });
-        if (index < 0) {
-          selectedIndex = -1;
-          return null;
-        }
-        selectedIndex = index;
-        var selected = rows[selectedIndex];
-        selected.classList.add('kb-selected');
-        selected.setAttribute('aria-current', 'true');
-        selected.scrollIntoView({ block: 'nearest' });
-        return selected;
+      function isTypingTarget(el) {
+        return el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
       }
 
+      function visibleFolders() {
+        return Array.from(foldersRoot.querySelectorAll('.settings-folder')).filter(function (folder) {
+          return !folder.classList.contains('hidden');
+        });
+      }
+
+      function activeFolder() { return foldersRoot.querySelector('.settings-folder.active'); }
+
+      function activePanel() {
+        var folder = activeFolder();
+        if (!folder) return null;
+        return panelsRoot.querySelector('.settings-panel[data-section="' + folder.getAttribute('data-section') + '"]');
+      }
+
+      function visibleOptions() {
+        var panel = activePanel();
+        if (!panel) return [];
+        return Array.from(panel.querySelectorAll('.option, .settings-action')).filter(function (row) {
+          return !row.classList.contains('hidden');
+        });
+      }
+
+      function persistSection(section) {
+        try {
+          var next = new URL(window.location.href);
+          if (section) next.searchParams.set('section', section);
+          else next.searchParams.delete('section');
+          if (next.href !== window.location.href) history.replaceState(null, '', next.toString());
+        } catch (e) {}
+      }
+
+      function scrollNearest(container, el) {
+        if (!container || !el) return;
+        var cRect = container.getBoundingClientRect();
+        var eRect = el.getBoundingClientRect();
+        if (eRect.top < cRect.top) container.scrollTop += eRect.top - cRect.top;
+        else if (eRect.bottom > cRect.bottom) container.scrollTop += eRect.bottom - cRect.bottom;
+      }
+
+      function setFolderKb(on) {
+        foldersRoot.querySelectorAll('.settings-folder').forEach(function (folder) {
+          folder.classList.toggle('kb', on && folder.classList.contains('active'));
+        });
+      }
+
+      function clearOptionSelection() {
+        panelsRoot.querySelectorAll('.kb-selected').forEach(function (row) {
+          row.classList.remove('kb-selected');
+          if (!row.classList.contains('selected')) row.removeAttribute('aria-current');
+        });
+      }
+
+      function selectSection(section, focus) {
+        var folders = Array.from(foldersRoot.querySelectorAll('.settings-folder'));
+        var match = folders.find(function (folder) {
+          return folder.getAttribute('data-section') === section && !folder.classList.contains('hidden');
+        }) || visibleFolders()[0] || null;
+        var nextSection = match ? (match.getAttribute('data-section') || '') : '';
+        folders.forEach(function (folder) {
+          var on = folder === match;
+          folder.classList.toggle('active', on);
+          if (on) folder.setAttribute('aria-current', 'true');
+          else folder.removeAttribute('aria-current');
+        });
+        panelsRoot.querySelectorAll('.settings-panel').forEach(function (panel) {
+          panel.classList.toggle('hidden', !nextSection || panel.getAttribute('data-section') !== nextSection);
+        });
+        clearOptionSelection();
+        var options = visibleOptions();
+        if (paneTitle) paneTitle.textContent = match ? match.querySelector('.settings-folder-name').textContent : 'Settings';
+        if (paneCount) paneCount.textContent = options.length ? String(options.length) : '';
+        if (paneEmpty) paneEmpty.classList.toggle('hidden', options.length > 0);
+        paneFocus = focus || 'folders';
+        setFolderKb(paneFocus === 'folders');
+        if (match) {
+          persistSection(nextSection);
+          scrollNearest(foldersRoot, match);
+        }
+        return match;
+      }
+
+      function selectOption(row, focusRows) {
+        clearOptionSelection();
+        if (!row) return null;
+        row.classList.add('kb-selected');
+        row.setAttribute('aria-current', 'true');
+        scrollNearest(panelsRoot, row);
+        if (focusRows) {
+          paneFocus = 'options';
+          setFolderKb(false);
+        }
+        return row;
+      }
+
+      function selectedOption() {
+        var panel = activePanel();
+        return panel && panel.querySelector('.kb-selected:not(.hidden)');
+      }
+
+      function applyFilter() {
+        var q = String(filter.value || '').toLowerCase().trim();
+        var totalVisible = 0;
+        var active = activeFolder();
+        var activeSection = active ? active.getAttribute('data-section') : '';
+        foldersRoot.querySelectorAll('.settings-folder').forEach(function (folder) {
+          var section = folder.getAttribute('data-section') || '';
+          var panel = panelsRoot.querySelector('.settings-panel[data-section="' + section + '"]');
+          var folderName = String((folder.querySelector('.settings-folder-name') || {}).textContent || '').toLowerCase();
+          var sectionMatch = q && folderName.indexOf(q) !== -1;
+          var sectionHits = 0;
+          if (panel) {
+            panel.querySelectorAll('.option, .settings-action').forEach(function (row) {
+              var match = !q || sectionMatch || String(row.getAttribute('data-hay') || '').toLowerCase().indexOf(q) !== -1;
+              row.classList.toggle('hidden', !match);
+              if (match) sectionHits += 1;
+            });
+          }
+          folder.classList.toggle('hidden', sectionHits === 0);
+          totalVisible += sectionHits;
+        });
+        if (emptyFilter) emptyFilter.classList.toggle('hidden', totalVisible > 0);
+        finder.classList.toggle('hidden', totalVisible === 0);
+        var nextSection = activeSection;
+        var current = foldersRoot.querySelector('.settings-folder.active');
+        if (!current || current.classList.contains('hidden')) {
+          var first = visibleFolders()[0];
+          nextSection = first ? first.getAttribute('data-section') : '';
+        }
+        selectSection(nextSection, paneFocus);
+        if (paneFocus === 'options') {
+          var options = visibleOptions();
+          if (options[0]) selectOption(options[0], true);
+        }
+      }
+
+      function move(delta) {
+        if (paneFocus === 'folders') {
+          var folders = visibleFolders();
+          if (!folders.length) return;
+          var current = activeFolder();
+          var index = current ? folders.indexOf(current) : -1;
+          var next = index < 0 ? 0 : (index + delta + folders.length) % folders.length;
+          selectSection(folders[next].getAttribute('data-section'), 'folders');
+          return;
+        }
+        var options = visibleOptions();
+        if (!options.length) return;
+        var currentOption = selectedOption();
+        var index = currentOption ? options.indexOf(currentOption) : -1;
+        var next = index < 0 ? (delta > 0 ? 0 : options.length - 1) : (index + delta + options.length) % options.length;
+        selectOption(options[next], true);
+      }
+
+      foldersRoot.addEventListener('click', function (event) {
+        var folder = event.target.closest('.settings-folder');
+        if (folder) selectSection(folder.getAttribute('data-section'), 'folders');
+      });
+      filter.addEventListener('input', function () { paneFocus = 'folders'; applyFilter(); });
+      filter.addEventListener('focus', function () { paneFocus = 'folders'; setFolderKb(true); });
+
       document.addEventListener('keydown', function (event) {
+        var typing = isTypingTarget(event.target);
         if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
           event.preventDefault();
-          var next = event.key === 'ArrowDown'
-            ? (selectedIndex + 1) % rows.length
-            : (selectedIndex <= 0 ? rows.length - 1 : selectedIndex - 1);
-          setSelected(next);
-        } else if (event.key === 'Enter' || event.key === 'NumpadEnter') {
-          if (selectedIndex < 0) return;
-          var selected = rows[selectedIndex];
-          if (!selected) return;
+          if (typing) filter.blur();
+          move(event.key === 'ArrowDown' ? 1 : -1);
+          return;
+        }
+        if (event.key === 'ArrowRight') {
+          if (typing) return;
+          var options = visibleOptions();
+          if (!options.length) return;
           event.preventDefault();
-          selected.click();
+          paneFocus = 'options';
+          selectOption(options[0], true);
+          return;
+        }
+        if (event.key === 'ArrowLeft') {
+          if (typing) return;
+          event.preventDefault();
+          paneFocus = 'folders';
+          clearOptionSelection();
+          setFolderKb(true);
+          var folder = activeFolder();
+          if (folder) scrollNearest(foldersRoot, folder);
+          return;
+        }
+        if (event.key === 'Enter' || event.key === 'NumpadEnter') {
+          if (typing) return;
+          if (paneFocus !== 'options') {
+            var first = visibleOptions()[0];
+            if (!first) return;
+            event.preventDefault();
+            selectOption(first, true);
+            return;
+          }
+          var selected = selectedOption();
+          if (selected && selected.tagName === 'A') {
+            event.preventDefault();
+            selected.click();
+          }
         }
       });
+
+      filter.focus();
+      applyFilter();
     })();
   `
 }
@@ -779,157 +1224,167 @@ function applySettingsFromQuery(url: URL): boolean {
   return true
 }
 
-export function renderSettingsPage(showDev = false, cacheCleared = false): string {
+export function renderSettingsPage(showDev = false, cacheCleared = false, requestedSection?: string | null): string {
   const settings = getSettings()
-  const devToggleHref = escapeHtml(settingsPageUrl({}, !showDev))
   const devToggleLabel = showDev ? 'Hide developer' : 'Developer'
   const devToggleSub = showDev ? 'Visible' : 'Hidden'
-  const clearCacheHref = escapeHtml(settingsPageUrl({ clearCache: '1' }, showDev))
+  const clearCacheHref = settingsPageUrl({ section: 'more', clearCache: '1' }, showDev)
 
   const newTabOptions = [
-    renderOption('homepage', 'recent', 'Recent sites', settings.homepage, showDev),
-    renderOption('homepage', 'blank', 'Blank', settings.homepage, showDev)
+    renderOption('new-tab', 'homepage', 'recent', 'Recent sites', settings.homepage, showDev),
+    renderOption('new-tab', 'homepage', 'blank', 'Blank', settings.homepage, showDev)
   ].join('')
 
   const searchOptions = [
-    renderOption('searchEngine', 'google', 'Google', settings.searchEngine, showDev, SEARCH_ENGINE_URLS.google),
+    renderOption('search', 'searchEngine', 'google', 'Google', settings.searchEngine, showDev),
     renderOption(
+      'search',
       'searchEngine',
       'duckduckgo',
       'DuckDuckGo',
       settings.searchEngine,
-      showDev,
-      SEARCH_ENGINE_URLS.duckduckgo
+      showDev
     ),
-    renderOption('searchEngine', 'bing', 'Bing', settings.searchEngine, showDev, SEARCH_ENGINE_URLS.bing)
+    renderOption('search', 'searchEngine', 'bing', 'Bing', settings.searchEngine, showDev)
   ].join('')
 
   const startupPageOptions = [
-    renderOption('startupPage', 'homepage', 'Homepage', settings.startupPage, showDev),
-    renderOption('startupPage', 'searchEngine', 'Search engine', settings.startupPage, showDev)
+    renderOption('startup', 'startupPage', 'homepage', 'Homepage', settings.startupPage, showDev),
+    renderOption('startup', 'startupPage', 'searchEngine', 'Search engine', settings.startupPage, showDev)
   ].join('')
 
   const startupOptions = [
-    renderOption('restoreSession', 'always', 'Restore previous tabs', settings.restoreSession, showDev),
-    renderOption('restoreSession', 'never', 'Start fresh', settings.restoreSession, showDev)
+    renderOption('on-startup', 'restoreSession', 'always', 'Restore previous tabs', settings.restoreSession, showDev),
+    renderOption('on-startup', 'restoreSession', 'never', 'Start fresh', settings.restoreSession, showDev)
   ].join('')
 
   const themeOptions = [
-    renderOption('theme', 'light', 'Light', settings.theme, showDev),
-    renderOption('theme', 'dark', 'Dark', settings.theme, showDev),
-    renderOption('theme', 'system', 'System', settings.theme, showDev)
+    renderOption('theme', 'theme', 'light', 'Light', settings.theme, showDev),
+    renderOption('theme', 'theme', 'dark', 'Dark', settings.theme, showDev),
+    renderOption('theme', 'theme', 'system', 'System', settings.theme, showDev)
   ].join('')
 
   const linkPreviewOptions = [
-    renderOption('linkPreview', 'on', 'On hover', settings.linkPreview ? 'on' : 'off', showDev),
-    renderOption('linkPreview', 'off', 'Off', settings.linkPreview ? 'on' : 'off', showDev)
+    renderOption('link-preview', 'linkPreview', 'on', 'On hover', settings.linkPreview ? 'on' : 'off', showDev),
+    renderOption('link-preview', 'linkPreview', 'off', 'Off', settings.linkPreview ? 'on' : 'off', showDev)
   ].join('')
 
   const askAiOptions = [
     renderOption(
+      'ask-ai',
       'aiAssistant',
       'chatgpt',
       'ChatGPT',
       settings.aiAssistant ?? 'chatgpt',
-      showDev,
-      AI_ASSISTANT_HOME_URLS.chatgpt
+      showDev
     ),
     renderOption(
+      'ask-ai',
       'aiAssistant',
       'claude',
       'Claude',
       settings.aiAssistant ?? 'chatgpt',
-      showDev,
-      AI_ASSISTANT_HOME_URLS.claude
+      showDev
     ),
     renderOption(
+      'ask-ai',
       'aiAssistant',
       'gemini',
       'Gemini',
       settings.aiAssistant ?? 'chatgpt',
-      showDev,
-      AI_ASSISTANT_HOME_URLS.gemini
+      showDev
     )
   ].join('')
 
-  const moreCards = `
-      <div class="settings-section">
-        <div class="col-label">More</div>
-        <div class="home-cards">
-          <a class="home-card" href="browsy://bookmarks" data-nav>
-            <div class="card-glyph">★</div>
-            <div class="card-meta">
-              <div class="card-title">Bookmarks</div>
-              <div class="card-sub">Saved pages and pins</div>
-            </div>
-          </a>
-          <a class="home-card" href="browsy://shortcuts" data-nav>
-            <div class="card-glyph">⌘</div>
-            <div class="card-meta">
-              <div class="card-title">Shortcuts</div>
-              <div class="card-sub">Keyboard reference</div>
-            </div>
-          </a>
-          <a class="home-card" href="${clearCacheHref}">
-            <div class="card-glyph">×</div>
-            <div class="card-meta">
-              <div class="card-title">Clear cache</div>
-              <div class="card-sub"${cacheCleared ? ' aria-live="polite"' : ''}>${
-                cacheCleared ? 'Cache cleared' : 'Cached files and pages'
-              }</div>
-            </div>
-          </a>
-        </div>
-      </div>`
+  const moreOptions = [
+    renderSettingsAction('Bookmarks', 'Saved pages and pins', 'browsy://bookmarks', '★'),
+    renderSettingsAction('Shortcuts', 'Keyboard reference', 'browsy://shortcuts', '⌘'),
+    renderSettingsAction(
+      'Clear cache',
+      cacheCleared ? 'Cache cleared' : 'Cached files and pages',
+      clearCacheHref,
+      '×'
+    )
+  ].join('')
 
-  const developerSection = `
-      <div class="settings-section">
-        <div class="col-label">Developer</div>
-        <a class="dev-toggle" href="${devToggleHref}">
-          <span>${devToggleLabel}</span>
-          <span class="dev-toggle-sub">${devToggleSub}</span>
-        </a>
+  const devToggleHref = settingsPageUrl({ section: 'developer' }, !showDev)
+  const developerOptions = `${renderSettingsAction(devToggleLabel, devToggleSub, devToggleHref, 'DEV')}
         ${
           showDev
-            ? `<div class="dev-panel">
-          <p>Agent API · http://127.0.0.1:${BROWSY_API_PORT} (off by default; token required)</p>
-          <p>Enable API · BROWSY_ENABLE_API=1 or BROWSY_API_TOKEN</p>
-          <p>CDP · localhost:${BROWSY_CDP_PORT} (off by default)</p>
-          <p>Enable CDP · BROWSY_ENABLE_CDP=1 or BROWSY_CDP_PORT</p>
-          <p>MCP · BROWSY_API_TOKEN=… npm run mcp</p>
-        </div>`
+            ? `<div class="settings-dev-panel">
+           <p>Agent API · http://127.0.0.1:${BROWSY_API_PORT} (off by default; token required)</p>
+           <p>Enable API · BROWSY_ENABLE_API=1 or BROWSY_API_TOKEN</p>
+           <p>CDP · localhost:${BROWSY_CDP_PORT} (off by default)</p>
+           <p>Enable CDP · BROWSY_ENABLE_CDP=1 or BROWSY_CDP_PORT</p>
+           <p>MCP · BROWSY_API_TOKEN=… npm run mcp</p>
+         </div>`
             : ''
         }
+      `
+
+  const sections = [
+    { id: 'theme', label: 'Theme', options: themeOptions, count: 3 },
+    { id: 'new-tab', label: 'New tab', options: newTabOptions, count: 2 },
+    { id: 'startup', label: 'Startup page', options: startupPageOptions, count: 2 },
+    { id: 'search', label: 'Search engine', options: searchOptions, count: 3 },
+    { id: 'link-preview', label: 'Link preview', options: linkPreviewOptions, count: 2 },
+    { id: 'ask-ai', label: 'Ask AI', options: askAiOptions, count: 3 },
+    { id: 'on-startup', label: 'On startup', options: startupOptions, count: 2 },
+    { id: 'more', label: 'More', options: moreOptions, count: 3 },
+    { id: 'developer', label: 'Developer', options: developerOptions, count: 1 }
+  ]
+  const selectedSection = sections.some((section) => section.id === requestedSection) ? requestedSection! : sections[0].id
+  const foldersHtml = sections
+    .map((section) => renderSettingsFolder(section.label, section.id, section.count, section.id === selectedSection))
+    .join('')
+  const panelsHtml = sections
+    .map(
+      (section) => `
+      <div class="settings-panel${section.id === selectedSection ? '' : ' hidden'}" data-section="${section.id}" role="list">
+        <div class="settings-options">${section.options}</div>
       </div>`
+    )
+    .join('')
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="${settings.theme === 'light' ? 'light' : settings.theme === 'dark' ? 'dark' : 'dark light'}" />
   <title>Settings — Browsy</title>
   <style>${localFontFaceCss()}</style>
    <style>${baseStyles(settings.theme)}</style>
+   <style>${settingsPageStyles(settings.theme)}</style>
 </head>
-<body>
-  <div class="greeting">Settings</div>
-  <div class="home-layout">
-    <section class="home-col" aria-label="Browsing">
-      ${renderSettingsSection('Theme', themeOptions)}
-      ${renderSettingsSection('New tab', newTabOptions)}
-      ${renderSettingsSection('Startup page', startupPageOptions)}
-      ${renderSettingsSection('Search engine', searchOptions)}
-      ${renderSettingsSection('Link preview', linkPreviewOptions)}
-      ${renderSettingsSection('Ask AI', askAiOptions)}
-    </section>
-    <section class="home-col" aria-label="Session">
-      ${renderSettingsSection('On startup', startupOptions)}
-      ${moreCards}
-      ${developerSection}
-    </section>
-  </div>
-  <a class="footer-link settings-home" href="browsy://home">← Home</a>
-  <script>${settingsClientScript(cacheCleared ? settingsPageUrl({}, showDev) : undefined)}</script>
+<body class="settings-page">
+  <main class="settings-wrap">
+    <div class="settings-brand">Settings</div>
+    <p class="settings-muted">Preferences for your browsing experience</p>
+    ${cacheCleared ? '<p class="settings-notice" aria-live="polite">Cache cleared</p>' : ''}
+    <div class="settings-filter-wrap">
+      <input id="settings-filter" class="settings-filter" type="search" placeholder="Filter settings" autocomplete="off" spellcheck="false" />
+      <p class="settings-hint">← sections · → choices · enter selects · type to filter</p>
+    </div>
+    <p id="settings-empty-filter" class="settings-empty hidden">No matching settings.</p>
+    <div id="settings-finder" class="settings-finder">
+      <nav id="settings-folders" class="settings-sidebar" aria-label="Settings sections">${foldersHtml}</nav>
+      <section class="settings-pane" aria-label="Settings choices">
+        <div class="settings-pane-head">
+          <span id="settings-pane-title" class="settings-pane-title">${escapeHtml(
+            sections.find((section) => section.id === selectedSection)?.label ?? 'Settings'
+          )}</span>
+          <span id="settings-pane-count" class="settings-count">${
+            sections.find((section) => section.id === selectedSection)?.count ?? ''
+          }</span>
+        </div>
+        <div id="settings-panels" class="settings-panels">${panelsHtml}</div>
+        <p id="settings-pane-empty" class="settings-empty hidden">No settings in this folder.</p>
+      </section>
+    </div>
+    <a class="settings-footer" href="browsy://home">← Home</a>
+  </main>
+  <script>${settingsClientScript(cacheCleared ? settingsPageUrl({ section: 'more' }, showDev) : undefined)}</script>
 </body>
 </html>`
 }
@@ -1111,7 +1566,7 @@ export function setupProtocolHandler(
           cacheCleared = false
         }
       }
-      return new Response(renderSettingsPage(showDev, cacheCleared), {
+      return new Response(renderSettingsPage(showDev, cacheCleared, url.searchParams.get('section')), {
         headers: { 'Content-Type': 'text/html; charset=utf-8' }
       })
     }
