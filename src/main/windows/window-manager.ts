@@ -94,7 +94,7 @@ export class WindowManager {
     configureSessionCache()
     setupProtocolHandler(
       () => this.broadcastSettings(),
-      () => this.notifyPinsChanged(false)
+      (reloadBookmarks = true) => this.notifyPinsChanged(false, reloadBookmarks)
     )
     this.registerSessionPermissions()
     this.registerIpc()
@@ -713,7 +713,7 @@ export class WindowManager {
       message,
       tone: pinResult.atLimit ? 'default' : 'success'
     })
-    this.notifyPinsChanged(true)
+    this.notifyPinsChanged(false)
     return payload
   }
 
@@ -726,20 +726,20 @@ export class WindowManager {
     }
   }
 
-  private reloadHomePages(includeSettings = false): void {
+  private reloadHomePages(includeSettings = false, includeBookmarks = true): void {
     for (const win of this.windows.values()) {
       win.tabs.reloadTabsMatching((tabUrl) => {
         if (tabUrl.startsWith('browsy://home')) return true
-        if (tabUrl.startsWith('browsy://bookmarks')) return true
+        if (includeBookmarks && tabUrl.startsWith('browsy://bookmarks')) return true
         return includeSettings && tabUrl.startsWith('browsy://settings')
       })
     }
   }
 
   /** Pinned shortcuts are derived from bookmarks; refresh launcher + home (and settings when needed). */
-  private notifyPinsChanged(includeSettings: boolean): void {
+  private notifyPinsChanged(includeSettings: boolean, includeBookmarks = true): void {
     this.broadcastBookmarks()
-    this.reloadHomePages(includeSettings)
+    this.reloadHomePages(includeSettings, includeBookmarks)
   }
 
   private sendToast(windowId: number, toast: ToastPayload): void {
@@ -1137,7 +1137,7 @@ export class WindowManager {
 
     ipcMain.handle(IPC.REMOVE_BOOKMARK, (_event, id: string) => {
       removeBookmark(id)
-      this.notifyPinsChanged(true)
+      this.notifyPinsChanged(false)
     })
 
     ipcMain.handle(IPC.GET_HISTORY, () => getHistory())

@@ -10,7 +10,7 @@ A minimal, keyboard-first Electron browser built for learning and portfolio use.
 - Omnibox suggestions and command palette (`/` shortcuts)
 - Multiple windows and tabs
 - Custom homepage with recent sites and pinned bookmarks
-- Custom bookmarks page grouped by domain
+- Finder-style bookmarks page (folders by domain) with pin and delete
 - Custom error pages
 - DevTools docked right, one per tab (`F12`)
 - Session restore on launch
@@ -62,7 +62,7 @@ The DMG is written to `release/` and can be opened to drag Browsy into Applicati
 | `Cmd+Right Arrow` | Tab switcher (carousel) |
 | `Cmd+Left Arrow` | Tab switcher (carousel) |
 | `Ctrl/Cmd+D` | Bookmark page |
-| `Ctrl/Cmd+Shift+P` | Bookmark (if needed) and pin the current page |
+| `Ctrl/Cmd+Shift+P` | Bookmark (if needed) and pin the current page, or pin the selected bookmark |
 | `Ctrl/Cmd+N` | New window |
 | `Ctrl/Cmd+R` | Reload |
 | `Ctrl/Cmd+[` | Back |

@@ -1050,8 +1050,15 @@ export class TabManager {
       else if (key === 't' && !input.shift) action = 'new-tab'
       else if (key === 'w') action = 'close-tab'
       else if (key === 'r') action = 'reload'
-      else if (key === 'p' && input.shift) action = 'pin-page'
-      else if (key === 'p') action = 'back'
+      else if (key === 'p' && input.shift) {
+        let onBookmarks = false
+        try {
+          onBookmarks = wc.getURL().startsWith('browsy://bookmarks')
+        } catch {
+          onBookmarks = false
+        }
+        if (!onBookmarks) action = 'pin-page'
+      } else if (key === 'p') action = 'back'
       else if (key === 'n' && !input.shift) action = 'forward'
       else if (key === 'n' && input.shift) action = 'new-window'
       else if (key === 'b') action = 'bookmarks'
