@@ -7,10 +7,34 @@ export const AI_ASSISTANT_LABELS: Record<AiAssistant, string> = {
   gemini: 'Gemini'
 }
 
+export const AI_ASSISTANT_GLYPHS: Record<AiAssistant, string> = {
+  chatgpt: '✦',
+  claude: 'C',
+  gemini: 'G'
+}
+
 export const AI_ASSISTANT_HOME_URLS: Record<AiAssistant, string> = {
   chatgpt: 'https://chatgpt.com/',
   claude: 'https://claude.ai/',
   gemini: 'https://gemini.google.com/'
+}
+
+/** Parse launcher input such as `@ai explain this` or `@claude explain this`. */
+export function parseAiCommand(
+  input: string,
+  defaultAssistant: AiAssistant = 'chatgpt'
+): { assistant: AiAssistant; prompt: string } | null {
+  const match = input.trim().match(/^@(ai|chatgpt|claude|gemini)\s+([\s\S]+)$/i)
+  if (!match) return null
+
+  const prompt = match[2].trim()
+  if (!prompt) return null
+
+  const provider = match[1].toLowerCase()
+  return {
+    assistant: provider === 'ai' ? defaultAssistant : (provider as AiAssistant),
+    prompt
+  }
 }
 
 /** Keep encoded `?q=` URLs within typical browser limits. */

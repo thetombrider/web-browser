@@ -5,7 +5,7 @@ A minimal, keyboard-first Electron browser built for learning and portfolio use.
 ## Features
 
 - Full-page browsing with hidden chrome by default
-- Spotlight-style launcher (`Ctrl/Cmd+L`) — search, URL, commands, and open-tabs inventory
+- Spotlight-style launcher (`Ctrl/Cmd+L`) — search, URL, commands, open-tabs inventory, and AI prompts (`@ai ask something`, or `@claude`/`@chatgpt`/`@gemini` to override the setting)
 - Fullscreen tab carousel for switching tabs (`Cmd+←/→`)
 - Omnibox suggestions and command palette (`/` shortcuts)
 - Multiple windows and tabs

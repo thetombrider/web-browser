@@ -1,7 +1,8 @@
-import type { Bookmark, HistoryEntry, TabState } from '@shared/types'
+import type { AiAssistant, Bookmark, HistoryEntry, TabState } from '@shared/types'
+import { AI_ASSISTANT_GLYPHS, AI_ASSISTANT_LABELS } from '@shared/ai-assistant'
 import { browsyPageLabel } from '@shared/internal-pages'
 
-export type SuggestionKind = 'tab' | 'bookmark' | 'history' | 'command'
+export type SuggestionKind = 'tab' | 'bookmark' | 'history' | 'command' | 'ai'
 
 export type CommandAction =
   | 'bookmarks'
@@ -26,6 +27,7 @@ export interface Suggestion {
   tabId?: string
   favicon?: string | null
   action?: CommandAction
+  commandInput?: string
   glyph: string
   /** Marks the currently active tab in open-tabs inventory. */
   isActiveTab?: boolean
@@ -186,6 +188,25 @@ function toCommandSuggestion(command: CommandDef): Suggestion {
   }
 }
 
+function aiSuggestionForQuery(query: string, defaultAssistant: AiAssistant): Suggestion | null {
+  const match = query.trim().match(/^@(ai|chatgpt|claude|gemini)(?:\s+([\s\S]*))?$/i)
+  if (!match) return null
+
+  const provider = match[1].toLowerCase()
+  const assistant = provider === 'ai' ? defaultAssistant : (provider as AiAssistant)
+  const prompt = match[2]?.trim() ?? ''
+  const label = AI_ASSISTANT_LABELS[assistant]
+
+  return {
+    id: 'ai-prompt',
+    kind: 'ai',
+    title: `Ask ${label}`,
+    subtitle: prompt ? `Press Enter to ask: ${prompt}` : `Type a prompt for ${label}`,
+    commandInput: prompt ? query.trim() : undefined,
+    glyph: AI_ASSISTANT_GLYPHS[assistant]
+  }
+}
+
 function tabSuggestion(tab: TabState, activeTabId: string | null): Suggestion {
   return {
     id: `tab-${tab.id}`,
@@ -250,7 +271,7 @@ export function commandForExactQuery(query: string): Suggestion | null {
 /**
  * Build omnibox suggestions.
  * Empty query → full open-tabs inventory (birds-eye).
- * Typed query → commands, matching tabs, bookmarks, history.
+ * Typed query → AI prompts, commands, matching tabs, bookmarks, history.
  */
 export function buildSuggestions(
   query: string,
@@ -258,7 +279,8 @@ export function buildSuggestions(
   bookmarks: Bookmark[],
   history: HistoryEntry[],
   activeTabId: string | null = null,
-  limit = 12
+  limit = 12,
+  aiAssistant: AiAssistant = 'chatgpt'
 ): Suggestion[] {
   const q = query.trim().toLowerCase()
   const seenUrls = new Set<string>()
@@ -287,6 +309,9 @@ export function buildSuggestions(
     }
     return results
   }
+
+  const aiSuggestion = aiSuggestionForQuery(query, aiAssistant)
+  if (aiSuggestion) results.push(aiSuggestion)
 
   // Plain text: matching commands first so "home" / "settings" always surface
   for (const suggestion of matchingCommands(q)) {
@@ -354,6 +379,8 @@ export function kindLabel(kind: SuggestionKind): string {
       return 'History'
     case 'command':
       return 'Command'
+    case 'ai':
+      return 'AI'
   }
 }
 

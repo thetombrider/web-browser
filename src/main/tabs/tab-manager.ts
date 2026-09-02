@@ -22,7 +22,7 @@ import { encodePreviewImage } from '../services/link-preview'
 import { popupPageContextMenu } from '../services/page-context-menu'
 import { addHistoryEntry, getSettings } from '../services/store'
 import { showsNavigationChrome } from '../../shared/internal-pages'
-import type { ChromePanel, MediaKind, TabState } from '../../shared/types'
+import type { AiAssistant, ChromePanel, MediaKind, TabState } from '../../shared/types'
 import {
   APP_SURFACE_DARK,
   APP_SURFACE_LIGHT,
@@ -562,11 +562,14 @@ export class TabManager {
   }
 
   private askAiAboutSelection(selection: string, sourceUrl: string): void {
-    const assistant = getSettings().aiAssistant ?? 'chatgpt'
     const prompt = buildExplainPrompt(selection, sourceUrl)
+    void this.askAiPrompt(prompt)
+  }
+
+  async askAiPrompt(prompt: string, assistant: AiAssistant = getSettings().aiAssistant ?? 'chatgpt'): Promise<void> {
     const chatUrl = sanitizeNavigationUrl(buildAiChatUrl(assistant, prompt))
     if (!chatUrl) return
-    void this.createTab(chatUrl, true, false)
+    await this.createTab(chatUrl, true, false)
   }
 
   private screenshotDefaultPath(): string {

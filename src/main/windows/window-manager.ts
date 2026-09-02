@@ -32,6 +32,7 @@ import {
   setSettings
 } from '../services/store'
 import { resolveNavigationInput, generateId, sanitizeNavigationUrl, isAllowedWebPermission } from '../../shared/utils'
+import { parseAiCommand } from '../../shared/ai-assistant'
 import { displayHostname, isPreviewableUrl } from '../../shared/link-preview'
 import { isPinnableUrl } from '../../shared/pinned-sites'
 import { LinkPreviewCapturer, makeLinkPreviewPayload } from '../services/link-preview'
@@ -922,10 +923,7 @@ export class WindowManager {
   async navigateFocused(input: string): Promise<void> {
     const entry = this.getFocusedEntry()
     if (!entry) return
-    const url = resolveNavigationInput(input, getSettings().searchEngine)
-    entry.tabs.hideChrome()
-    this.layoutWindow(entry.window.id)
-    void entry.tabs.navigate(url).catch(() => undefined)
+    this.navigateEntry(entry, input)
   }
 
   goBackFocused(): void {
@@ -985,6 +983,20 @@ export class WindowManager {
       chromeFocusToken: tabs.getChromeFocusToken(),
       carousel: [...this.windows.values()].find((entry) => entry.tabs === tabs)?.carousel ?? null
     }
+  }
+
+  private navigateEntry(entry: BrowserWindowEntry, input: string): void {
+    const aiCommand = parseAiCommand(input, getSettings().aiAssistant ?? 'chatgpt')
+    entry.tabs.hideChrome()
+    this.layoutWindow(entry.window.id)
+
+    if (aiCommand) {
+      void entry.tabs.askAiPrompt(aiCommand.prompt, aiCommand.assistant).catch(() => undefined)
+      return
+    }
+
+    const url = resolveNavigationInput(input, getSettings().searchEngine)
+    void entry.tabs.navigate(url).catch(() => undefined)
   }
 
   private clearStateBroadcast(windowId: number): void {
@@ -1089,10 +1101,7 @@ export class WindowManager {
     ipcMain.handle(IPC.NAVIGATE, (event, input: string) => {
       const entry = this.getEntryFromEvent(event)
       if (!entry) return
-      const url = resolveNavigationInput(input, getSettings().searchEngine)
-      entry.tabs.hideChrome()
-      this.layoutWindow(entry.window.id)
-      void entry.tabs.navigate(url).catch(() => undefined)
+      this.navigateEntry(entry, input)
     })
 
     ipcMain.handle(IPC.GO_BACK, (event) => {

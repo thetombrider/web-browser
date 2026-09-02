@@ -13,7 +13,8 @@ import {
   VStack
 } from '@chakra-ui/react'
 import { CloseIcon, SearchIcon } from '@chakra-ui/icons'
-import type { Bookmark, HistoryEntry, TabState } from '@shared/types'
+import type { AiAssistant, Bookmark, HistoryEntry, TabState } from '@shared/types'
+import { AI_ASSISTANT_GLYPHS, AI_ASSISTANT_LABELS, parseAiCommand } from '@shared/ai-assistant'
 import { selectPinnedBookmarks } from '@shared/pinned-sites'
 import { browsyPageLabel } from '@shared/internal-pages'
 import {
@@ -62,6 +63,7 @@ export function Omnibox({
   const [value, setValue] = useState(displayValueForUrl(initialValue))
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([])
   const [history, setHistory] = useState<HistoryEntry[]>([])
+  const [aiAssistant, setAiAssistant] = useState<AiAssistant>('chatgpt')
   const [activeIndex, setActiveIndex] = useState(-1)
   const [completionSuppressedFor, setCompletionSuppressedFor] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -72,7 +74,7 @@ export function Omnibox({
   // While the field still mirrors the live URL (just opened / not edited), show
   // the open-tabs inventory instead of searching for that URL string.
   const suggestionQuery = showingLiveUrl ? '' : value
-  const suggestions = buildSuggestions(suggestionQuery, tabs, bookmarks, history, activeTabId)
+  const suggestions = buildSuggestions(suggestionQuery, tabs, bookmarks, history, activeTabId, 12, aiAssistant)
   const queryEmpty = suggestionQuery.trim().length === 0
   const showingTabsInventory = queryEmpty && suggestions.some((s) => s.kind === 'tab')
   const pinnedSites = selectPinnedBookmarks(bookmarks)
@@ -94,6 +96,8 @@ export function Omnibox({
       : null
   const completion = completionMatch?.value ?? null
   const displayedValue = completion ?? value
+  const aiCommand = parseAiCommand(value, aiAssistant)
+  const aiInputValue = aiCommand ? aiCommand.prompt : displayedValue
 
   const showOriginCue =
     showingLiveUrl && !isLoading && (scheme === 'https' || scheme === 'http' || scheme === 'browsy')
@@ -114,10 +118,17 @@ export function Omnibox({
 
   useEffect(() => {
     void window.browsy.getBookmarks().then(setBookmarks)
+    void window.browsy.getSettings().then((settings) => setAiAssistant(settings.aiAssistant ?? 'chatgpt'))
     // Prefetch a small recent slice only — never the full history store.
     void window.browsy.getHistory(40).then(setHistory)
     const unsubBookmarks = window.browsy.onBookmarksChanged(setBookmarks)
-    return unsubBookmarks
+    const unsubSettings = window.browsy.onSettingsChanged((settings) => {
+      setAiAssistant(settings.aiAssistant ?? 'chatgpt')
+    })
+    return () => {
+      unsubBookmarks()
+      unsubSettings()
+    }
   }, [focusToken])
 
   // Debounced main-process search while typing (keeps IPC payloads tiny).
@@ -148,6 +159,10 @@ export function Omnibox({
   }, [onClose])
 
   const choose = (suggestion: Suggestion) => {
+    if (suggestion.kind === 'ai') {
+      if (suggestion.commandInput) onSubmit(suggestion.commandInput)
+      return
+    }
     if (suggestion.kind === 'command' && suggestion.action) {
       onCommand(suggestion.action)
       return
@@ -273,8 +288,36 @@ export function Omnibox({
         </HStack>
 
         <InputGroup size="md" pb={2}>
-          <InputLeftElement h="44px" pointerEvents="none">
-            {isLoading ? (
+          <InputLeftElement h="44px" w="auto" left={3} pointerEvents="none">
+            {aiCommand ? (
+              <HStack
+                spacing={1.5}
+                px={1.5}
+                py={1}
+                borderRadius="md"
+                bg="browsy.glyph"
+                color="browsy.ink"
+                role="img"
+                aria-label={`${AI_ASSISTANT_LABELS[aiCommand.assistant]} provider`}
+              >
+                <Box
+                  w="16px"
+                  h="16px"
+                  borderRadius="full"
+                  bg="browsy.active"
+                  display="flex"
+                  alignItems="center"
+                  justifyContent="center"
+                  fontSize="10px"
+                  fontWeight="700"
+                >
+                  {AI_ASSISTANT_GLYPHS[aiCommand.assistant]}
+                </Box>
+                <Text fontSize="xs" fontWeight="600">
+                  {AI_ASSISTANT_LABELS[aiCommand.assistant]}
+                </Text>
+              </HStack>
+            ) : isLoading ? (
               <Spinner size="sm" color="browsy.icon" thickness="1.5px" />
             ) : showOriginCue ? (
               <OriginCue scheme={scheme} />
@@ -284,12 +327,18 @@ export function Omnibox({
           </InputLeftElement>
           <Input
             ref={inputRef}
-            value={displayedValue}
+            value={aiInputValue}
             h="44px"
             fontSize="md"
+            pl={aiCommand ? 28 : 10}
             borderRadius="lg"
             onChange={(e) => {
-              setValue(e.target.value)
+              if (aiCommand) {
+                const prefix = value.trim().match(/^@(ai|chatgpt|claude|gemini)/i)?.[0]
+                setValue(prefix ? (e.target.value ? `${prefix} ${e.target.value}` : prefix) : e.target.value)
+              } else {
+                setValue(e.target.value)
+              }
               setActiveIndex(-1)
               setCompletionSuppressedFor(null)
             }}
@@ -333,7 +382,7 @@ export function Omnibox({
                 else moveDown()
               }
             }}
-            placeholder="Search, URL, tab, or /command"
+            placeholder="Search, URL, tab, /command, or @ai prompt"
             bg="browsy.input"
             border="1px solid"
             borderColor="browsy.inputBorder"
