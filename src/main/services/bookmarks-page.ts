@@ -218,10 +218,15 @@ function pageStyles(theme: ThemeMode): string {
       font: inherit;
       cursor: pointer;
       text-align: left;
+      appearance: none;
+      -webkit-appearance: none;
     }
     .folder:hover { background: rgba(255,255,255,0.05); }
     .folder.active { background: ${APP_SURFACE_DARK}; }
-    .folder.kb { outline: 1px solid rgba(255,255,255,0.16); }
+    .folder:focus { outline: none; color: inherit; background: transparent; }
+    .folder.active:focus { background: ${APP_SURFACE_DARK}; }
+    .folder.kb, .folder:focus-visible { outline: 1px solid rgba(255,255,255,0.16); }
+    .folder.active.kb, .folder.active:focus-visible { background: ${APP_SURFACE_DARK}; }
     .folder.hidden { display: none; }
     .glyph {
       position: relative;
@@ -398,8 +403,9 @@ function pageStyles(theme: ThemeMode): string {
       .finder { background: ${APP_SURFACE_ELEVATED_LIGHT}; border-color: rgba(0,0,0,0.08); }
       .sidebar { border-color: rgba(0,0,0,0.08); }
       .folder:hover { background: rgba(0,0,0,0.04); }
-      .folder.active { background: ${APP_SURFACE_LIGHT}; }
-      .folder.kb { outline: 1px solid rgba(0,0,0,0.08); }
+      .folder.active, .folder.active:focus, .folder.active:focus-visible { background: ${APP_SURFACE_LIGHT}; }
+      .folder:focus { background: transparent; color: inherit; }
+      .folder.kb, .folder:focus-visible { outline: 1px solid rgba(0,0,0,0.08); }
       .pane { background: ${APP_SURFACE_LIGHT}; }
       .pane-head { border-color: rgba(0,0,0,0.08); }
       .row:hover, .row.selected { background: ${APP_SURFACE_ELEVATED_LIGHT}; }
