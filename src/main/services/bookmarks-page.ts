@@ -199,7 +199,6 @@ function pageStyles(theme: ThemeMode): string {
       min-height: 320px;
       display: grid;
       grid-template-columns: 240px minmax(0, 1fr);
-      border: 1px solid rgba(255,255,255,0.08);
       border-radius: 10px;
       overflow: hidden;
       background: ${APP_SURFACE_ELEVATED_DARK};
@@ -208,7 +207,6 @@ function pageStyles(theme: ThemeMode): string {
     .sidebar {
       overflow: auto;
       padding: 8px;
-      border-right: 1px solid rgba(255,255,255,0.08);
     }
     .folder {
       display: flex;
@@ -232,7 +230,6 @@ function pageStyles(theme: ThemeMode): string {
     .folder.active, .folder.active:hover, .folder.active:active, .folder.active:focus {
       background: ${APP_SURFACE_DARK};
     }
-    .folder.kb, .folder:focus-visible { outline: 1px solid rgba(255,255,255,0.16); }
     .folder.active.kb, .folder.active:focus-visible { background: ${APP_SURFACE_DARK}; }
     .folder.hidden { display: none; }
     .glyph {
@@ -287,7 +284,6 @@ function pageStyles(theme: ThemeMode): string {
       align-items: center;
       gap: 10px;
       padding: 12px 14px 10px;
-      border-bottom: 1px solid rgba(255,255,255,0.08);
       flex-shrink: 0;
     }
     .pane-title {
@@ -310,7 +306,7 @@ function pageStyles(theme: ThemeMode): string {
       min-width: 0;
     }
     .row:hover { background: ${APP_SURFACE_ELEVATED_DARK}; }
-    .row.selected { background: ${APP_SURFACE_ELEVATED_DARK}; outline: 1px solid rgba(255,255,255,0.16); }
+    .row.selected { background: ${APP_SURFACE_ELEVATED_DARK}; }
     .row.hidden { display: none; }
     .row-main {
       flex: 1;
@@ -394,7 +390,6 @@ function pageStyles(theme: ThemeMode): string {
       .finder { grid-template-columns: 1fr; min-height: 0; }
       .sidebar {
         border-right: none;
-        border-bottom: 1px solid rgba(255,255,255,0.08);
         max-height: 180px;
       }
     }
@@ -408,23 +403,18 @@ function pageStyles(theme: ThemeMode): string {
         color: #18181b;
       }
       .filter:focus { border-color: rgba(0,0,0,0.22); }
-      .finder { background: ${APP_SURFACE_ELEVATED_LIGHT}; border-color: rgba(0,0,0,0.08); }
-      .sidebar { border-color: rgba(0,0,0,0.08); }
+      .finder { background: ${APP_SURFACE_ELEVATED_LIGHT}; }
       .folder:hover, .folder:active { background: rgba(0,0,0,0.04); }
       .folder:focus { outline: none; color: inherit; background: transparent; }
       .folder.active, .folder.active:hover, .folder.active:active, .folder.active:focus, .folder.active:focus-visible {
         background: ${APP_SURFACE_LIGHT};
       }
-      .folder.kb, .folder:focus-visible { outline: 1px solid rgba(0,0,0,0.08); }
       .pane { background: ${APP_SURFACE_LIGHT}; }
-      .pane-head { border-color: rgba(0,0,0,0.08); }
       .row:hover, .row.selected { background: ${APP_SURFACE_ELEVATED_LIGHT}; }
-      .row.selected { outline: 1px solid rgba(0,0,0,0.08); }
       .glyph { background: rgba(0,0,0,0.06); color: #52525b; }
       .action { color: #71717a; }
       .action:hover { background: rgba(0,0,0,0.06); color: inherit; }
       @media (max-width: 720px) {
-        .sidebar { border-color: rgba(0,0,0,0.08); }
       }
     ${lightThemeEnd(theme)}
   `
