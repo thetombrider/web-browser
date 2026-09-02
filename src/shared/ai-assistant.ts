@@ -37,6 +37,12 @@ export function parseAiCommand(
   }
 }
 
+/** Return the untrimmed prompt suffix used while editing an AI command. */
+export function aiPromptInputValue(input: string): string | null {
+  const match = input.match(/^\s*@(ai|chatgpt|claude|gemini)\s+([\s\S]*)$/i)
+  return match ? match[2] : null
+}
+
 /** Keep encoded `?q=` URLs within typical browser limits. */
 const MAX_SELECTION_CHARS = 4000
 

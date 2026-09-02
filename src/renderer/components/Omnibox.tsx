@@ -14,7 +14,12 @@ import {
 } from '@chakra-ui/react'
 import { CloseIcon, SearchIcon } from '@chakra-ui/icons'
 import type { AiAssistant, Bookmark, HistoryEntry, TabState } from '@shared/types'
-import { AI_ASSISTANT_GLYPHS, AI_ASSISTANT_LABELS, parseAiCommand } from '@shared/ai-assistant'
+import {
+  AI_ASSISTANT_GLYPHS,
+  AI_ASSISTANT_LABELS,
+  aiPromptInputValue,
+  parseAiCommand
+} from '@shared/ai-assistant'
 import { selectPinnedBookmarks } from '@shared/pinned-sites'
 import { browsyPageLabel } from '@shared/internal-pages'
 import {
@@ -97,7 +102,7 @@ export function Omnibox({
   const completion = completionMatch?.value ?? null
   const displayedValue = completion ?? value
   const aiCommand = parseAiCommand(value, aiAssistant)
-  const aiInputValue = aiCommand ? aiCommand.prompt : displayedValue
+  const aiInputValue = aiCommand ? aiPromptInputValue(value) ?? aiCommand.prompt : displayedValue
 
   const showOriginCue =
     showingLiveUrl && !isLoading && (scheme === 'https' || scheme === 'http' || scheme === 'browsy')

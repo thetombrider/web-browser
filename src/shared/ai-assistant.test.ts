@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { buildAiChatUrl, parseAiCommand } from './ai-assistant'
+import { aiPromptInputValue, buildAiChatUrl, parseAiCommand } from './ai-assistant'
 
 test('uses the configured provider for @ai commands', () => {
   assert.deepEqual(parseAiCommand('@ai explain this page', 'claude'), {
@@ -19,6 +19,10 @@ test('allows a provider override', () => {
 test('ignores incomplete AI commands', () => {
   assert.equal(parseAiCommand('@ai'), null)
   assert.equal(parseAiCommand('@unknown do something'), null)
+})
+
+test('preserves a trailing space while editing an AI prompt', () => {
+  assert.equal(aiPromptInputValue('@claude explain this '), 'explain this ')
 })
 
 test('builds a provider chat URL from the prompt', () => {

@@ -228,6 +228,7 @@ function tabSuggestion(tab: TabState, activeTabId: string | null): Suggestion {
 }
 
 export function completionForSuggestion(suggestion: Suggestion, query: string): string | null {
+  if (/\s$/.test(query)) return null
   const typed = query.trim().toLowerCase()
   if (!typed) return null
 

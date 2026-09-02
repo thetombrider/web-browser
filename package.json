@@ -11,7 +11,7 @@
     "test:install": "bash scripts/test-install-from-dmg.sh",
     "start": "electron-vite preview",
     "mcp": "tsx src/mcp/bridge.ts",
-    "test": "node --import tsx --test src/shared/ai-assistant.test.ts",
+    "test": "TSX_TSCONFIG_PATH=tsconfig.web.json node --import tsx --test src/shared/ai-assistant.test.ts src/renderer/utils/suggestions.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json"
   },
   "build": {
