@@ -352,7 +352,7 @@ export class TabManager {
       wc.focus()
     }
     this.onUpdate()
-    this.hibernateExcessTabs()
+    this.hibernateExcessTabs(false)
   }
 
   async nextTab(): Promise<void> {
@@ -976,8 +976,11 @@ export class TabManager {
   /**
    * Drop live WebContents for background tabs beyond the warm budget (or idle
    * long enough). Active and audible tabs stay warm.
+   *
+   * Cap eviction is skipped on tab switches so cycling a handful of tabs does
+   * not reload the one you just left. The idle poll still applies the cap.
    */
-  hibernateExcessTabs(): void {
+  hibernateExcessTabs(applyCap = true): void {
     if (this.destroying) return
     this.pruneDestroyedTabs()
 
@@ -1001,7 +1004,7 @@ export class TabManager {
 
     let warmCount = warmBackground.length
     for (const tab of warmBackground) {
-      const overCap = warmCount > MAX_WARM_BACKGROUND_TABS
+      const overCap = applyCap && warmCount > MAX_WARM_BACKGROUND_TABS
       const idle = now - tab.lastActiveAt >= TAB_HIBERNATE_IDLE_MS
       if (!overCap && !idle) continue
       this.hibernateTab(tab)
