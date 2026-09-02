@@ -31,7 +31,7 @@ On a Mac, this one-liner builds a disk image and installs Browsy the same way yo
 curl -fsSL https://raw.githubusercontent.com/thetombrider/web-browser/main/install.sh | bash
 ```
 
-Then open Browsy from Applications or Launchpad.
+Then open Browsy from Applications or Launchpad. The installer quits any already-running Browsy (including `npm run dev`) so Electron does not keep an old window on screen. Open `/Applications/Browsy.app` specifically if Spotlight still finds another copy.
 
 **The repository must be public** for this one-liner to work. GitHub serves `raw.githubusercontent.com` and anonymous `git clone` without auth only for public repos. While the repo is private, `curl` gets a 404 and clone fails unless the caller has GitHub credentials.
 

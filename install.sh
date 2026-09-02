@@ -137,9 +137,10 @@ clone_or_update() {
 
   if [[ -d "$INSTALL_DIR" ]]; then
     if [[ -d "$INSTALL_DIR/.git" ]]; then
-      info "Updating existing checkout in $INSTALL_DIR"
-      git -C "$INSTALL_DIR" fetch --prune origin
-      git -C "$INSTALL_DIR" pull --ff-only
+      info "Updating existing checkout in $INSTALL_DIR to origin/main"
+      git -C "$INSTALL_DIR" fetch --depth 1 origin main
+      git -C "$INSTALL_DIR" checkout -B main origin/main
+      git -C "$INSTALL_DIR" reset --hard origin/main
       return
     fi
     if [[ -n "$(ls -A "$INSTALL_DIR" 2>/dev/null)" ]]; then
@@ -148,7 +149,7 @@ clone_or_update() {
   fi
 
   info "Cloning Browsy into $INSTALL_DIR"
-  if ! git clone --depth 1 "$REPO_URL" "$INSTALL_DIR"; then
+  if ! git clone --depth 1 --branch main --single-branch "$REPO_URL" "$INSTALL_DIR"; then
     cat >&2 <<EOF
 
 Could not clone:
@@ -168,10 +169,13 @@ clone_or_update
 cd "$INSTALL_DIR"
 HELPER_SCRIPT="$INSTALL_DIR/scripts/install-from-dmg.sh"
 
+revision="$(git log -1 --format='%h %cs %s')"
+ok "Source revision: $revision"
+
 # shellcheck source=scripts/dmg-utils.sh
 source "$INSTALL_DIR/scripts/dmg-utils.sh"
 
-info 'Building a Browsy disk image (this may take a few minutes)'
+info "Building a Browsy disk image from $revision (this may take a few minutes)"
 npm run dmg
 
 dmg_path="$(latest_dmg "$INSTALL_DIR/release")" || fail "The DMG build finished but no .dmg was found in $INSTALL_DIR/release."
