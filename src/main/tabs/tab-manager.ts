@@ -1,7 +1,9 @@
 import {
   BrowserWindow,
   WebContentsView,
+  app,
   dialog,
+  type ContextMenuParams,
   type DownloadItem,
   type Event,
   type HandlerDetails,
@@ -12,13 +14,16 @@ import {
 } from 'electron'
 import { join } from 'path'
 import { existsSync } from 'fs'
+import { writeFile } from 'fs/promises'
 import { generateId, isAllowedNavigationUrl, sanitizeNavigationUrl } from '../../shared/utils'
+import { buildAiChatUrl, buildExplainPrompt } from '../../shared/ai-assistant'
 import { canonicalPreviewUrl } from '../../shared/link-preview'
 import { encodePreviewImage } from '../services/link-preview'
+import { popupPageContextMenu } from '../services/page-context-menu'
+import { addHistoryEntry, getSettings } from '../services/store'
 import { showsNavigationChrome } from '../../shared/internal-pages'
 import type { ChromePanel, MediaKind, TabState } from '../../shared/types'
 import { APP_SURFACE_DARK } from '../../shared/types'
-import { addHistoryEntry } from '../services/store'
 import {
   ensureOsMediaAccess,
   getStoredDecisions,
@@ -59,6 +64,7 @@ interface PendingMediaPermission {
 
 export type LayoutCallback = () => void
 export type CarouselOpenCallback = () => boolean
+export type OpenInNewWindowCallback = (url: string) => void
 
 export class TabManager {
   private tabs: Tab[] = []
@@ -81,7 +87,8 @@ export class TabManager {
     private onMediaPermissionClosed: PopupClosedCallback,
     private onShortcut: ShortcutCallback,
     private onLayout: LayoutCallback,
-    private isCarouselOpen: CarouselOpenCallback
+    private isCarouselOpen: CarouselOpenCallback,
+    private onOpenInNewWindow: OpenInNewWindowCallback
   ) {
     this.window.on('resize', () => this.onLayout())
   }
@@ -392,6 +399,67 @@ export class TabManager {
       return encodePreviewImage(image)
     } catch {
       return null
+    }
+  }
+
+  private showPageContextMenu(tab: Tab, params: ContextMenuParams): void {
+    const wc = tab.view.webContents
+    if (this.window.isDestroyed() || !wc || wc.isDestroyed()) return
+    const pageUrl = sanitizeNavigationUrl(wc.getURL()) ?? wc.getURL() ?? ''
+    const viewBounds = tab.view.getBounds()
+    popupPageContextMenu(this.window, wc, params, pageUrl, { x: viewBounds.x, y: viewBounds.y }, {
+      openInNewTab: (url) => {
+        void this.createTab(url, true, false)
+      },
+      openInNewWindow: (url) => this.onOpenInNewWindow(url),
+      screenshotPage: () => {
+        void this.screenshotTab(tab)
+      },
+      askAi: (selection, sourceUrl) => this.askAiAboutSelection(selection, sourceUrl)
+    })
+  }
+
+  private askAiAboutSelection(selection: string, sourceUrl: string): void {
+    const assistant = getSettings().aiAssistant ?? 'chatgpt'
+    const prompt = buildExplainPrompt(selection, sourceUrl)
+    const chatUrl = sanitizeNavigationUrl(buildAiChatUrl(assistant, prompt))
+    if (!chatUrl) return
+    void this.createTab(chatUrl, true, false)
+  }
+
+  private screenshotDefaultPath(): string {
+    const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19)
+    const name = `browsy-${stamp}.png`
+    try {
+      return join(app.getPath('pictures'), name)
+    } catch {
+      return name
+    }
+  }
+
+  private async screenshotTab(tab: Tab): Promise<void> {
+    const wc = tab.view.webContents
+    if (this.window.isDestroyed() || !wc || wc.isDestroyed()) return
+
+    let image: NativeImage
+    try {
+      image = await wc.capturePage(undefined, { stayHidden: false, stayAwake: true })
+    } catch {
+      return
+    }
+    if (image.isEmpty()) return
+
+    const savePath = dialog.showSaveDialogSync(this.window, {
+      title: 'Save screenshot',
+      defaultPath: this.screenshotDefaultPath(),
+      filters: [{ name: 'PNG Image', extensions: ['png'] }]
+    })
+    if (!savePath) return
+
+    try {
+      await writeFile(savePath, image.toPNG())
+    } catch (error) {
+      console.error('[Browsy] Failed to save screenshot', error)
     }
   }
 
@@ -894,6 +962,10 @@ export class TabManager {
       this.onUpdate()
     })
     wc.on('did-navigate-in-page', () => this.onUpdate())
+
+    wc.on('context-menu', (_event, params: ContextMenuParams) => {
+      this.showPageContextMenu(tab, params)
+    })
 
     wc.on('did-finish-load', () => {
       if (wc.isDestroyed()) return

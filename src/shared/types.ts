@@ -26,6 +26,7 @@ export type ChromePanel = 'navigation' | 'bookmarks' | null
 export type SearchEngine = 'google' | 'duckduckgo' | 'bing'
 export type RestoreSession = 'always' | 'never'
 export type ThemeMode = 'light' | 'dark' | 'system'
+export type AiAssistant = 'chatgpt' | 'claude' | 'gemini'
 
 export interface TabState {
   id: string
@@ -110,6 +111,8 @@ export interface Settings {
   hasSeenShortcutTip: boolean
   /** Hover previews of http(s) destinations. Default on. */
   linkPreview: boolean
+  /** Chat assistant used by the page context menu “Ask AI” action. */
+  aiAssistant: AiAssistant
 }
 
 export interface ToastPayload {

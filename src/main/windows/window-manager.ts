@@ -155,7 +155,7 @@ export class WindowManager {
     })
   }
 
-  async createWindow(session?: SessionWindow): Promise<BrowserWindow> {
+  async createWindow(session?: SessionWindow, url?: string): Promise<BrowserWindow> {
     const isMac = process.platform === 'darwin'
 
     const win = new BrowserWindow({
@@ -235,7 +235,10 @@ export class WindowManager {
       },
       (action) => this.handleShortcut(win.id, action),
       () => this.layoutWindow(win.id),
-      () => this.windows.get(win.id)?.carousel !== null
+      () => this.windows.get(win.id)?.carousel !== null,
+      (url) => {
+        void this.createWindow(undefined, url)
+      }
     )
 
     this.windows.set(win.id, {
@@ -296,7 +299,9 @@ export class WindowManager {
     })
 
     const restoring = Boolean(session?.tabs?.length)
-    await tabs.createTab('browsy://home', true, !restoring)
+    const startUrl = sanitizeNavigationUrl(url) ?? 'browsy://home'
+    // Fresh windows show the launcher; restored sessions and "open in new window" do not.
+    await tabs.createTab(startUrl, true, !restoring && !url)
 
     this.layoutWindow(win.id)
     this.registerShortcuts(chromeView.webContents, win.id)

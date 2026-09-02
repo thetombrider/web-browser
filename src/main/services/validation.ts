@@ -6,6 +6,7 @@ const searchEngineSchema = z.enum(['google', 'duckduckgo', 'bing'])
 const homepageSchema = z.enum(['recent', 'blank'])
 const restoreSessionSchema = z.enum(['always', 'never'])
 const themeSchema = z.enum(['light', 'dark', 'system'])
+const aiAssistantSchema = z.enum(['chatgpt', 'claude', 'gemini'])
 
 export const settingsPatchSchema = z
   .object({
@@ -14,7 +15,8 @@ export const settingsPatchSchema = z
     restoreSession: restoreSessionSchema,
     theme: themeSchema,
     hasSeenShortcutTip: z.boolean(),
-    linkPreview: z.boolean()
+    linkPreview: z.boolean(),
+    aiAssistant: aiAssistantSchema
   })
   .partial()
   .strict()
