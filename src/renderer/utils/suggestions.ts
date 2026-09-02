@@ -191,7 +191,7 @@ function tabSuggestion(tab: TabState, activeTabId: string | null): Suggestion {
     id: `tab-${tab.id}`,
     kind: 'tab',
     title: browsyPageLabel(tab.url) ?? (tab.title === 'Browsy' ? 'Home' : tab.title),
-    subtitle: tab.url,
+    subtitle: tab.hibernated ? `Sleeping · ${tab.url}` : tab.url,
     url: tab.url,
     completionValues: [
       tab.title,

@@ -1,11 +1,17 @@
 import { BrowserWindow, nativeTheme, type DownloadItem, type Event, type NativeImage, type WebContents } from 'electron'
 import type { LinkPreviewPayload } from '../../shared/types'
-import { LINK_PREVIEW_CACHE_LIMIT, canonicalPreviewUrl, displayHostname, isPreviewableUrl } from '../../shared/link-preview'
+import {
+  LINK_PREVIEW_CACHE_LIMIT,
+  LINK_PREVIEW_LOAD_TIMEOUT_MS,
+  LINK_PREVIEW_SETTLE_MS,
+  LINK_PREVIEW_VIEWPORT_HEIGHT,
+  LINK_PREVIEW_VIEWPORT_WIDTH,
+  canonicalPreviewUrl,
+  displayHostname,
+  isPreviewableUrl
+} from '../../shared/link-preview'
 import { faviconUrlForPage, isAllowedNavigationUrl, sanitizeNavigationUrl } from '../../shared/utils'
 import { getSettings } from './store'
-
-const PREVIEW_LOAD_TIMEOUT_MS = 7000
-const PREVIEW_SETTLE_MS = 450
 
 export function resolvePreviewTheme(): 'light' | 'dark' {
   const theme = getSettings().theme
@@ -49,6 +55,7 @@ export class LinkPreviewCapturer {
   private window: BrowserWindow | null = null
   private cache = new Map<string, LinkPreviewPayload>()
   private generation = 0
+  private inflight: Promise<LinkPreviewPayload | null> | null = null
   private downloadHandler: ((event: Event, item: DownloadItem, contents: WebContents) => void) | null = null
 
   constructor(private parent: BrowserWindow) {}
@@ -84,6 +91,7 @@ export class LinkPreviewCapturer {
 
   dispose(): void {
     this.generation += 1
+    this.inflight = null
     this.cache.clear()
     if (this.window && !this.window.isDestroyed()) {
       if (this.downloadHandler) {
@@ -102,6 +110,26 @@ export class LinkPreviewCapturer {
     const cached = this.getCached(safeUrl)
     if (cached?.dataUrl) return cached
 
+    // Serialize captures — one offscreen navigation at a time per window.
+    if (this.inflight) {
+      this.cancel()
+      try {
+        await this.inflight
+      } catch {
+        // Ignore prior failures.
+      }
+    }
+
+    const pending = this.runCapture(safeUrl)
+    this.inflight = pending
+    try {
+      return await pending
+    } finally {
+      if (this.inflight === pending) this.inflight = null
+    }
+  }
+
+  private async runCapture(safeUrl: string): Promise<LinkPreviewPayload | null> {
     const gen = ++this.generation
     const wc = this.ensureWindow()
     if (!wc) return null
@@ -118,7 +146,7 @@ export class LinkPreviewCapturer {
       if (gen !== this.generation || wc.isDestroyed()) return null
       await this.waitForPaint(wc)
       if (gen !== this.generation || wc.isDestroyed()) return null
-      await sleep(PREVIEW_SETTLE_MS)
+      await sleep(LINK_PREVIEW_SETTLE_MS)
       if (gen !== this.generation || wc.isDestroyed()) return null
 
       let dataUrl: string | null = null
@@ -157,8 +185,8 @@ export class LinkPreviewCapturer {
     const win = new BrowserWindow({
       parent: this.parent,
       show: false,
-      width: 1280,
-      height: 800,
+      width: LINK_PREVIEW_VIEWPORT_WIDTH,
+      height: LINK_PREVIEW_VIEWPORT_HEIGHT,
       skipTaskbar: true,
       frame: false,
       focusable: false,
@@ -171,7 +199,7 @@ export class LinkPreviewCapturer {
         javascript: true,
         images: true,
         webSecurity: true,
-        backgroundThrottling: false,
+        backgroundThrottling: true,
         autoplayPolicy: 'user-gesture-required'
       }
     })
@@ -210,7 +238,7 @@ export class LinkPreviewCapturer {
         if (!isMainFrame || errorCode === -3) return
         finish()
       }
-      const timer = setTimeout(finish, PREVIEW_LOAD_TIMEOUT_MS)
+      const timer = setTimeout(finish, LINK_PREVIEW_LOAD_TIMEOUT_MS)
       wc.once('did-finish-load', finish)
       wc.on('did-fail-load', onFail)
       void wc.loadURL(url).catch(() => finish())
@@ -229,7 +257,7 @@ export class LinkPreviewCapturer {
         resolve()
       }
       const onPaint = (): void => done()
-      const timer = setTimeout(done, 1500)
+      const timer = setTimeout(done, 900)
       wc.once('paint', onPaint)
     })
   }

@@ -4,7 +4,6 @@ import {
   app,
   dialog,
   type ContextMenuParams,
-  type DownloadItem,
   type Event,
   type HandlerDetails,
   type MediaAccessPermissionRequest,
@@ -23,7 +22,12 @@ import { popupPageContextMenu } from '../services/page-context-menu'
 import { addHistoryEntry, getSettings } from '../services/store'
 import { showsNavigationChrome } from '../../shared/internal-pages'
 import type { ChromePanel, MediaKind, TabState } from '../../shared/types'
-import { APP_SURFACE_DARK } from '../../shared/types'
+import {
+  APP_SURFACE_DARK,
+  MAX_WARM_BACKGROUND_TABS,
+  TAB_HIBERNATE_IDLE_MS,
+  TAB_HIBERNATE_POLL_MS
+} from '../../shared/types'
 import {
   ensureOsMediaAccess,
   getStoredDecisions,
@@ -35,12 +39,19 @@ import {
 
 export interface Tab {
   id: string
-  view: WebContentsView
+  /** Null while hibernated — metadata below is the source of truth. */
+  view: WebContentsView | null
+  url: string
+  title: string
   favicon: string | null
   devToolsOpen: boolean
   thumbnail: string | null
-  /** Restored tabs stay muted until this WebContents receives a user gesture. */
+  /** Restored / woken tabs stay muted until this WebContents receives a user gesture. */
   audioLockedUntilGesture: boolean
+  hibernated: boolean
+  lastActiveAt: number
+  canGoBack: boolean
+  canGoForward: boolean
 }
 
 export type TabUpdateCallback = () => void
@@ -77,6 +88,8 @@ export class TabManager {
   private destroying = false
   /** Tab currently being snapshotted so layout does not hide it mid-capture. */
   private thumbnailCaptureTabId: string | null = null
+  private wakePromises = new Map<string, Promise<void>>()
+  private hibernateTimer: ReturnType<typeof setInterval> | null = null
 
   constructor(
     private window: BrowserWindow,
@@ -90,7 +103,7 @@ export class TabManager {
     private isCarouselOpen: CarouselOpenCallback,
     private onOpenInNewWindow: OpenInNewWindowCallback
   ) {
-    this.window.on('resize', () => this.onLayout())
+    this.hibernateTimer = setInterval(() => this.hibernateExcessTabs(), TAB_HIBERNATE_POLL_MS)
   }
 
   getTabs(): Tab[] {
@@ -141,11 +154,21 @@ export class TabManager {
     }
   }
 
+  private getTabUrl(tab: Tab): string {
+    const wc = tab.view?.webContents
+    if (wc && !wc.isDestroyed()) {
+      try {
+        return wc.getURL() || tab.url
+      } catch {
+        return tab.url
+      }
+    }
+    return tab.url
+  }
+
   /** Tab still on the default new-tab page (not navigated away). */
   private isNewTabPage(tab: Tab): boolean {
-    const wc = tab?.view?.webContents
-    if (!wc || wc.isDestroyed()) return false
-    const url = wc.getURL()
+    const url = this.getTabUrl(tab)
     return !url || url === 'browsy://home' || url.startsWith('browsy://home')
   }
 
@@ -159,7 +182,7 @@ export class TabManager {
     if (!forceNew && (safeUrl === 'browsy://home' || safeUrl.startsWith('browsy://home'))) {
       const existing = this.findNewTab()
       if (existing) {
-        this.switchTab(existing.id)
+        await this.switchTab(existing.id)
         this.showChrome('navigation')
         return existing
       }
@@ -167,14 +190,7 @@ export class TabManager {
     return await this.createTab(safeUrl)
   }
 
-  async createTab(
-    url = 'browsy://home',
-    activate = true,
-    showNavigationChrome = true,
-    lockAudioUntilGesture = false
-  ): Promise<Tab> {
-    const safeUrl = sanitizeNavigationUrl(url) ?? 'browsy://home'
-
+  private createWebContentsView(): WebContentsView {
     const preloadPath = join(__dirname, '../preload/tab.js')
     if (!existsSync(preloadPath)) {
       console.error('[Browsy] Tab preload missing', preloadPath)
@@ -189,19 +205,37 @@ export class TabManager {
         webSecurity: true,
         allowRunningInsecureContent: false,
         navigateOnDragDrop: false,
-        backgroundThrottling: false,
+        // Throttle background tabs; temporarily disable only while capturing.
+        backgroundThrottling: true,
         autoplayPolicy: 'user-gesture-required'
       }
     })
     view.setBackgroundColor(APP_SURFACE_DARK)
+    return view
+  }
+
+  async createTab(
+    url = 'browsy://home',
+    activate = true,
+    showNavigationChrome = true,
+    lockAudioUntilGesture = false
+  ): Promise<Tab> {
+    const safeUrl = sanitizeNavigationUrl(url) ?? 'browsy://home'
+    const view = this.createWebContentsView()
 
     const tab: Tab = {
       id: generateId(),
       view,
+      url: safeUrl,
+      title: 'New Tab',
       favicon: null,
       devToolsOpen: false,
       thumbnail: null,
-      audioLockedUntilGesture: false
+      audioLockedUntilGesture: false,
+      hibernated: false,
+      lastActiveAt: Date.now(),
+      canGoBack: false,
+      canGoForward: false
     }
 
     this.tabs.push(tab)
@@ -211,7 +245,7 @@ export class TabManager {
     }
 
     if (activate) {
-      this.switchTab(tab.id)
+      await this.switchTab(tab.id)
     } else {
       this.onLayout()
     }
@@ -220,40 +254,77 @@ export class TabManager {
       this.showChrome('navigation')
     }
 
-    await tab.view.webContents.loadURL(safeUrl)
+    await view.webContents.loadURL(safeUrl)
+    this.syncTabMetadata(tab)
+    if (!activate) this.hibernateExcessTabs()
     return tab
   }
 
-  switchTab(tabId: string): void {
+  /**
+   * Session-restore helper: store URL/title without allocating a WebContents.
+   * The tab wakes on first activation.
+   */
+  createHibernatedTab(url: string, title = 'New Tab'): Tab {
+    const safeUrl = sanitizeNavigationUrl(url) ?? 'browsy://home'
+    const tab: Tab = {
+      id: generateId(),
+      view: null,
+      url: safeUrl,
+      title: title || 'New Tab',
+      favicon: null,
+      devToolsOpen: false,
+      thumbnail: null,
+      audioLockedUntilGesture: true,
+      hibernated: true,
+      lastActiveAt: 0,
+      canGoBack: false,
+      canGoForward: false
+    }
+    this.tabs.push(tab)
+    return tab
+  }
+
+  async switchTab(tabId: string): Promise<void> {
     const tab = this.tabs.find((t) => t.id === tabId)
     if (!tab) return
 
+    const previous = this.getActiveTab()
+    if (previous && previous.id !== tabId) {
+      previous.lastActiveAt = Date.now()
+      this.cacheActiveThumbnail(previous)
+    }
+
     this.activeTabId = tabId
-    const wc = tab.view.webContents
+    tab.lastActiveAt = Date.now()
+
+    await this.ensureAwake(tab)
+    if (this.activeTabId !== tabId || this.destroying) return
+
+    const wc = tab.view?.webContents
     this.onLayout()
     // Keep the user's current chrome state when moving between tabs.
     if (this.chromeVisible) this.chromeFocusToken += 1
-    else if (!wc.isDestroyed()) {
+    else if (wc && !wc.isDestroyed()) {
       wc.focus()
     }
     this.onUpdate()
-    this.cacheActiveThumbnail(tab)
+    this.hibernateExcessTabs()
   }
 
-  nextTab(): void {
+  async nextTab(): Promise<void> {
     if (this.tabs.length < 2 || !this.activeTabId) return
     const index = this.tabs.findIndex((t) => t.id === this.activeTabId)
     if (index === -1) return
     const next = this.tabs[(index + 1) % this.tabs.length]
-    this.switchTab(next.id)
+    await this.switchTab(next.id)
   }
 
-  prevTab(): void {
+  async prevTab(): Promise<void> {
     if (this.tabs.length < 2 || !this.activeTabId) return
     const index = this.tabs.findIndex((t) => t.id === this.activeTabId)
     if (index === -1) return
     const prev = this.tabs[(index - 1 + this.tabs.length) % this.tabs.length]
-    this.switchTab(prev.id)
+    await this.switchTab(prev.id)
   }
 
   closeTab(tabId: string): void {
@@ -261,13 +332,14 @@ export class TabManager {
     if (index === -1) return
 
     const [tab] = this.tabs.splice(index, 1)
+    this.wakePromises.delete(tabId)
     this.detachTabView(tab)
 
     if (this.activeTabId === tabId) {
       const next = this.tabs[Math.min(index, this.tabs.length - 1)]
       this.activeTabId = next?.id ?? null
       if (next) {
-        this.switchTab(next.id)
+        void this.switchTab(next.id)
       } else {
         this.onLayout()
       }
@@ -287,13 +359,31 @@ export class TabManager {
     if (!active) return Promise.resolve()
     const safeUrl = sanitizeNavigationUrl(input)
     if (!safeUrl) return Promise.resolve()
-    const wc = active.view?.webContents
-    return wc && !wc.isDestroyed() ? wc.loadURL(safeUrl) : Promise.resolve()
+
+    if (active.hibernated || !active.view) {
+      active.url = safeUrl
+      active.title = 'New Tab'
+      active.favicon = null
+      active.thumbnail = null
+      active.canGoBack = false
+      active.canGoForward = false
+      return this.ensureAwake(active).then(() => {
+        this.syncTabMetadata(active)
+        this.onUpdate()
+      })
+    }
+
+    const wc = active.view.webContents
+    return wc && !wc.isDestroyed()
+      ? wc.loadURL(safeUrl).then(() => {
+          this.syncTabMetadata(active)
+        })
+      : Promise.resolve()
   }
 
   goBack(): void {
     const active = this.getActiveTab()
-    const wc = active?.view.webContents
+    const wc = active?.view?.webContents
     if (wc && !wc.isDestroyed() && wc.navigationHistory.canGoBack()) {
       wc.navigationHistory.goBack()
     }
@@ -301,19 +391,30 @@ export class TabManager {
 
   goForward(): void {
     const active = this.getActiveTab()
-    const wc = active?.view.webContents
+    const wc = active?.view?.webContents
     if (wc && !wc.isDestroyed() && wc.navigationHistory.canGoForward()) {
       wc.navigationHistory.goForward()
     }
   }
 
   reload(): void {
-    this.getActiveTab()?.view.webContents.reload()
+    const active = this.getActiveTab()
+    if (!active) return
+    if (active.hibernated || !active.view) {
+      void this.ensureAwake(active)
+      return
+    }
+    const wc = active.view.webContents
+    if (!wc.isDestroyed()) wc.reload()
   }
 
   reloadTabsMatching(predicate: (url: string) => boolean): void {
     for (const tab of this.getTabs()) {
-      const wc = tab.view?.webContents
+      if (tab.hibernated || !tab.view) {
+        // Hibernated tabs reload fresh content when woken; skip live reload.
+        continue
+      }
+      const wc = tab.view.webContents
       if (!wc || wc.isDestroyed()) continue
       try {
         if (predicate(wc.getURL())) wc.reload()
@@ -324,12 +425,13 @@ export class TabManager {
   }
 
   stop(): void {
-    this.getActiveTab()?.view.webContents.stop()
+    const wc = this.getActiveTab()?.view?.webContents
+    if (wc && !wc.isDestroyed()) wc.stop()
   }
 
   toggleDevTools(): void {
     const active = this.getActiveTab()
-    if (!active) return
+    if (!active?.view) return
 
     if (active.devToolsOpen) {
       active.view.webContents.closeDevTools()
@@ -351,9 +453,10 @@ export class TabManager {
 
   async captureThumbnail(tabId: string): Promise<string | null> {
     const tab = this.tabs.find((candidate) => candidate.id === tabId)
-    const wc = tab?.view.webContents
-    if (!tab || !wc || wc.isDestroyed()) return null
+    if (!tab) return null
     if (tab.thumbnail) return tab.thumbnail
+    // Never wake a hibernated tab just for a carousel thumbnail.
+    if (tab.hibernated || !tab.view) return null
 
     const captured = await this.snapshotTab(tab)
     if (captured) {
@@ -375,15 +478,10 @@ export class TabManager {
   } | null {
     this.pruneDestroyedTabs()
     const key = canonicalPreviewUrl(url)
-    const tab = this.tabs.find((item) => {
-      const wc = item.view?.webContents
-      if (!wc || wc.isDestroyed()) return false
-      return canonicalPreviewUrl(wc.getURL()) === key
-    })
+    const tab = this.tabs.find((item) => canonicalPreviewUrl(this.getTabUrl(item)) === key)
     if (!tab) return null
-    const wc = tab.view.webContents
     return {
-      title: wc.getTitle() || '',
+      title: tab.title || '',
       favicon: tab.favicon,
       thumbnail: tab.thumbnail,
       isActive: tab.id === this.activeTabId
@@ -392,7 +490,7 @@ export class TabManager {
 
   async captureActivePreview(): Promise<string | null> {
     const tab = this.getActiveTab()
-    const wc = tab?.view.webContents
+    const wc = tab?.view?.webContents
     if (!tab || !wc || wc.isDestroyed()) return null
     try {
       const image = await wc.capturePage(undefined, { stayHidden: false, stayAwake: true })
@@ -403,10 +501,10 @@ export class TabManager {
   }
 
   private showPageContextMenu(tab: Tab, params: ContextMenuParams): void {
-    const wc = tab.view.webContents
+    const wc = tab.view?.webContents
     if (this.window.isDestroyed() || !wc || wc.isDestroyed()) return
     const pageUrl = sanitizeNavigationUrl(wc.getURL()) ?? wc.getURL() ?? ''
-    const viewBounds = tab.view.getBounds()
+    const viewBounds = tab.view!.getBounds()
     popupPageContextMenu(this.window, wc, params, pageUrl, { x: viewBounds.x, y: viewBounds.y }, {
       openInNewTab: (url) => {
         void this.createTab(url, true, false)
@@ -438,7 +536,7 @@ export class TabManager {
   }
 
   private async screenshotTab(tab: Tab): Promise<void> {
-    const wc = tab.view.webContents
+    const wc = tab.view?.webContents
     if (this.window.isDestroyed() || !wc || wc.isDestroyed()) return
 
     let image: NativeImage
@@ -465,16 +563,10 @@ export class TabManager {
 
   getSessionTabs(): { url: string; active: boolean }[] {
     this.pruneDestroyedTabs()
-    return this.tabs.flatMap((tab) => {
-      const wc = tab?.view?.webContents
-      if (!wc || wc.isDestroyed()) return []
-      return [
-        {
-          url: sanitizeNavigationUrl(wc.getURL()) ?? 'browsy://home',
-          active: tab.id === this.activeTabId
-        }
-      ]
-    })
+    return this.tabs.map((tab) => ({
+      url: sanitizeNavigationUrl(this.getTabUrl(tab)) ?? 'browsy://home',
+      active: tab.id === this.activeTabId
+    }))
   }
 
   respondToPopup(id: string, allow: boolean): void {
@@ -501,15 +593,15 @@ export class TabManager {
   /** Mute restored media until this tab's WebContents receives a user gesture. */
   lockAudioUntilGesture(tab: Tab): void {
     tab.audioLockedUntilGesture = true
-    const wc = tab.view.webContents
-    if (!wc.isDestroyed()) wc.setAudioMuted(true)
+    const wc = tab.view?.webContents
+    if (wc && !wc.isDestroyed()) wc.setAudioMuted(true)
   }
 
   private unlockAudioFromGesture(tab: Tab): void {
     if (!tab.audioLockedUntilGesture) return
     tab.audioLockedUntilGesture = false
-    const wc = tab.view.webContents
-    if (!wc.isDestroyed()) wc.setAudioMuted(false)
+    const wc = tab.view?.webContents
+    if (wc && !wc.isDestroyed()) wc.setAudioMuted(false)
   }
 
   checkMediaPermission(
@@ -617,9 +709,9 @@ export class TabManager {
     }
     const activeTab = this.tabs.find((tab) => tab.id === this.activeTabId)
 
-    // Keep restored/background tabs attached so a later snapshot can paint them
-    // without recreating the view. Only the active (or in-capture) tab is shown.
+    // Only attach live views. Hibernated tabs have no WebContentsView.
     for (const tab of this.tabs) {
+      if (!tab.view) continue
       if (!contentView.children.includes(tab.view)) {
         contentView.addChildView(tab.view)
       }
@@ -629,8 +721,8 @@ export class TabManager {
 
     if (this.thumbnailCaptureTabId) {
       const capturing = this.tabs.find((item) => item.id === this.thumbnailCaptureTabId)
-      if (capturing) this.raiseTabUnderChrome(capturing)
-    } else if (activeTab && contentView.children.includes(activeTab.view)) {
+      if (capturing?.view) this.raiseTabUnderChrome(capturing)
+    } else if (activeTab?.view && contentView.children.includes(activeTab.view)) {
       contentView.addChildView(activeTab.view)
     }
   }
@@ -648,6 +740,7 @@ export class TabManager {
   }
 
   private raiseTabUnderChrome(tab: Tab): void {
+    if (!tab.view) return
     const contentView = this.window.contentView
     const isTabView = (child: unknown) => this.tabs.some((item) => item.view === child)
     if (contentView.children.includes(tab.view)) {
@@ -709,8 +802,8 @@ export class TabManager {
   }
 
   private async snapshotTab(tab: Tab): Promise<string | null> {
-    const wc = tab.view.webContents
-    if (this.window.isDestroyed() || !wc || wc.isDestroyed()) return null
+    const wc = tab.view?.webContents
+    if (this.window.isDestroyed() || !tab.view || !wc || wc.isDestroyed()) return null
 
     const bounds = this.window.getContentBounds()
     const viewBounds = {
@@ -721,6 +814,11 @@ export class TabManager {
     }
 
     this.thumbnailCaptureTabId = tab.id
+    try {
+      wc.setBackgroundThrottling(false)
+    } catch {
+      // Older Electron builds may not expose the setter.
+    }
     tab.view.setVisible(true)
     tab.view.setBounds(viewBounds)
     this.raiseTabUnderChrome(tab)
@@ -733,16 +831,24 @@ export class TabManager {
     } catch {
       return null
     } finally {
+      try {
+        if (!wc.isDestroyed()) wc.setBackgroundThrottling(true)
+      } catch {
+        // Ignore.
+      }
       if (this.thumbnailCaptureTabId === tab.id) this.thumbnailCaptureTabId = null
       if (!this.destroying && !this.window.isDestroyed()) this.onLayout()
     }
   }
 
   private cacheActiveThumbnail(tab: Tab): void {
-    const wc = tab.view.webContents
-    if (tab.id !== this.activeTabId || !wc || wc.isDestroyed()) return
+    const wc = tab.view?.webContents
+    if (!wc || wc.isDestroyed()) return
+    if (tab.id !== this.activeTabId && tab.id !== this.thumbnailCaptureTabId) {
+      // Prefer snapshotting while still active / visible.
+    }
     void wc
-      .capturePage(undefined, { stayHidden: false, stayAwake: true })
+      .capturePage(undefined, { stayHidden: false, stayAwake: false })
       .then((image) => {
         const encoded = this.encodeThumbnail(image)
         if (encoded) tab.thumbnail = encoded
@@ -750,8 +856,117 @@ export class TabManager {
       .catch(() => undefined)
   }
 
+  private syncTabMetadata(tab: Tab): void {
+    const wc = tab.view?.webContents
+    if (!wc || wc.isDestroyed()) return
+    try {
+      tab.url = sanitizeNavigationUrl(wc.getURL()) ?? tab.url
+      tab.title = wc.getTitle() || tab.title || 'New Tab'
+      tab.canGoBack = wc.navigationHistory.canGoBack()
+      tab.canGoForward = wc.navigationHistory.canGoForward()
+    } catch {
+      // Ignore destroyed races.
+    }
+  }
+
+  private async ensureAwake(tab: Tab): Promise<void> {
+    if (tab.view && !tab.hibernated) {
+      const wc = tab.view.webContents
+      if (wc && !wc.isDestroyed()) return
+    }
+    const existing = this.wakePromises.get(tab.id)
+    if (existing) return existing
+    const pending = this.wakeTab(tab).finally(() => {
+      this.wakePromises.delete(tab.id)
+    })
+    this.wakePromises.set(tab.id, pending)
+    return pending
+  }
+
+  private async wakeTab(tab: Tab): Promise<void> {
+    if (this.destroying || this.window.isDestroyed()) return
+    if (tab.view && !tab.hibernated) {
+      const wc = tab.view.webContents
+      if (wc && !wc.isDestroyed()) return
+    }
+
+    // Tear down a half-dead view before recreating.
+    if (tab.view) this.detachTabView(tab)
+
+    const view = this.createWebContentsView()
+    tab.view = view
+    tab.hibernated = false
+    this.attachWebContentsHandlers(tab)
+    if (tab.audioLockedUntilGesture) {
+      this.lockAudioUntilGesture(tab)
+    }
+
+    this.onLayout()
+    const target = sanitizeNavigationUrl(tab.url) ?? 'browsy://home'
+    try {
+      await view.webContents.loadURL(target)
+    } catch {
+      // Navigation can fail if the tab is closed mid-wake.
+    }
+    if (!tab.view || tab.view !== view) return
+    this.syncTabMetadata(tab)
+  }
+
+  /**
+   * Drop live WebContents for background tabs beyond the warm budget (or idle
+   * long enough). Active and audible tabs stay warm.
+   */
+  hibernateExcessTabs(): void {
+    if (this.destroying) return
+    this.pruneDestroyedTabs()
+
+    const now = Date.now()
+    const warmBackground = this.tabs.filter((tab) => {
+      if (tab.id === this.activeTabId) return false
+      if (tab.hibernated || !tab.view) return false
+      if (tab.id === this.thumbnailCaptureTabId) return false
+      const wc = tab.view.webContents
+      if (!wc || wc.isDestroyed()) return false
+      try {
+        if (wc.isCurrentlyAudible()) return false
+        if (wc.isLoadingMainFrame()) return false
+      } catch {
+        // Treat as hibernatable if audible/loading checks fail.
+      }
+      return true
+    })
+
+    warmBackground.sort((a, b) => a.lastActiveAt - b.lastActiveAt)
+
+    let warmCount = warmBackground.length
+    for (const tab of warmBackground) {
+      const overCap = warmCount > MAX_WARM_BACKGROUND_TABS
+      const idle = now - tab.lastActiveAt >= TAB_HIBERNATE_IDLE_MS
+      if (!overCap && !idle) continue
+      this.hibernateTab(tab)
+      warmCount -= 1
+    }
+  }
+
+  private hibernateTab(tab: Tab): void {
+    if (tab.id === this.activeTabId || tab.hibernated || !tab.view) return
+    if (tab.id === this.thumbnailCaptureTabId) return
+
+    // Metadata + thumbnail should already be current from switch/stop-loading.
+    this.syncTabMetadata(tab)
+    this.detachTabView(tab)
+    tab.hibernated = true
+    tab.devToolsOpen = false
+    this.onUpdate()
+  }
+
   destroy(): void {
     this.destroying = true
+    if (this.hibernateTimer) {
+      clearInterval(this.hibernateTimer)
+      this.hibernateTimer = null
+    }
+    this.wakePromises.clear()
     this.rejectPendingMediaPermissions()
     for (const pending of this.pendingPopups.values()) {
       if (pending.popup && !pending.popup.isDestroyed()) pending.popup.close()
@@ -765,71 +980,90 @@ export class TabManager {
   }
 
   private removeDestroyedTab(tab: Tab): void {
+    // Hibernated tabs intentionally have no view — ignore.
+    if (tab.hibernated || !tab.view) return
     const index = this.tabs.indexOf(tab)
     if (index === -1) return
 
     this.tabs.splice(index, 1)
+    this.wakePromises.delete(tab.id)
     if (this.activeTabId === tab.id) {
       const next = this.tabs[Math.min(index, this.tabs.length - 1)]
       this.activeTabId = next?.id ?? null
-      if (next) this.switchTab(next.id)
+      if (next) void this.switchTab(next.id)
       else if (!this.destroying) void this.createTab()
     }
     if (!this.destroying) this.onUpdate()
   }
 
   private detachTabView(tab: Tab): void {
-    const wc = tab?.view?.webContents
-    if (!wc) return
-    if (!wc.isDestroyed() && tab.devToolsOpen) {
+    const view = tab.view
+    if (!view) return
+    const wc = view.webContents
+    if (wc && !wc.isDestroyed() && tab.devToolsOpen) {
       wc.closeDevTools()
     }
     if (!this.window.isDestroyed()) {
       const { children } = this.window.contentView
-      if (children.includes(tab.view)) {
-        this.window.contentView.removeChildView(tab.view)
+      if (children.includes(view)) {
+        this.window.contentView.removeChildView(view)
       }
     }
-    if (!wc.isDestroyed()) {
+    if (wc && !wc.isDestroyed()) {
       wc.close()
     }
-  }
-
-  private syncChromeWithActiveTab(): void {
-    // Spotlight chrome is ephemeral (Cmd+L / new tab). Native pages no longer
-    // pin a persistent navigation strip, so URL changes do not force chrome.
+    tab.view = null
   }
 
   private pruneDestroyedTabs(): void {
     const destroyed = this.tabs.filter((tab) => {
-      const wc = tab?.view?.webContents
+      if (tab.hibernated || !tab.view) return false
+      const wc = tab.view.webContents
       return !wc || wc.isDestroyed()
     })
     if (destroyed.length === 0) return
 
     this.tabs = this.tabs.filter((tab) => !destroyed.includes(tab))
+    for (const tab of destroyed) this.wakePromises.delete(tab.id)
     if (this.activeTabId && !this.tabs.some((tab) => tab.id === this.activeTabId)) {
       this.activeTabId = this.tabs[0]?.id ?? null
     }
   }
 
   private toTabState(tab: Tab | undefined): TabState | null {
-    const wc = tab?.view?.webContents
-    if (!tab || !wc || wc.isDestroyed()) return null
+    if (!tab) return null
+    if (tab.hibernated || !tab.view) {
+      return {
+        id: tab.id,
+        title: tab.title || 'New Tab',
+        url: tab.url || 'browsy://home',
+        favicon: tab.favicon,
+        isLoading: false,
+        canGoBack: tab.canGoBack,
+        canGoForward: tab.canGoForward,
+        hibernated: true
+      }
+    }
+
+    const wc = tab.view.webContents
+    if (!wc || wc.isDestroyed()) return null
 
     return {
       id: tab.id,
-      title: wc.getTitle() || 'New Tab',
-      url: wc.getURL() || 'browsy://home',
+      title: wc.getTitle() || tab.title || 'New Tab',
+      url: wc.getURL() || tab.url || 'browsy://home',
       favicon: tab.favicon,
       isLoading: wc.isLoading(),
       canGoBack: wc.navigationHistory.canGoBack(),
-      canGoForward: wc.navigationHistory.canGoForward()
+      canGoForward: wc.navigationHistory.canGoForward(),
+      hibernated: false
     }
   }
 
   private attachWebContentsHandlers(tab: Tab): void {
-    const wc = tab.view.webContents
+    const view = tab.view
+    if (!view) return
+    const wc = view.webContents
 
     wc.on('destroyed', () => {
       this.removeDestroyedTab(tab)
@@ -847,6 +1081,7 @@ export class TabManager {
     // Powerful permissions stay denied by default. Media (mic/camera) and
     // sanitized clipboard writes are handled once on the shared session from
     // WindowManager so multi-window routing stays correct.
+    // Downloads are also registered once on the shared session (not per-tab).
 
     wc.setWindowOpenHandler((details: HandlerDetails) => {
       const target = sanitizeNavigationUrl(details.url)
@@ -882,7 +1117,9 @@ export class TabManager {
     })
 
     wc.on('did-create-window', (popup, details) => {
-      const pendingId = [...this.pendingPopups.entries()].find(([, pending]) => pending.popup === null && pending.url === details.url)?.[0]
+      const pendingId = [...this.pendingPopups.entries()].find(
+        ([, pending]) => pending.popup === null && pending.url === details.url
+      )?.[0]
       if (!pendingId) {
         popup.close()
         return
@@ -944,24 +1181,30 @@ export class TabManager {
 
     wc.on('did-start-loading', () => this.onUpdate())
     wc.on('did-stop-loading', () => {
+      this.syncTabMetadata(tab)
       this.onUpdate()
-      this.cacheActiveThumbnail(tab)
+      if (tab.id === this.activeTabId) this.cacheActiveThumbnail(tab)
     })
-    wc.on('page-title-updated', () => this.onUpdate())
+    wc.on('page-title-updated', (_event, title) => {
+      tab.title = title
+      this.onUpdate()
+    })
     wc.on('page-favicon-updated', (_event, favicons: string[]) => {
       const next = favicons.find((icon) => icon.startsWith('data:image/') || isAllowedNavigationUrl(icon))
       tab.favicon = next ?? null
       this.onUpdate()
     })
-    wc.on('did-navigate', () => {
+    wc.on('did-navigate', (_event, url) => {
+      tab.url = sanitizeNavigationUrl(url) ?? tab.url
       tab.favicon = null
       tab.thumbnail = null
-      if (tab.id === this.activeTabId) {
-        this.syncChromeWithActiveTab()
-      }
+      this.syncTabMetadata(tab)
       this.onUpdate()
     })
-    wc.on('did-navigate-in-page', () => this.onUpdate())
+    wc.on('did-navigate-in-page', () => {
+      this.syncTabMetadata(tab)
+      this.onUpdate()
+    })
 
     wc.on('context-menu', (_event, params: ContextMenuParams) => {
       this.showPageContextMenu(tab, params)
@@ -969,13 +1212,11 @@ export class TabManager {
 
     wc.on('did-finish-load', () => {
       if (wc.isDestroyed()) return
+      this.syncTabMetadata(tab)
       const url = wc.getURL()
       const title = wc.getTitle()
       if (url && !url.startsWith('browsy://error') && isAllowedNavigationUrl(url)) {
         addHistoryEntry(url, title)
-      }
-      if (tab.id === this.activeTabId) {
-        this.syncChromeWithActiveTab()
       }
       this.onUpdate()
     })
@@ -989,18 +1230,6 @@ export class TabManager {
         void wc.loadURL(errorUrl)
       }
     )
-
-    wc.session.on('will-download', (_event: Event, item: DownloadItem) => {
-      const filename = item.getFilename()
-      const savePath = dialog.showSaveDialogSync(this.window, {
-        defaultPath: filename
-      })
-      if (savePath) {
-        item.setSavePath(savePath)
-      } else {
-        item.cancel()
-      }
-    })
 
     wc.on('input-event', (_event, inputEvent) => {
       if (
@@ -1050,15 +1279,8 @@ export class TabManager {
       else if (key === 't' && !input.shift) action = 'new-tab'
       else if (key === 'w') action = 'close-tab'
       else if (key === 'r') action = 'reload'
-      else if (key === 'p' && input.shift) {
-        let onBookmarks = false
-        try {
-          onBookmarks = wc.getURL().startsWith('browsy://bookmarks')
-        } catch {
-          onBookmarks = false
-        }
-        if (!onBookmarks) action = 'pin-page'
-      } else if (key === 'p') action = 'back'
+      else if (key === 'p' && input.shift) action = 'pin-page'
+      else if (key === 'p') action = 'back'
       else if (key === 'n' && !input.shift) action = 'forward'
       else if (key === 'n' && input.shift) action = 'new-window'
       else if (key === 'b') action = 'bookmarks'

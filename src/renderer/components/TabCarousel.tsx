@@ -92,7 +92,10 @@ export function TabCarousel({ tabs, carousel, thumbnails }: TabCarouselProps) {
                   <Favicon url={tab.url} favicon={tab.favicon} isLoading={tab.isLoading} size={18} />
                   <Text fontSize="sm" fontWeight="600" color="browsy.overlayText" noOfLines={1}>{tab.title}</Text>
                 </Box>
-                <Text fontSize="xs" color="browsy.overlayMuted" noOfLines={1} mt={1}>{hostname(tab.url)}</Text>
+                <Text fontSize="xs" color="browsy.overlayMuted" noOfLines={1} mt={1}>
+                  {tab.hibernated ? 'Sleeping · ' : ''}
+                  {hostname(tab.url)}
+                </Text>
               </Box>
             </MotionBox>
           )

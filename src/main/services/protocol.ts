@@ -1,5 +1,6 @@
 import { protocol } from 'electron'
 import { clearSessionCache } from './cache'
+import { localFontFaceCss, serveLocalFont } from './fonts'
 import { getBookmarks, getPinnedBookmarks, getRecentSites, getSettings, setSettings } from './store'
 import { applyBookmarksPageQuery, renderBookmarksPage } from './bookmarks-page'
 import { renderShortcutsPage } from './shortcuts-page'
@@ -576,9 +577,7 @@ export function renderHomePage(): string {
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Browsy</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>${localFontFaceCss()}</style>
    <style>${baseStyles(settings.theme)}</style>
 </head>
 <body>
@@ -899,9 +898,7 @@ export function renderSettingsPage(showDev = false, cacheCleared = false): strin
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Settings — Browsy</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>${localFontFaceCss()}</style>
    <style>${baseStyles(settings.theme)}</style>
 </head>
 <body>
@@ -935,9 +932,7 @@ export function renderErrorPage(url: string, errorCode: number, errorDescription
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Page not available — Browsy</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>${localFontFaceCss()}</style>
    <style>${baseStyles(getSettings().theme)}</style>
 </head>
 <body class="error-page">
@@ -996,9 +991,7 @@ function renderNotFoundPage(url: string): string {
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>404 — Browsy</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>${localFontFaceCss()}</style>
   <style>
      ${baseStyles(getSettings().theme)}
     .not-found-wrap { width: 100%; max-width: 560px; padding: 24px; }
@@ -1074,6 +1067,12 @@ export function setupProtocolHandler(
 ): void {
   protocol.handle('browsy', async (request) => {
     const url = new URL(request.url)
+
+    if (url.hostname === 'font') {
+      const font = await serveLocalFont(url.pathname)
+      if (font) return font
+      return new Response('Not found', { status: 404 })
+    }
 
     if (url.hostname === 'home' || url.pathname === '/home') {
       return new Response(renderHomePage(), {

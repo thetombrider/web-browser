@@ -20,6 +20,20 @@ export const CHROME_PANEL_HEIGHT = 280
 export const CHROME_DRAG_HEIGHT = 32
 /** Top padding on browsy:// internal pages (below the chrome strip). */
 export const HOME_PAGE_TOP_PADDING = 48
+/** Max background tabs that keep a live WebContents (active is always live). */
+export const MAX_WARM_BACKGROUND_TABS = 2
+/** Idle time before a warm background tab may hibernate. */
+export const TAB_HIBERNATE_IDLE_MS = 2 * 60 * 1000
+/** How often to scan for hibernation candidates. */
+export const TAB_HIBERNATE_POLL_MS = 15_000
+/** Carousel thumbnail capture radius around the selected tab. */
+export const CAROUSEL_THUMB_NEIGHBOR_RADIUS = 2
+/** Coalesce chrome state IPC bursts (ms). */
+export const STATE_BROADCAST_COALESCE_MS = 32
+/** Omnibox history search result cap. */
+export const HISTORY_SEARCH_LIMIT = 12
+/** Recent history rows fetched when the launcher opens (not the full store). */
+export const HISTORY_LAUNCHER_PREFETCH = 40
 
 export type ChromePanel = 'navigation' | 'bookmarks' | null
 
@@ -36,6 +50,8 @@ export interface TabState {
   isLoading: boolean
   canGoBack: boolean
   canGoForward: boolean
+  /** True when the tab has no live WebContents and only stores metadata. */
+  hibernated: boolean
 }
 
 export interface CarouselState {
@@ -152,6 +168,7 @@ export const IPC = {
   ADD_BOOKMARK: 'browser:add-bookmark',
   REMOVE_BOOKMARK: 'browser:remove-bookmark',
   GET_HISTORY: 'browser:get-history',
+  SEARCH_HISTORY: 'browser:search-history',
   GET_RECENT_SITES: 'browser:get-recent-sites',
   GET_SETTINGS: 'browser:get-settings',
   SET_SETTINGS: 'browser:set-settings',
@@ -231,7 +248,8 @@ export interface BrowsyAPI {
   bookmarkPage: () => Promise<BookmarkResult>
   pinPage: () => Promise<PinResult>
   removeBookmark: (id: string) => Promise<void>
-  getHistory: () => Promise<HistoryEntry[]>
+  getHistory: (limit?: number) => Promise<HistoryEntry[]>
+  searchHistory: (query: string, limit?: number) => Promise<HistoryEntry[]>
   getRecentSites: () => Promise<HistoryEntry[]>
   getSettings: () => Promise<Settings>
   setSettings: (settings: Partial<Settings>) => Promise<Settings>

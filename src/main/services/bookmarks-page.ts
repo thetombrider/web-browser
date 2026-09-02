@@ -1,4 +1,5 @@
 import { getBookmarks, getSettings, removeBookmark, setBookmarkPinned } from './store'
+import { localFontFaceCss } from './fonts'
 import { faviconUrlForPage, isAllowedNavigationUrl } from '../../shared/utils'
 import { isPinnableUrl } from '../../shared/pinned-sites'
 import type { Bookmark } from '../../shared/types'
@@ -821,9 +822,7 @@ export function renderBookmarksPage(options?: {
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Bookmarks — Browsy</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>${localFontFaceCss()}</style>
    <style>${pageStyles(theme)}</style>
 </head>
 <body>

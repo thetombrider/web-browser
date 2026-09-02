@@ -113,15 +113,25 @@ export function Omnibox({
   }, [initialValue])
 
   useEffect(() => {
-    void Promise.all([window.browsy.getBookmarks(), window.browsy.getHistory()]).then(
-      ([nextBookmarks, nextHistory]) => {
-        setBookmarks(nextBookmarks)
-        setHistory(nextHistory)
-      }
-    )
+    void window.browsy.getBookmarks().then(setBookmarks)
+    // Prefetch a small recent slice only — never the full history store.
+    void window.browsy.getHistory(40).then(setHistory)
     const unsubBookmarks = window.browsy.onBookmarksChanged(setBookmarks)
     return unsubBookmarks
   }, [focusToken])
+
+  // Debounced main-process search while typing (keeps IPC payloads tiny).
+  useEffect(() => {
+    const q = suggestionQuery.trim()
+    if (!q || q.startsWith('/')) {
+      void window.browsy.getHistory(40).then(setHistory)
+      return
+    }
+    const timer = window.setTimeout(() => {
+      void window.browsy.searchHistory(q, 12).then(setHistory)
+    }, 40)
+    return () => window.clearTimeout(timer)
+  }, [suggestionQuery])
 
   useEffect(() => {
     const el = inputRef.current
