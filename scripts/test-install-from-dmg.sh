@@ -99,7 +99,31 @@ printf 'xattr %s\n' "$*" >>"${BROWSY_XATTR_LOG:-/dev/null}"
 exit 0
 EOF
 
-chmod +x "$BIN/hdiutil" "$BIN/ditto" "$BIN/xattr"
+cat >"$BIN/killall" <<'EOF'
+#!/usr/bin/env bash
+printf 'killall %s\n' "$*" >>"${BROWSY_KILLALL_LOG:-/dev/null}"
+exit 0
+EOF
+
+cat >"$BIN/osascript" <<'EOF'
+#!/usr/bin/env bash
+printf 'osascript %s\n' "$*" >>"${BROWSY_OSASCRIPT_LOG:-/dev/null}"
+exit 0
+EOF
+
+cat >"$BIN/pkill" <<'EOF'
+#!/usr/bin/env bash
+printf 'pkill %s\n' "$*" >>"${BROWSY_PKILL_LOG:-/dev/null}"
+exit 0
+EOF
+
+cat >"$BIN/open" <<'EOF'
+#!/usr/bin/env bash
+printf 'open %s\n' "$*" >>"${BROWSY_OPEN_LOG:-/dev/null}"
+exit 0
+EOF
+
+chmod +x "$BIN/hdiutil" "$BIN/ditto" "$BIN/xattr" "$BIN/killall" "$BIN/osascript" "$BIN/pkill" "$BIN/open"
 export PATH="$BIN:$PATH"
 
 # --- latest_dmg picks the newest image ---
@@ -131,9 +155,17 @@ mkdir -p "$dest"
 export BROWSY_HDIUTIL="$BIN/hdiutil"
 export BROWSY_DITTO="$BIN/ditto"
 export BROWSY_XATTR="$BIN/xattr"
+export BROWSY_KILLALL="$BIN/killall"
+export BROWSY_OSASCRIPT="$BIN/osascript"
+export BROWSY_PKILL="$BIN/pkill"
+export BROWSY_OPEN="$BIN/open"
 export BROWSY_DEST_DIR="$dest"
 export BROWSY_HDIUTIL_LOG="$WORKDIR/hdiutil.log"
 export BROWSY_XATTR_LOG="$WORKDIR/xattr.log"
+export BROWSY_KILLALL_LOG="$WORKDIR/killall.log"
+export BROWSY_OSASCRIPT_LOG="$WORKDIR/osascript.log"
+export BROWSY_PKILL_LOG="$WORKDIR/pkill.log"
+export BROWSY_OPEN_LOG="$WORKDIR/open.log"
 
 bash "$ROOT/scripts/install-from-dmg.sh" "$WORKDIR/Browsy-0.1.0-arm64.dmg"
 assert_file 'installed Browsy.app' "$dest/Browsy.app/Contents/MacOS/Browsy"
@@ -146,6 +178,16 @@ if grep -q -- '-cr' "$WORKDIR/xattr.log"; then
   pass 'cleared quarantine xattrs on the installed app'
 else
   fail_test 'did not clear quarantine xattrs'
+fi
+if grep -q 'killall Browsy' "$WORKDIR/killall.log" && grep -q 'tell application "Browsy" to quit' "$WORKDIR/osascript.log"; then
+  pass 'quits a running Browsy before copying the new app'
+else
+  fail_test 'did not quit a running Browsy before copy'
+fi
+if grep -q "$dest/Browsy.app" "$WORKDIR/open.log"; then
+  pass 'opens the newly installed app by full path'
+else
+  fail_test 'did not open the installed app by full path'
 fi
 
 # Replacing an existing app
