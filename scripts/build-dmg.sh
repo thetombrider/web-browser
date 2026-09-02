@@ -5,10 +5,16 @@ set -euo pipefail
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+# shellcheck source=scripts/dmg-utils.sh
+source "$ROOT_DIR/scripts/dmg-utils.sh"
+
 if [[ "$(uname -s)" != "Darwin" ]]; then
   printf '%s\n' 'DMG builds require macOS.' >&2
   exit 1
 fi
+
+# Avoid interactive keychain prompts during a local unsigned build.
+export CSC_IDENTITY_AUTO_DISCOVERY="${CSC_IDENTITY_AUTO_DISCOVERY:-false}"
 
 REQUESTED_ARCH="${BROWSY_ARCH:-$(uname -m)}"
 
@@ -33,4 +39,9 @@ fi
 npm run build
 npx --no-install electron-builder --mac dmg --"$ARCH" --publish never
 
-printf 'DMG created in %s/release/\n' "$ROOT_DIR"
+dmg_path="$(latest_dmg "$ROOT_DIR/release")" || {
+  printf '%s\n' 'electron-builder finished but no DMG was found in release/.' >&2
+  exit 1
+}
+
+printf 'DMG created: %s\n' "$dmg_path"
