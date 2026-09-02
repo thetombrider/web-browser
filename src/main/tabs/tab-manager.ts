@@ -352,7 +352,7 @@ export class TabManager {
       wc.focus()
     }
     this.onUpdate()
-    this.hibernateExcessTabs()
+    this.hibernateExcessTabs(false)
   }
 
   async nextTab(): Promise<void> {
@@ -805,29 +805,32 @@ export class TabManager {
   private async waitForCompositorFrame(wc: WebContents, timeoutMs = 250): Promise<void> {
     if (wc.isDestroyed()) return
 
-    await new Promise<void>((resolve) => {
-      let settled = false
-      const done = (): void => {
-        if (settled) return
-        settled = true
-        try {
-          wc.endFrameSubscription()
-        } catch {
-          // Subscription may already have ended.
+    await Promise.race([
+      new Promise<void>((resolve) => {
+        let settled = false
+        const done = (): void => {
+          if (settled) return
+          settled = true
+          try {
+            wc.endFrameSubscription()
+          } catch {
+            // Subscription may already have ended.
+          }
+          resolve()
         }
-        resolve()
-      }
-      const timer = setTimeout(done, timeoutMs)
-      try {
-        wc.beginFrameSubscription(false, () => {
+        const timer = setTimeout(done, timeoutMs)
+        try {
+          wc.beginFrameSubscription(false, () => {
+            clearTimeout(timer)
+            done()
+          })
+        } catch {
           clearTimeout(timer)
           done()
-        })
-      } catch {
-        clearTimeout(timer)
-        done()
-      }
-    })
+        }
+      }),
+      new Promise<void>((resolve) => setTimeout(resolve, timeoutMs + 50))
+    ])
   }
 
   private async waitForPaint(wc: WebContents): Promise<void> {
@@ -964,11 +967,34 @@ export class TabManager {
 
     this.onLayout()
     const target = sanitizeNavigationUrl(tab.url) ?? 'browsy://home'
-    try {
-      await view.webContents.loadURL(target)
-    } catch {
-      // Navigation can fail if the tab is closed mid-wake.
-    }
+    const wc = view.webContents
+    const loaded = wc.loadURL(target).then(() => {
+      if (!tab.view || tab.view !== view) return
+      this.syncTabMetadata(tab)
+    }).catch(() => undefined)
+
+    // Pages can paint (and sit behind the carousel) long before loadURL
+    // settles. Bound the wait so Enter cannot leave the overlay up forever.
+    await new Promise<void>((resolve) => {
+      let settled = false
+      const done = (): void => {
+        if (settled) return
+        settled = true
+        try {
+          wc.removeListener('dom-ready', done)
+          wc.removeListener('did-finish-load', done)
+          wc.removeListener('did-stop-loading', done)
+        } catch {
+          // WebContents may already be gone.
+        }
+        resolve()
+      }
+      wc.once('dom-ready', done)
+      wc.once('did-finish-load', done)
+      wc.once('did-stop-loading', done)
+      void loaded.then(done)
+      setTimeout(done, 600)
+    })
     if (!tab.view || tab.view !== view) return
     this.syncTabMetadata(tab)
   }
@@ -976,8 +1002,11 @@ export class TabManager {
   /**
    * Drop live WebContents for background tabs beyond the warm budget (or idle
    * long enough). Active and audible tabs stay warm.
+   *
+   * Cap eviction is skipped on tab switches so cycling a handful of tabs does
+   * not reload the one you just left. The idle poll still applies the cap.
    */
-  hibernateExcessTabs(): void {
+  hibernateExcessTabs(applyCap = true): void {
     if (this.destroying) return
     this.pruneDestroyedTabs()
 
@@ -1001,7 +1030,7 @@ export class TabManager {
 
     let warmCount = warmBackground.length
     for (const tab of warmBackground) {
-      const overCap = warmCount > MAX_WARM_BACKGROUND_TABS
+      const overCap = applyCap && warmCount > MAX_WARM_BACKGROUND_TABS
       const idle = now - tab.lastActiveAt >= TAB_HIBERNATE_IDLE_MS
       if (!overCap && !idle) continue
       this.hibernateTab(tab)

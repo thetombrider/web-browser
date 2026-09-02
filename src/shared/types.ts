@@ -21,11 +21,13 @@ export const CHROME_DRAG_HEIGHT = 32
 /** Top padding on browsy:// internal pages (below the chrome strip). */
 export const HOME_PAGE_TOP_PADDING = 48
 /** Max background tabs that keep a live WebContents (active is always live). */
-export const MAX_WARM_BACKGROUND_TABS = 2
+export const MAX_WARM_BACKGROUND_TABS = 8
 /** Idle time before a warm background tab may hibernate. */
 export const TAB_HIBERNATE_IDLE_MS = 2 * 60 * 1000
 /** How often to scan for hibernation candidates. */
 export const TAB_HIBERNATE_POLL_MS = 15_000
+/** How long the carousel overlay may stay up after Enter. */
+export const CAROUSEL_COMMIT_OVERLAY_MS = 450
 /** Carousel thumbnail capture radius around the selected tab. */
 export const CAROUSEL_THUMB_NEIGHBOR_RADIUS = 2
 /** Coalesce chrome state IPC bursts (ms). */
