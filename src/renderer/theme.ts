@@ -47,10 +47,10 @@ export const theme = extendTheme({
         internal: { default: '#52525b', _dark: '#a1a1aa' },
         peek: { default: 'blackAlpha.100', _dark: 'blackAlpha.100' },
         peekHover: { default: 'blackAlpha.400', _dark: 'blackAlpha.400' },
-        overlay: { default: 'blackAlpha.750', _dark: 'blackAlpha.750' },
+        overlay: { default: 'rgba(0, 0, 0, 0.5)', _dark: 'rgba(0, 0, 0, 0.72)' },
         overlayText: { default: 'white', _dark: 'white' },
-        overlayMuted: { default: 'whiteAlpha.700', _dark: 'whiteAlpha.700' },
-        overlayHint: { default: 'whiteAlpha.800', _dark: 'whiteAlpha.800' },
+        overlayMuted: { default: 'whiteAlpha.800', _dark: 'whiteAlpha.800' },
+        overlayHint: { default: 'whiteAlpha.900', _dark: 'whiteAlpha.900' },
         tooltip: { default: 'gray.900', _dark: 'whiteAlpha.900' },
         tooltipText: { default: 'white', _dark: 'gray.900' }
       }

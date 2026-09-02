@@ -28,7 +28,7 @@ export function TabCarousel({ tabs, carousel, thumbnails }: TabCarouselProps) {
       position="fixed"
       inset={0}
       zIndex={1600}
-      bg="browsy.backdrop"
+      bg="browsy.overlay"
       display="flex"
       alignItems="center"
       justifyContent="center"
