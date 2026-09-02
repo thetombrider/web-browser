@@ -1,4 +1,4 @@
-import { URL } from 'url'
+const { URL } = globalThis
 import { SEARCH_ENGINE_URLS, type SearchEngine } from './types'
 
 /** Schemes permitted for tab navigation, bookmarks, session restore, and pop-ups. */
