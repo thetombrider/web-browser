@@ -21,6 +21,7 @@ import {
   type RestoreSession,
   type SearchEngine,
   type Settings,
+  type StartupPage,
   type ThemeMode
 } from '../../shared/types'
 
@@ -756,6 +757,10 @@ function applySettingsFromQuery(url: URL): boolean {
   if (searchEngine === 'google' || searchEngine === 'duckduckgo' || searchEngine === 'bing') {
     patch.searchEngine = searchEngine as SearchEngine
   }
+  const startupPage = url.searchParams.get('startupPage')
+  if (startupPage === 'homepage' || startupPage === 'searchEngine') {
+    patch.startupPage = startupPage as StartupPage
+  }
   const restoreSession = url.searchParams.get('restoreSession')
   if (restoreSession === 'always' || restoreSession === 'never') {
     patch.restoreSession = restoreSession as RestoreSession
@@ -797,6 +802,11 @@ export function renderSettingsPage(showDev = false, cacheCleared = false): strin
       SEARCH_ENGINE_URLS.duckduckgo
     ),
     renderOption('searchEngine', 'bing', 'Bing', settings.searchEngine, showDev, SEARCH_ENGINE_URLS.bing)
+  ].join('')
+
+  const startupPageOptions = [
+    renderOption('startupPage', 'homepage', 'Homepage', settings.startupPage, showDev),
+    renderOption('startupPage', 'searchEngine', 'Search engine', settings.startupPage, showDev)
   ].join('')
 
   const startupOptions = [
@@ -907,6 +917,7 @@ export function renderSettingsPage(showDev = false, cacheCleared = false): strin
     <section class="home-col" aria-label="Browsing">
       ${renderSettingsSection('Theme', themeOptions)}
       ${renderSettingsSection('New tab', newTabOptions)}
+      ${renderSettingsSection('Startup page', startupPageOptions)}
       ${renderSettingsSection('Search engine', searchOptions)}
       ${renderSettingsSection('Link preview', linkPreviewOptions)}
       ${renderSettingsSection('Ask AI', askAiOptions)}

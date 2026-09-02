@@ -1,4 +1,5 @@
 # Taste
+- When asking for a diagnosis, explicitly prefers a read-only investigation: inspect code, configuration, runtime behavior, and evidence without modifying source files. Confidence: 0.95
 - Cares about pixel-level visual polish: reports subtle layout discrepancies (e.g., ~10px of page content getting overlapped by chrome on cmd+L) as bugs worth fixing, not nitpicks to dismiss. Confidence: 0.6
 - Bug reports often give the observed symptom precisely (action, magnitude like "~10px at most", and when it's noticeable) rather than a diagnosis — expects the agent to trace the root cause in code. Confidence: 0.5
 - Prefers native-page content (recents, nav cards) to stay in a single shared column aligned with the main list, not spread into separate grids or sections ("in that same column"). Confidence: 0.5
@@ -9,3 +10,5 @@
 - Values live, real-time UI feedback: explicitly praised suggestions updating as he types and wants derived UI (like forward-fill) to stay in sync with input as it changes. Confidence: 0.5
 - Prefers pragmatic scope control: when a change causes regressions or takes too long, revert the broader work promptly rather than continuing to debug it, while preserving a specifically named useful change. Confidence: 0.9
 - For trackpad/wheel navigation, prefers the gesture behavior to be limited to the carousel overlay itself rather than intercepting gestures from the active webpage. Confidence: 0.9
+- Prefers replacing visually cluttered, oversized option lists with compact selectors when the task is choosing from existing items. Confidence: 0.9
+- When explicitly requested, wants completed changes committed and pushed to the configured remote. Confidence: 0.95

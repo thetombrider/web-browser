@@ -63,6 +63,7 @@ import {
   HISTORY_LAUNCHER_PREFETCH,
   HISTORY_SEARCH_LIMIT,
   IPC,
+  SEARCH_ENGINE_HOME_URLS,
   STATE_BROADCAST_COALESCE_MS
 } from '../../shared/types'
 
@@ -86,6 +87,20 @@ interface BrowserWindowEntry {
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
+}
+
+function getStartupUrl(): string {
+  const settings = getSettings()
+  if (settings.startupPage === 'homepage') return 'browsy://home'
+  return SEARCH_ENGINE_HOME_URLS[settings.searchEngine] ?? SEARCH_ENGINE_HOME_URLS.google
+}
+
+function isSameNavigationUrl(left: string, right: string): boolean {
+  try {
+    return new URL(left).href === new URL(right).href
+  } catch {
+    return left === right
+  }
 }
 
 export class WindowManager {
@@ -333,7 +348,7 @@ export class WindowManager {
     })
 
     const restoring = Boolean(session?.tabs?.length)
-    const startUrl = sanitizeNavigationUrl(url) ?? 'browsy://home'
+    const startUrl = url ? sanitizeNavigationUrl(url) ?? 'browsy://home' : getStartupUrl()
     // Load chrome UI and the first tab in parallel — biggest startup latency cut.
     const chromeReady = chromeView.webContents.loadURL(chromeUrl)
     const firstTabReady = tabs.createTab(startUrl, true, !restoring && !url)
@@ -347,42 +362,31 @@ export class WindowManager {
     this.focusShortcutTarget(win.id)
 
     if (restoring) {
-      void this.restoreSessionTabs(win.id, session!.tabs)
+      void this.restoreSessionTabs(win.id, session!.tabs, startUrl)
     }
 
     return win
   }
 
-  private async restoreSessionTabs(windowId: number, sessionTabs: SessionWindow['tabs']): Promise<void> {
+  private async restoreSessionTabs(
+    windowId: number,
+    sessionTabs: SessionWindow['tabs'],
+    startupUrl: string
+  ): Promise<void> {
     const entry = this.windows.get(windowId)
     if (!entry) return
 
     const restored = sessionTabs
-      .map((tab) => ({
-        url: sanitizeNavigationUrl(tab.url) ?? 'browsy://home',
-        active: tab.active
-      }))
-      .filter((tab) => !tab.url.startsWith('browsy://home'))
+      .map((tab) => sanitizeNavigationUrl(tab.url) ?? 'browsy://home')
+      .filter((url) => !url.startsWith('browsy://home') && !isSameNavigationUrl(url, startupUrl))
 
     if (restored.length === 0) return
 
-    const activeEntry = restored.find((tab) => tab.active) ?? restored[0]
-    const background = restored.filter((tab) => tab.url !== activeEntry.url)
-
-    const homeTab = entry.tabs.findNewTab()
-    if (homeTab) {
-      entry.tabs.lockAudioUntilGesture(homeTab)
-      await entry.tabs.navigate(activeEntry.url)
-      await entry.tabs.switchTab(homeTab.id)
-    } else {
-      await entry.tabs.createTab(activeEntry.url, true, true, true)
-    }
-
-    // Background tabs stay hibernated (metadata only) until first focus — the
-    // biggest multi-tab memory win on restore.
-    for (const tab of background) {
+    // Keep every restored tab hibernated (metadata only). The configured
+    // startup page stays active and restored tabs wake on first focus.
+    for (const url of restored) {
       if (!this.windows.has(windowId)) return
-      entry.tabs.createHibernatedTab(tab.url)
+      entry.tabs.createHibernatedTab(url)
     }
 
     if (this.windows.has(windowId)) {

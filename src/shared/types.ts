@@ -40,6 +40,7 @@ export const HISTORY_LAUNCHER_PREFETCH = 40
 export type ChromePanel = 'navigation' | 'bookmarks' | null
 
 export type SearchEngine = 'google' | 'duckduckgo' | 'bing'
+export type StartupPage = 'homepage' | 'searchEngine'
 export type RestoreSession = 'always' | 'never'
 export type ThemeMode = 'light' | 'dark' | 'system'
 export type AiAssistant = 'chatgpt' | 'claude' | 'gemini'
@@ -124,6 +125,7 @@ export interface SessionWindow {
 export interface Settings {
   homepage: 'recent' | 'blank'
   searchEngine: SearchEngine
+  startupPage: StartupPage
   restoreSession: RestoreSession
   theme: ThemeMode
   hasSeenShortcutTip: boolean
@@ -143,6 +145,12 @@ export const SEARCH_ENGINE_URLS: Record<SearchEngine, string> = {
   google: GOOGLE_SEARCH_URL,
   duckduckgo: DUCKDUCKGO_SEARCH_URL,
   bing: BING_SEARCH_URL
+}
+
+export const SEARCH_ENGINE_HOME_URLS: Record<SearchEngine, string> = {
+  google: 'https://www.google.com',
+  duckduckgo: 'https://duckduckgo.com',
+  bing: 'https://www.bing.com'
 }
 
 export const IPC = {
