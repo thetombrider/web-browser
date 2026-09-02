@@ -54,6 +54,7 @@ import type {
   ToastPayload
 } from '../../shared/types'
 import {
+  CAROUSEL_COMMIT_OVERLAY_MS,
   CAROUSEL_THUMB_NEIGHBOR_RADIUS,
   CHROME_DRAG_HEIGHT,
   CHROME_NAV_HEIGHT,
@@ -673,11 +674,12 @@ export class WindowManager {
       return
     }
 
-    // Keep the overlay up until the destination tab has painted. Clearing it
-    // first lets coalesced did-start-loading broadcasts reveal a blank view.
-    entry.carouselCommitting = true
-    entry.tabs.setCarouselCommitting(true)
-    void entry.tabs.switchTab(tabId).finally(() => {
+    // Keep the overlay up while the destination tab attaches, but never leave
+    // it stuck: some pages paint while loadURL never settles.
+    let dismissed = false
+    const dismiss = (): void => {
+      if (dismissed) return
+      dismissed = true
       const current = this.windows.get(windowId)
       if (!current) return
       current.carousel = null
@@ -686,14 +688,25 @@ export class WindowManager {
       current.tabs.setCarouselCommitting(false)
       this.layoutWindow(windowId)
       this.broadcastState(windowId, true)
+    }
+
+    entry.carouselCommitting = true
+    entry.tabs.setCarouselCommitting(true)
+    const overlayBudget = setTimeout(dismiss, CAROUSEL_COMMIT_OVERLAY_MS)
+    void entry.tabs.switchTab(tabId).finally(() => {
+      clearTimeout(overlayBudget)
+      dismiss()
     })
   }
 
   private dismissCarousel(windowId: number): void {
     const entry = this.windows.get(windowId)
-    if (!entry?.carousel) return
+    if (!entry) return
+    if (!entry.carousel && !entry.carouselCommitting) return
     entry.carousel = null
     entry.carouselTabIds = []
+    entry.carouselCommitting = false
+    entry.tabs.setCarouselCommitting(false)
     this.layoutWindow(windowId)
     this.broadcastState(windowId, true)
   }
