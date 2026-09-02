@@ -25,6 +25,22 @@ A minimal, keyboard-first Electron browser built for learning and portfolio use.
 
 ## Install
 
+Anyone can install from a public clone of this repository:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/thetombrider/web-browser/main/install.sh | bash
+```
+
+That downloads `install.sh`, clones into `~/browsy` (override with `BROWSY_DIR`), installs dependencies, and builds the app. Then:
+
+```bash
+cd ~/browsy && npm start
+```
+
+**The repository must be public** for this one-liner to work. GitHub serves `raw.githubusercontent.com` and anonymous `git clone` without auth only for public repos. While the repo is private, `curl` gets a 404 and clone fails unless the caller has GitHub credentials.
+
+If you already have the source:
+
 ```bash
 npm install
 ```
