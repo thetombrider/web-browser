@@ -139,11 +139,15 @@ export function applyBookmarksPageQuery(url: URL): {
 function pageStyles(theme: ThemeMode): string {
   return `
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { height: 100%; }
+    html {
+      color-scheme: ${theme === 'light' ? 'light' : 'dark'};
+      background: ${theme === 'light' ? APP_SURFACE_LIGHT : APP_SURFACE_DARK};
+    }
+    html, body { height: 100%; overflow: hidden; }
     body {
       font-family: "IBM Plex Sans", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
-      background: ${APP_SURFACE_DARK};
-      color: #f4f4f5;
+      background: ${theme === 'light' ? APP_SURFACE_LIGHT : APP_SURFACE_DARK};
+      color: ${theme === 'light' ? '#18181b' : '#f4f4f5'};
       min-height: 100vh;
       display: flex;
       flex-direction: column;
@@ -221,11 +225,13 @@ function pageStyles(theme: ThemeMode): string {
       text-align: left;
       appearance: none;
       -webkit-appearance: none;
+      -webkit-tap-highlight-color: transparent;
     }
-    .folder:hover { background: rgba(255,255,255,0.05); }
-    .folder.active { background: ${APP_SURFACE_DARK}; }
+    .folder:hover, .folder:active { background: rgba(255,255,255,0.05); }
     .folder:focus { outline: none; color: inherit; background: transparent; }
-    .folder.active:focus { background: ${APP_SURFACE_DARK}; }
+    .folder.active, .folder.active:hover, .folder.active:active, .folder.active:focus {
+      background: ${APP_SURFACE_DARK};
+    }
     .folder.kb, .folder:focus-visible { outline: 1px solid rgba(255,255,255,0.16); }
     .folder.active.kb, .folder.active:focus-visible { background: ${APP_SURFACE_DARK}; }
     .folder.hidden { display: none; }
@@ -393,6 +399,7 @@ function pageStyles(theme: ThemeMode): string {
       }
     }
     ${lightThemeStart(theme)}
+      html { color-scheme: light; background: ${APP_SURFACE_LIGHT}; }
       body { background: ${APP_SURFACE_LIGHT}; color: #18181b; }
       .muted, .notice, .hint, .count, .path, .empty, .pane-empty { color: #71717a; }
       .filter {
@@ -403,9 +410,11 @@ function pageStyles(theme: ThemeMode): string {
       .filter:focus { border-color: rgba(0,0,0,0.22); }
       .finder { background: ${APP_SURFACE_ELEVATED_LIGHT}; border-color: rgba(0,0,0,0.08); }
       .sidebar { border-color: rgba(0,0,0,0.08); }
-      .folder:hover { background: rgba(0,0,0,0.04); }
-      .folder.active, .folder.active:focus, .folder.active:focus-visible { background: ${APP_SURFACE_LIGHT}; }
-      .folder:focus { background: transparent; color: inherit; }
+      .folder:hover, .folder:active { background: rgba(0,0,0,0.04); }
+      .folder:focus { outline: none; color: inherit; background: transparent; }
+      .folder.active, .folder.active:hover, .folder.active:active, .folder.active:focus, .folder.active:focus-visible {
+        background: ${APP_SURFACE_LIGHT};
+      }
       .folder.kb, .folder:focus-visible { outline: 1px solid rgba(0,0,0,0.08); }
       .pane { background: ${APP_SURFACE_LIGHT}; }
       .pane-head { border-color: rgba(0,0,0,0.08); }
@@ -479,8 +488,17 @@ function clientScript(): string {
           next.searchParams.delete('delete');
           if (domain) next.searchParams.set('folder', domain);
           else next.searchParams.delete('folder');
+          if (next.href === window.location.href) return;
           history.replaceState(null, '', next.toString());
         } catch (e) {}
+      }
+
+      function scrollNearest(container, el) {
+        if (!container || !el) return;
+        var cRect = container.getBoundingClientRect();
+        var eRect = el.getBoundingClientRect();
+        if (eRect.top < cRect.top) container.scrollTop += eRect.top - cRect.top;
+        else if (eRect.bottom > cRect.bottom) container.scrollTop += eRect.bottom - cRect.bottom;
       }
 
       function setFolderKb(on) {
@@ -511,13 +529,16 @@ function clientScript(): string {
         var match = folders.find(function (folder) {
           return folder.getAttribute('data-domain') === domain && !folder.classList.contains('hidden');
         }) || visibleFolders()[0] || null;
+        var nextDomain = match ? (match.getAttribute('data-domain') || '') : '';
 
         folders.forEach(function (folder) {
-          folder.classList.remove('active');
-          folder.removeAttribute('aria-current');
+          var on = folder === match;
+          folder.classList.toggle('active', on);
+          if (on) folder.setAttribute('aria-current', 'true');
+          else folder.removeAttribute('aria-current');
         });
         panelsRoot.querySelectorAll('.panel').forEach(function (panel) {
-          panel.classList.add('hidden');
+          panel.classList.toggle('hidden', !nextDomain || panel.getAttribute('data-domain') !== nextDomain);
         });
         clearRowSelection();
 
@@ -525,21 +546,17 @@ function clientScript(): string {
           updatePaneHead('Bookmarks', 0);
           updatePaneEmpty(0);
           setFolderKb(false);
+          persistFolder('');
           return null;
         }
 
-        var nextDomain = match.getAttribute('data-domain') || '';
-        match.classList.add('active');
-        match.setAttribute('aria-current', 'true');
-        var panel = panelsRoot.querySelector('.panel[data-domain="' + nextDomain + '"]');
-        if (panel) panel.classList.remove('hidden');
         var rows = visibleRows();
         updatePaneHead(nextDomain, rows.length);
         updatePaneEmpty(rows.length);
         paneFocus = focus || 'folders';
         setFolderKb(paneFocus === 'folders');
         persistFolder(nextDomain);
-        match.scrollIntoView({ block: 'nearest' });
+        scrollNearest(foldersRoot, match);
         return match;
       }
 
@@ -548,7 +565,7 @@ function clientScript(): string {
         if (!row) return null;
         row.classList.add('selected');
         row.setAttribute('aria-current', 'true');
-        row.scrollIntoView({ block: 'nearest' });
+        scrollNearest(panelsRoot, row);
         if (focusRows) {
           paneFocus = 'rows';
           setFolderKb(false);
@@ -708,7 +725,7 @@ function clientScript(): string {
           clearRowSelection();
           setFolderKb(true);
           var folder = activeFolder();
-          if (folder) folder.scrollIntoView({ block: 'nearest' });
+          if (folder) scrollNearest(foldersRoot, folder);
           return;
         }
 
@@ -821,6 +838,7 @@ export function renderBookmarksPage(options?: {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="${theme === 'light' ? 'light' : theme === 'dark' ? 'dark' : 'dark light'}" />
   <title>Bookmarks — Browsy</title>
   <style>${localFontFaceCss()}</style>
    <style>${pageStyles(theme)}</style>
