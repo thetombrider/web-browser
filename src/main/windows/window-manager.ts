@@ -674,33 +674,17 @@ export class WindowManager {
   ): Promise<BookmarkImportResult> {
     const collected = await collectImportCandidates(source, () => this.pickBookmarkImportFile(parent))
 
-    if (collected.cancelled) {
-      return buildImportResult(source, { added: 0, skippedDuplicates: 0, skippedInvalid: 0 }, {
-        cancelled: true,
-        hint: collected.hint
-      })
-    }
-
-    if (collected.notFound) {
-      return buildImportResult(source, { added: 0, skippedDuplicates: 0, skippedInvalid: 0 }, {
-        notFound: true,
-        hint: collected.hint
-      })
-    }
-
-    if (collected.candidates.length === 0) {
+    if (collected.cancelled || collected.candidates.length === 0) {
       return buildImportResult(
         source,
         { added: 0, skippedDuplicates: 0, skippedInvalid: 0 },
         {
-          notFound: true,
+          cancelled: collected.cancelled,
           hint:
             collected.hint ??
-            (source === 'chrome'
-              ? 'No Chrome bookmarks found. Export as HTML/JSON and use Import file…'
-              : source === 'firefox'
-                ? 'No Firefox bookmarks found. Export as HTML from Firefox (Library → Import and Backup → Export) and use Import file…'
-                : 'That file did not contain any bookmarks.')
+            (source === 'firefox'
+              ? 'Export bookmarks as HTML from Firefox, then try again.'
+              : 'No bookmarks found.')
         }
       )
     }
