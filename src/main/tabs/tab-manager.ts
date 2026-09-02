@@ -3,6 +3,7 @@ import {
   WebContentsView,
   app,
   dialog,
+  nativeTheme,
   type ContextMenuParams,
   type Event,
   type HandlerDetails,
@@ -24,6 +25,7 @@ import { showsNavigationChrome } from '../../shared/internal-pages'
 import type { ChromePanel, MediaKind, TabState } from '../../shared/types'
 import {
   APP_SURFACE_DARK,
+  APP_SURFACE_LIGHT,
   MAX_WARM_BACKGROUND_TABS,
   TAB_HIBERNATE_IDLE_MS,
   TAB_HIBERNATE_POLL_MS
@@ -36,6 +38,13 @@ import {
   normalizeOrigin,
   rememberMediaDecision
 } from '../services/media-permissions'
+
+function tabViewBackground(): string {
+  const theme = getSettings().theme
+  if (theme === 'light') return APP_SURFACE_LIGHT
+  if (theme === 'dark') return APP_SURFACE_DARK
+  return nativeTheme.shouldUseDarkColors ? APP_SURFACE_DARK : APP_SURFACE_LIGHT
+}
 
 export interface Tab {
   id: string
@@ -88,6 +97,10 @@ export class TabManager {
   private destroying = false
   /** Tab currently being snapshotted so layout does not hide it mid-capture. */
   private thumbnailCaptureTabId: string | null = null
+  /** Keep the outgoing tab painted on top until the incoming tab has a frame. */
+  private coverTabId: string | null = null
+  /** True while the carousel overlay is waiting for the destination tab to paint. */
+  private carouselCommitting = false
   private wakePromises = new Map<string, Promise<void>>()
   private hibernateTimer: ReturnType<typeof setInterval> | null = null
 
@@ -131,6 +144,10 @@ export class TabManager {
 
   getChromeFocusToken(): number {
     return this.chromeFocusToken
+  }
+
+  setCarouselCommitting(value: boolean): void {
+    this.carouselCommitting = value
   }
 
   showChrome(panel: ChromePanel): void {
@@ -210,7 +227,7 @@ export class TabManager {
         autoplayPolicy: 'user-gesture-required'
       }
     })
-    view.setBackgroundColor(APP_SURFACE_DARK)
+    view.setBackgroundColor(tabViewBackground())
     return view
   }
 
@@ -294,10 +311,35 @@ export class TabManager {
       this.cacheActiveThumbnail(previous)
     }
 
+    const previousId = this.activeTabId
     this.activeTabId = tabId
     tab.lastActiveAt = Date.now()
+    // Carousel overlay already covers the swap; keep the previous page on top
+    // only for un-covered switches so we never flash a blank WebContentsView.
+    if (previousId && previousId !== tabId && !this.isCarouselOpen()) this.coverTabId = previousId
 
-    await this.ensureAwake(tab)
+    try {
+      await this.ensureAwake(tab)
+      if (this.activeTabId !== tabId || this.destroying) return
+
+      this.onLayout()
+      const wc = tab.view?.webContents
+      if (wc && !wc.isDestroyed() && previousId !== tabId) {
+        await this.waitForCompositorFrame(wc, 180)
+        if (!wc.isDestroyed()) {
+          try {
+            await wc.executeJavaScript(
+              'new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))'
+            )
+          } catch {
+            await new Promise<void>((resolve) => setTimeout(resolve, 32))
+          }
+        }
+      }
+    } finally {
+      if (this.coverTabId === previousId) this.coverTabId = null
+    }
+
     if (this.activeTabId !== tabId || this.destroying) return
 
     const wc = tab.view?.webContents
@@ -716,12 +758,19 @@ export class TabManager {
         contentView.addChildView(tab.view)
       }
       tab.view.setBounds(viewBounds)
-      tab.view.setVisible(tab.id === this.activeTabId || tab.id === this.thumbnailCaptureTabId)
+      tab.view.setVisible(
+        tab.id === this.activeTabId ||
+          tab.id === this.thumbnailCaptureTabId ||
+          tab.id === this.coverTabId
+      )
     }
 
-    if (this.thumbnailCaptureTabId) {
+    if (this.thumbnailCaptureTabId && !this.carouselCommitting) {
       const capturing = this.tabs.find((item) => item.id === this.thumbnailCaptureTabId)
       if (capturing?.view) this.raiseTabUnderChrome(capturing)
+    } else if (this.coverTabId) {
+      const cover = this.tabs.find((item) => item.id === this.coverTabId)
+      if (cover?.view) this.raiseTabUnderChrome(cover)
     } else if (activeTab?.view && contentView.children.includes(activeTab.view)) {
       contentView.addChildView(activeTab.view)
     }
@@ -751,6 +800,34 @@ export class TabManager {
     contentView.addChildView(tab.view, index)
   }
 
+  private async waitForCompositorFrame(wc: WebContents, timeoutMs = 250): Promise<void> {
+    if (wc.isDestroyed()) return
+
+    await new Promise<void>((resolve) => {
+      let settled = false
+      const done = (): void => {
+        if (settled) return
+        settled = true
+        try {
+          wc.endFrameSubscription()
+        } catch {
+          // Subscription may already have ended.
+        }
+        resolve()
+      }
+      const timer = setTimeout(done, timeoutMs)
+      try {
+        wc.beginFrameSubscription(false, () => {
+          clearTimeout(timer)
+          done()
+        })
+      } catch {
+        clearTimeout(timer)
+        done()
+      }
+    })
+  }
+
   private async waitForPaint(wc: WebContents): Promise<void> {
     if (wc.isDestroyed()) return
 
@@ -766,30 +843,7 @@ export class TabManager {
     }
 
     if (wc.isDestroyed()) return
-
-    await new Promise<void>((resolve) => {
-      let settled = false
-      const done = (): void => {
-        if (settled) return
-        settled = true
-        try {
-          wc.endFrameSubscription()
-        } catch {
-          // Subscription may already have ended.
-        }
-        resolve()
-      }
-      const timer = setTimeout(done, 250)
-      try {
-        wc.beginFrameSubscription(false, () => {
-          clearTimeout(timer)
-          done()
-        })
-      } catch {
-        clearTimeout(timer)
-        done()
-      }
-    })
+    await this.waitForCompositorFrame(wc)
 
     if (wc.isDestroyed()) return
     try {
@@ -804,6 +858,7 @@ export class TabManager {
   private async snapshotTab(tab: Tab): Promise<string | null> {
     const wc = tab.view?.webContents
     if (this.window.isDestroyed() || !tab.view || !wc || wc.isDestroyed()) return null
+    if (this.carouselCommitting && tab.id !== this.activeTabId) return null
 
     const bounds = this.window.getContentBounds()
     const viewBounds = {
@@ -814,6 +869,7 @@ export class TabManager {
     }
 
     this.thumbnailCaptureTabId = tab.id
+    const activeAtStart = this.activeTabId
     try {
       wc.setBackgroundThrottling(false)
     } catch {
@@ -825,7 +881,7 @@ export class TabManager {
 
     try {
       await this.waitForPaint(wc)
-      if (wc.isDestroyed()) return null
+      if (wc.isDestroyed() || this.carouselCommitting || this.activeTabId !== activeAtStart) return null
       const image = await wc.capturePage(undefined, { stayHidden: false, stayAwake: true })
       return this.encodeThumbnail(image)
     } catch {

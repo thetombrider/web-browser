@@ -77,6 +77,7 @@ interface BrowserWindowEntry {
   windowDrag: { startScreenX: number; startScreenY: number; startWindowX: number; startWindowY: number } | null
   carousel: CarouselState | null
   carouselTabIds: string[]
+  carouselCommitting: boolean
   popupOpen: boolean
   mediaPermissionOpen: boolean
   linkPreviewCapturer: LinkPreviewCapturer | null
@@ -284,6 +285,7 @@ export class WindowManager {
       windowDrag: null,
       carousel: null,
       carouselTabIds: [],
+      carouselCommitting: false,
       popupOpen: false,
       mediaPermissionOpen: false,
       linkPreviewCapturer: null
@@ -558,7 +560,7 @@ export class WindowManager {
 
   private handleTabNavigationShortcut(windowId: number, direction: -1 | 1): void {
     const entry = this.windows.get(windowId)
-    if (!entry) return
+    if (!entry || entry.carouselCommitting) return
 
     if (entry.carousel) {
       entry.carouselTabIds = entry.carouselTabIds.filter((tabId) => entry.tabs.hasTab(tabId))
@@ -607,7 +609,7 @@ export class WindowManager {
     const entry = this.windows.get(windowId)
     const carousel = entry?.carousel
     const selectedTabId = carousel?.selectedTabId
-    if (!entry || !carousel || !selectedTabId) return
+    if (!entry || entry.carouselCommitting || !carousel || !selectedTabId) return
 
     const selectedIndex = entry.carouselTabIds.indexOf(selectedTabId)
     const direction = carousel.direction
@@ -650,11 +652,11 @@ export class WindowManager {
 
     for (const tabId of neighborIds) {
       const current = this.windows.get(windowId)
-      if (!current || !current.carousel || !current.tabs.hasTab(tabId)) continue
+      if (!current || !current.carousel || current.carouselCommitting || !current.tabs.hasTab(tabId)) continue
       const dataUrl = await current.tabs.captureThumbnail(tabId)
       const latest = this.windows.get(windowId)
-      if (!latest || !latest.carousel || !dataUrl || !latest.tabs.hasTab(tabId)) {
-        if (latest?.carousel && latest.tabs.hasTab(tabId) && !dataUrl) {
+      if (!latest || !latest.carousel || latest.carouselCommitting || !dataUrl || !latest.tabs.hasTab(tabId)) {
+        if (latest?.carousel && !latest.carouselCommitting && latest.tabs.hasTab(tabId) && !dataUrl) {
           latest.chromeView.webContents.send(IPC.THUMBNAIL_FAILED, { tabId } satisfies ThumbnailFailedPayload)
         }
         continue
@@ -666,14 +668,22 @@ export class WindowManager {
   private commitCarousel(windowId: number): void {
     const entry = this.windows.get(windowId)
     const tabId = entry?.carousel?.selectedTabId
-    if (!entry || !tabId || !entry.tabs.hasTab(tabId)) {
-      this.dismissCarousel(windowId)
+    if (!entry || entry.carouselCommitting || !tabId || !entry.tabs.hasTab(tabId)) {
+      if (!entry?.carouselCommitting) this.dismissCarousel(windowId)
       return
     }
 
-    entry.carousel = null
-    entry.carouselTabIds = []
-    void entry.tabs.switchTab(tabId).then(() => {
+    // Keep the overlay up until the destination tab has painted. Clearing it
+    // first lets coalesced did-start-loading broadcasts reveal a blank view.
+    entry.carouselCommitting = true
+    entry.tabs.setCarouselCommitting(true)
+    void entry.tabs.switchTab(tabId).finally(() => {
+      const current = this.windows.get(windowId)
+      if (!current) return
+      current.carousel = null
+      current.carouselTabIds = []
+      current.carouselCommitting = false
+      current.tabs.setCarouselCommitting(false)
       this.layoutWindow(windowId)
       this.broadcastState(windowId, true)
     })
