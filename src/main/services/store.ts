@@ -1,7 +1,9 @@
 import Store from 'electron-store'
-import { PINNED_SITES_MAX, type Bookmark } from '../../shared/types'
+import { PINNED_SITES_MAX, type Bookmark, type BookmarkImportSummary } from '../../shared/types'
 import type { HistoryEntry, SessionWindow, Settings, SiteMediaPermissions } from '../../shared/types'
 import { selectPinnedBookmarks } from '../../shared/pinned-sites'
+import { generateId, isAllowedNavigationUrl } from '../../shared/utils'
+import type { ImportedBookmarkCandidate } from './bookmark-import'
 
 interface StoreSchema {
   bookmarks: Bookmark[]
@@ -54,6 +56,51 @@ export function removeBookmark(id: string): void {
     'bookmarks',
     getBookmarks().filter((b) => b.id !== id)
   )
+}
+
+/**
+ * Import bookmarks from another browser. Dedupes against existing URLs and
+ * within the import batch. Folder structure from Chrome/Firefox is discarded —
+ * Browsy groups by domain on the bookmarks page.
+ */
+export function importBookmarks(candidates: ImportedBookmarkCandidate[]): BookmarkImportSummary {
+  const existing = getBookmarks()
+  const existingUrls = new Set(existing.map((b) => b.url))
+  const seenInBatch = new Set<string>()
+
+  let skippedDuplicates = 0
+  let skippedInvalid = 0
+  const toAdd: Bookmark[] = []
+
+  for (const candidate of candidates) {
+    if (!isAllowedNavigationUrl(candidate.url)) {
+      skippedInvalid += 1
+      continue
+    }
+    if (seenInBatch.has(candidate.url) || existingUrls.has(candidate.url)) {
+      skippedDuplicates += 1
+      continue
+    }
+    seenInBatch.add(candidate.url)
+    toAdd.push({
+      id: generateId(),
+      title: candidate.title.trim().slice(0, 500) || candidate.url,
+      url: candidate.url,
+      createdAt: Number.isFinite(candidate.createdAt) ? candidate.createdAt : Date.now(),
+      pinned: false
+    })
+  }
+
+  if (toAdd.length > 0) {
+    const sortedNew = [...toAdd].sort((a, b) => b.createdAt - a.createdAt)
+    store.set('bookmarks', [...sortedNew, ...existing])
+  }
+
+  return {
+    added: toAdd.length,
+    skippedDuplicates,
+    skippedInvalid
+  }
 }
 
 export function getPinnedBookmarks(): Bookmark[] {

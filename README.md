@@ -11,6 +11,7 @@ A minimal, keyboard-first Electron browser built for learning and portfolio use.
 - Multiple windows and tabs
 - Custom homepage with recent sites and pinned bookmarks
 - Custom bookmarks page grouped by domain
+- Import bookmarks from Chrome or Firefox (deduped, regrouped by site)
 - Custom error pages
 - DevTools docked right, one per tab (`F12`)
 - Session restore on launch

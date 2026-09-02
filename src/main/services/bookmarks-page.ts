@@ -1,6 +1,6 @@
 import { getBookmarks, getSettings } from './store'
 import { faviconUrlForPage, isAllowedNavigationUrl } from '../../shared/utils'
-import type { Bookmark } from '../../shared/types'
+import type { Bookmark, BookmarkImportResult } from '../../shared/types'
 import {
   APP_SURFACE_DARK,
   APP_SURFACE_ELEVATED_DARK,
@@ -241,6 +241,43 @@ function pageStyles(theme: ThemeMode): string {
     }
     .empty { color: #71717a; font-size: 0.9rem; line-height: 1.5; max-width: 420px; }
     .empty.hidden { display: none; }
+    .import-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .import-btn {
+      display: inline-flex;
+      align-items: center;
+      height: 32px;
+      padding: 0 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: ${APP_SURFACE_ELEVATED_DARK};
+      color: inherit;
+      font: inherit;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .import-btn:hover { border-color: rgba(255,255,255,0.28); background: rgba(255,255,255,0.06); }
+    .import-hint {
+      flex: 1 1 100%;
+      font-size: 0.75rem;
+      color: #71717a;
+    }
+    .notice {
+      margin-bottom: 16px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: ${APP_SURFACE_ELEVATED_DARK};
+      border: 1px solid rgba(255,255,255,0.1);
+      font-size: 0.85rem;
+      line-height: 1.4;
+    }
     .footer-link {
       display: inline-block;
       margin-top: 24px;
@@ -251,7 +288,7 @@ function pageStyles(theme: ThemeMode): string {
     .footer-link:hover { color: inherit; }
     ${lightThemeStart(theme)}
       body { background: ${APP_SURFACE_LIGHT}; color: #18181b; }
-      .muted, .hint, .count, .path, .empty { color: #71717a; }
+      .muted, .hint, .count, .path, .empty, .import-hint { color: #71717a; }
       .filter {
         background: ${APP_SURFACE_ELEVATED_LIGHT};
         border-color: rgba(0,0,0,0.08);
@@ -262,6 +299,16 @@ function pageStyles(theme: ThemeMode): string {
       .row.selected { outline: 1px solid rgba(0,0,0,0.08); }
       .glyph { background: rgba(0,0,0,0.06); color: #52525b; }
       .chevron { color: #a1a1aa; }
+      .import-btn {
+        background: ${APP_SURFACE_ELEVATED_LIGHT};
+        border-color: rgba(0,0,0,0.1);
+        color: #18181b;
+      }
+      .import-btn:hover { border-color: rgba(0,0,0,0.22); background: rgba(0,0,0,0.03); }
+      .notice {
+        background: ${APP_SURFACE_ELEVATED_LIGHT};
+        border-color: rgba(0,0,0,0.08);
+      }
     ${lightThemeEnd(theme)}
   `
 }
@@ -383,7 +430,10 @@ function clientScript(): string {
   `
 }
 
-export function renderBookmarksPage(bookmarksOverride?: Bookmark[]): string {
+export function renderBookmarksPage(
+  bookmarksOverride?: Bookmark[],
+  importResult?: BookmarkImportResult | null
+): string {
   const theme = getSettings().theme
   const bookmarks = (bookmarksOverride ?? getBookmarks()).filter((b) => isAllowedNavigationUrl(b.url))
   const groups = groupBookmarksByDomain(bookmarks)
@@ -423,8 +473,24 @@ export function renderBookmarksPage(bookmarksOverride?: Bookmark[]): string {
   const payload = JSON.stringify(bookmarks).replace(/</g, '\\u003c')
   const subtitle =
     bookmarks.length === 0
-      ? 'Save pages with Ctrl+D'
+      ? 'Save pages with Ctrl+D · or import from Chrome / Firefox'
       : `${bookmarks.length} saved · grouped by site`
+
+  const noticeHtml = importResult
+    ? `<p class="notice" role="status">${escapeHtml(importResult.message)}</p>`
+    : ''
+
+  const stripImportQueryScript = importResult
+    ? `<script>
+    (function () {
+      try {
+        if (/[?&]import=/.test(location.search)) {
+          history.replaceState(null, '', 'browsy://bookmarks');
+        }
+      } catch (e) {}
+    })();
+  </script>`
+    : ''
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -441,17 +507,25 @@ export function renderBookmarksPage(bookmarksOverride?: Bookmark[]): string {
   <div class="wrap">
     <div class="brand">Bookmarks</div>
     <p class="muted">${escapeHtml(subtitle)}</p>
+    ${noticeHtml}
+    <div class="import-bar" aria-label="Import bookmarks">
+      <a class="import-btn" href="browsy://bookmarks?import=chrome">Import Chrome</a>
+      <a class="import-btn" href="browsy://bookmarks?import=firefox">Import Firefox</a>
+      <a class="import-btn" href="browsy://bookmarks?import=file">Import file…</a>
+      <p class="import-hint">Duplicates are skipped · browser folders are flattened into site groups</p>
+    </div>
     <div class="filter-wrap">
       <input id="filter" class="filter" type="search" placeholder="Filter by title, path, or site" autocomplete="off" spellcheck="false" />
       <p class="hint">Sites with one save start collapsed · arrows move across all bookmarks · enter opens · type to filter</p>
     </div>
-    <p id="empty-all" class="empty${bookmarks.length === 0 ? '' : ' hidden'}">No bookmarks yet. Press Ctrl+D on any page to save it.</p>
+    <p id="empty-all" class="empty${bookmarks.length === 0 ? '' : ' hidden'}">No bookmarks yet. Press Ctrl+D on any page, or import from Chrome or Firefox.</p>
     <p id="empty-filter" class="empty hidden">No matches.</p>
     <div id="groups" class="groups">${groupsHtml}</div>
     <a class="footer-link" href="browsy://home">← Home</a>
   </div>
   <script type="application/json" id="bookmarks-data">${payload}</script>
   <script>${clientScript()}</script>
+  ${stripImportQueryScript}
 </body>
 </html>`
 }

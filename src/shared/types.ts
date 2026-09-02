@@ -87,6 +87,21 @@ export interface Bookmark {
   pinnedAt?: number
 }
 
+export interface BookmarkImportSummary {
+  added: number
+  skippedDuplicates: number
+  skippedInvalid: number
+}
+
+export type BookmarkImportSource = 'chrome' | 'firefox' | 'file'
+
+export interface BookmarkImportResult extends BookmarkImportSummary {
+  source: BookmarkImportSource
+  message: string
+  cancelled?: boolean
+  notFound?: boolean
+}
+
 export interface HistoryEntry {
   url: string
   title: string
@@ -166,6 +181,7 @@ export const IPC = {
   BOOKMARK_PAGE: 'browser:bookmark-page',
   PIN_PAGE: 'browser:pin-page',
   BOOKMARKS_CHANGED: 'browser:bookmarks-changed',
+  IMPORT_BOOKMARKS: 'browser:import-bookmarks',
   LINK_HOVER: 'browser:link-hover',
   LINK_LEAVE: 'browser:link-leave',
   LINK_PREVIEW_READY: 'browser:link-preview-ready'
@@ -231,6 +247,7 @@ export interface BrowsyAPI {
   bookmarkPage: () => Promise<BookmarkResult>
   pinPage: () => Promise<PinResult>
   removeBookmark: (id: string) => Promise<void>
+  importBookmarks: (source: BookmarkImportSource) => Promise<BookmarkImportResult>
   getHistory: () => Promise<HistoryEntry[]>
   getRecentSites: () => Promise<HistoryEntry[]>
   getSettings: () => Promise<Settings>

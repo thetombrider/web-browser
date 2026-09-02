@@ -18,6 +18,8 @@ import {
   RECENT_SITES_COUNT,
   SEARCH_ENGINE_URLS,
   type AiAssistant,
+  type BookmarkImportResult,
+  type BookmarkImportSource,
   type RestoreSession,
   type SearchEngine,
   type Settings,
@@ -1243,7 +1245,8 @@ function renderNotFoundPage(url: string): string {
 
 export function setupProtocolHandler(
   onSettingsChanged?: () => void,
-  onPinsChanged?: () => void
+  onPinsChanged?: () => void,
+  onImportBookmarks?: (source: BookmarkImportSource) => Promise<BookmarkImportResult>
 ): void {
   protocol.handle('browsy', async (request) => {
     const url = new URL(request.url)
@@ -1255,7 +1258,25 @@ export function setupProtocolHandler(
     }
 
     if (url.hostname === 'bookmarks' || url.pathname === '/bookmarks') {
-      return new Response(renderBookmarksPage(), {
+      let importResult: BookmarkImportResult | null = null
+      const importParam = url.searchParams.get('import')
+      if (
+        onImportBookmarks &&
+        (importParam === 'chrome' || importParam === 'firefox' || importParam === 'file')
+      ) {
+        try {
+          importResult = await onImportBookmarks(importParam)
+        } catch {
+          importResult = {
+            source: importParam,
+            added: 0,
+            skippedDuplicates: 0,
+            skippedInvalid: 0,
+            message: 'Import failed. Try exporting bookmarks as HTML and use Import file…'
+          }
+        }
+      }
+      return new Response(renderBookmarksPage(undefined, importResult), {
         headers: { 'Content-Type': 'text/html; charset=utf-8' }
       })
     }

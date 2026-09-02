@@ -4,6 +4,7 @@ import {
   ipcMain,
   app,
   session,
+  dialog,
   type IpcMainEvent,
   type IpcMainInvokeEvent,
   type MediaAccessPermissionRequest,
@@ -22,11 +23,17 @@ import {
   getRecentSites,
   getSession,
   getSettings,
+  importBookmarks,
   pinBookmarkByUrl,
   removeBookmark,
   saveSession,
   setSettings
 } from '../services/store'
+import {
+  buildImportResult,
+  collectImportCandidates,
+  type BookmarkImportSource
+} from '../services/bookmark-import'
 import { resolveNavigationInput, generateId, sanitizeNavigationUrl, isAllowedWebPermission } from '../../shared/utils'
 import { displayHostname, isPreviewableUrl } from '../../shared/link-preview'
 import { isPinnableUrl } from '../../shared/pinned-sites'
@@ -38,6 +45,7 @@ import {
   parseSettingsPatch
 } from '../services/validation'
 import type {
+  BookmarkImportResult,
   BookmarkResult,
   BrowserState,
   CarouselState,
@@ -94,7 +102,8 @@ export class WindowManager {
     configureSessionCache()
     setupProtocolHandler(
       () => this.broadcastSettings(),
-      () => this.notifyPinsChanged(false)
+      () => this.notifyPinsChanged(false),
+      (source) => this.runBookmarkImport(source)
     )
     this.registerSessionPermissions()
     this.registerIpc()
@@ -639,6 +648,79 @@ export class WindowManager {
     this.broadcastState(windowId)
   }
 
+  private async pickBookmarkImportFile(parent?: BrowserWindow | null): Promise<string | null> {
+    const win = parent && !parent.isDestroyed() ? parent : BrowserWindow.getFocusedWindow()
+    const options = {
+      title: 'Import bookmarks',
+      buttonLabel: 'Import',
+      properties: ['openFile' as const],
+      filters: [
+        { name: 'Bookmark files', extensions: ['html', 'htm', 'json'] },
+        { name: 'HTML export', extensions: ['html', 'htm'] },
+        { name: 'Chrome Bookmarks JSON', extensions: ['json'] },
+        { name: 'All files', extensions: ['*'] }
+      ]
+    }
+    const result = win
+      ? await dialog.showOpenDialog(win, options)
+      : await dialog.showOpenDialog(options)
+    if (result.canceled || result.filePaths.length === 0) return null
+    return result.filePaths[0] ?? null
+  }
+
+  private async runBookmarkImport(
+    source: BookmarkImportSource,
+    parent?: BrowserWindow | null
+  ): Promise<BookmarkImportResult> {
+    const collected = await collectImportCandidates(source, () => this.pickBookmarkImportFile(parent))
+
+    if (collected.cancelled) {
+      return buildImportResult(source, { added: 0, skippedDuplicates: 0, skippedInvalid: 0 }, {
+        cancelled: true,
+        hint: collected.hint
+      })
+    }
+
+    if (collected.notFound) {
+      return buildImportResult(source, { added: 0, skippedDuplicates: 0, skippedInvalid: 0 }, {
+        notFound: true,
+        hint: collected.hint
+      })
+    }
+
+    if (collected.candidates.length === 0) {
+      return buildImportResult(
+        source,
+        { added: 0, skippedDuplicates: 0, skippedInvalid: 0 },
+        {
+          notFound: true,
+          hint:
+            collected.hint ??
+            (source === 'chrome'
+              ? 'No Chrome bookmarks found. Export as HTML/JSON and use Import file…'
+              : source === 'firefox'
+                ? 'No Firefox bookmarks found. Export as HTML from Firefox (Library → Import and Backup → Export) and use Import file…'
+                : 'That file did not contain any bookmarks.')
+        }
+      )
+    }
+
+    const summary = importBookmarks(collected.candidates)
+    const result = buildImportResult(source, summary)
+    if (summary.added > 0) {
+      this.broadcastBookmarks()
+      // Refresh home; skip bookmarks tabs that still have ?import= to avoid a re-import loop.
+      for (const win of this.windows.values()) {
+        win.tabs.reloadTabsMatching((tabUrl) => {
+          if (tabUrl.startsWith('browsy://home')) return true
+          if (tabUrl.startsWith('browsy://bookmarks')) return !/[?&]import=/.test(tabUrl)
+          return false
+        })
+      }
+    }
+    return result
+  }
+
   private bookmarkActivePage(windowId: number): BookmarkResult {
     const entry = this.windows.get(windowId)
     const empty: BookmarkResult = { added: false, alreadyExists: false, title: '', url: '' }
@@ -1138,6 +1220,29 @@ export class WindowManager {
     ipcMain.handle(IPC.REMOVE_BOOKMARK, (_event, id: string) => {
       removeBookmark(id)
       this.notifyPinsChanged(true)
+    })
+
+    ipcMain.handle(IPC.IMPORT_BOOKMARKS, async (event, source: unknown) => {
+      if (source !== 'chrome' && source !== 'firefox' && source !== 'file') {
+        return {
+          source: 'file',
+          added: 0,
+          skippedDuplicates: 0,
+          skippedInvalid: 0,
+          message: 'Unknown import source.',
+          notFound: true
+        } satisfies BookmarkImportResult
+      }
+      const entry = this.getEntryFromEvent(event)
+      const result = await this.runBookmarkImport(source, entry?.window)
+      if (result.added > 0 && entry) {
+        this.sendToast(entry.window.id, {
+          id: generateId(),
+          message: result.message,
+          tone: 'success'
+        })
+      }
+      return result
     })
 
     ipcMain.handle(IPC.GET_HISTORY, () => getHistory())

@@ -2,6 +2,8 @@ import { contextBridge, ipcRenderer } from 'electron'
 import {
   IPC,
   type Bookmark,
+  type BookmarkImportResult,
+  type BookmarkImportSource,
   type BookmarkResult,
   type BrowsyAPI,
   type BrowserState,
@@ -40,6 +42,8 @@ const api: BrowsyAPI = {
   bookmarkPage: () => ipcRenderer.invoke(IPC.BOOKMARK_PAGE) as Promise<BookmarkResult>,
   pinPage: () => ipcRenderer.invoke(IPC.PIN_PAGE) as Promise<PinResult>,
   removeBookmark: (id) => ipcRenderer.invoke(IPC.REMOVE_BOOKMARK, id),
+  importBookmarks: (source: BookmarkImportSource) =>
+    ipcRenderer.invoke(IPC.IMPORT_BOOKMARKS, source) as Promise<BookmarkImportResult>,
   getHistory: () => ipcRenderer.invoke(IPC.GET_HISTORY),
   getRecentSites: () => ipcRenderer.invoke(IPC.GET_RECENT_SITES),
   getSettings: () => ipcRenderer.invoke(IPC.GET_SETTINGS),
